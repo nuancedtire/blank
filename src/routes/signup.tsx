@@ -1,5 +1,5 @@
 import * as React from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,7 +18,7 @@ export const Route = createFileRoute("/signup")({
 });
 
 function SignupPage() {
-  const router = Route.useRouter();
+  const router = useRouter();
 
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
