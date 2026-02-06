@@ -1,5 +1,5 @@
 {
-  "name": "tanstack-start-on-cloudflare",
+  "name": "ed-guidelines",
   "private": true,
   "type": "module",
   "scripts": {
@@ -7,9 +7,17 @@
     "build": "vite build",
     "deploy": "pnpm run build && wrangler deploy",
     "serve": "vite preview",
-    "cf-typegen": "wrangler types --env-interface Env"
+    "test": "vitest",
+    "cf-typegen": "wrangler types --env-interface Env",
+    "convex:dev": "npx convex dev",
+    "convex:deploy": "npx convex deploy"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^3.0.25",
+    "@convex-dev/agent": "^0.3.2",
+    "@convex-dev/better-auth": "^0.10.10",
+    "@convex-dev/rag": "^0.7.0",
+    "@convex-dev/react-query": "^0.1.0",
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
@@ -20,9 +28,13 @@
     "@tanstack/react-router": "^1.150.0",
     "@tanstack/react-router-devtools": "^1.150.0",
     "@tanstack/react-router-ssr-query": "^1.150.0",
+    "@tanstack/react-router-with-query": "^1.130.17",
     "@tanstack/react-start": "^1.150.0",
+    "ai": "^6.0.73",
+    "better-auth": "1.4.9",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "convex": "^1.31.7",
     "lucide-react": "^0.476.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",

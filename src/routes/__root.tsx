@@ -4,33 +4,54 @@ import {
   Outlet,
   Scripts,
   createRootRouteWithContext,
+  useRouteContext,
 } from "@tanstack/react-router";
+import { createServerFn } from "@tanstack/react-start";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
-import * as React from "react";
 import type { QueryClient } from "@tanstack/react-query";
+import type { ConvexQueryClient } from "@convex-dev/react-query";
+import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
 import { DefaultCatchBoundary } from "@/components/default-catch-boundary";
 import { NotFound } from "@/components/not-found";
 import { ThemeProvider } from "@/components/theme";
+import { authClient } from "@/lib/auth-client";
+import { getToken } from "@/lib/auth-server";
 import appCss from "@/styles.css?url";
 import { seo } from "@/utils/seo";
 
+const getAuth = createServerFn({ method: "GET" }).handler(async () => {
+  return await getToken();
+});
+
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
+  convexQueryClient: ConvexQueryClient;
 }>()({
+  beforeLoad: async (ctx) => {
+    const token = await getAuth();
+
+    if (token) {
+      ctx.context.convexQueryClient.serverHttpClient?.setAuth(token);
+    }
+
+    return {
+      isAuthenticated: !!token,
+      token,
+    };
+  },
   head: () => ({
     meta: [
-      {
-        charSet: "utf-8",
-      },
+      { charSet: "utf-8" },
       {
         name: "viewport",
-        content: "width=device-width, initial-scale=1",
+        content:
+          "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
       },
       ...seo({
-        title:
-          "TanStack Start | Type-Safe, Client-First, Full-Stack React Framework",
-        description: `TanStack Start is a type-safe, client-first, full-stack React framework. `,
+        title: "ED Guidelines Assistant",
+        description:
+          "AI-powered guideline retrieval for Emergency Department clinicians. Instant access to local trust guidelines, RCEM, and NICE protocols.",
       }),
     ],
     links: [
@@ -68,17 +89,25 @@ export const Route = createRootRouteWithContext<{
 });
 
 function RootComponent() {
+  const context = useRouteContext({ from: Route.id });
+
   return (
-    <RootDocument>
-      <ThemeProvider
-        attribute="class"
-        defaultTheme="system"
-        enableSystem
-        disableTransitionOnChange={false}
-      >
-        <Outlet />
-      </ThemeProvider>
-    </RootDocument>
+    <ConvexBetterAuthProvider
+      client={context.convexQueryClient.convexClient}
+      authClient={authClient}
+      initialToken={context.token}
+    >
+      <RootDocument>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem
+          disableTransitionOnChange={false}
+        >
+          <Outlet />
+        </ThemeProvider>
+      </RootDocument>
+    </ConvexBetterAuthProvider>
   );
 }
 

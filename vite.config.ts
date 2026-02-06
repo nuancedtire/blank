@@ -24,6 +24,9 @@ const config = defineConfig({
       },
     }),
   ],
+  ssr: {
+    noExternal: ["@convex-dev/better-auth"],
+  },
 });
 
 export default config;
