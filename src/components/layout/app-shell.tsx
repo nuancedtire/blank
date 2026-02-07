@@ -94,7 +94,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex relative z-10">
         {/* Desktop sidebar */}
         <aside className="hidden md:flex md:w-64 md:shrink-0 md:flex-col md:border-r md:border-border/50 md:bg-background/30 md:backdrop-blur-sm">
-          <nav className="flex flex-col gap-2 p-4">
+          <nav className="flex flex-col gap-3 p-4">
             {navItems.map((item, idx) => {
               const isActive =
                 pathname === item.href ||
@@ -135,7 +135,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Mobile bottom navigation */}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/50 bg-background/80 backdrop-blur-xl pb-[env(safe-area-inset-bottom)] md:hidden">
-        <div className="flex h-16 items-center justify-around px-2">
+        <div className="flex h-16 items-center justify-around gap-2 px-3">
           {navItems.map((item) => {
             const isActive =
               pathname === item.href ||
