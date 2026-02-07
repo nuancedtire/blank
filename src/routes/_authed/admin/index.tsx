@@ -52,47 +52,47 @@ function AdminDashboard() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 gap-3">
-        <Card>
-          <CardHeader className="p-4 pb-2">
-            <CardDescription className="flex items-center gap-1.5">
+        <Card className="py-3 gap-2">
+          <CardHeader className="px-4 pb-0">
+            <CardDescription className="flex items-center gap-1.5 text-xs">
               <FileText className="h-3.5 w-3.5" />
               Published
             </CardDescription>
           </CardHeader>
-          <CardContent className="p-4 pt-0">
+          <CardContent className="px-4">
             <p className="text-2xl font-bold">{stats.published}</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="p-4 pb-2">
-            <CardDescription className="flex items-center gap-1.5">
+        <Card className="py-3 gap-2">
+          <CardHeader className="px-4 pb-0">
+            <CardDescription className="flex items-center gap-1.5 text-xs">
               <FileText className="h-3.5 w-3.5" />
               Drafts
             </CardDescription>
           </CardHeader>
-          <CardContent className="p-4 pt-0">
+          <CardContent className="px-4">
             <p className="text-2xl font-bold">{stats.drafts}</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="p-4 pb-2">
-            <CardDescription className="flex items-center gap-1.5">
+        <Card className="py-3 gap-2">
+          <CardHeader className="px-4 pb-0">
+            <CardDescription className="flex items-center gap-1.5 text-xs">
               <Users className="h-3.5 w-3.5" />
               Users
             </CardDescription>
           </CardHeader>
-          <CardContent className="p-4 pt-0">
+          <CardContent className="px-4">
             <p className="text-2xl font-bold">{stats.totalUsers}</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="p-4 pb-2">
-            <CardDescription className="flex items-center gap-1.5">
+        <Card className="py-3 gap-2">
+          <CardHeader className="px-4 pb-0">
+            <CardDescription className="flex items-center gap-1.5 text-xs">
               <Activity className="h-3.5 w-3.5" />
               Total Guidelines
             </CardDescription>
           </CardHeader>
-          <CardContent className="p-4 pt-0">
+          <CardContent className="px-4">
             <p className="text-2xl font-bold">{stats.totalGuidelines}</p>
           </CardContent>
         </Card>

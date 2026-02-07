@@ -216,7 +216,7 @@ function ManageGuidelinesPage() {
                     id="category"
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                    className="flex h-9 w-full rounded-xl border border-input bg-transparent px-3 py-1 text-sm transition-shadow focus:outline-none focus:ring-2 focus:ring-primary/20"
                   >
                     <option value="Medical">Medical</option>
                     <option value="Trauma">Trauma</option>
@@ -265,7 +265,7 @@ function ManageGuidelinesPage() {
                     onChange={(e) =>
                       setSource(e.target.value as "local" | "rcem" | "nice")
                     }
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                    className="flex h-9 w-full rounded-xl border border-input bg-transparent px-3 py-1 text-sm transition-shadow focus:outline-none focus:ring-2 focus:ring-primary/20"
                   >
                     <option value="local">Local</option>
                     <option value="rcem">RCEM</option>
@@ -296,7 +296,7 @@ function ManageGuidelinesPage() {
                         e.target.value as "draft" | "published" | "archived"
                       )
                     }
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                    className="flex h-9 w-full rounded-xl border border-input bg-transparent px-3 py-1 text-sm transition-shadow focus:outline-none focus:ring-2 focus:ring-primary/20"
                   >
                     <option value="draft">Draft</option>
                     <option value="published">Published</option>
