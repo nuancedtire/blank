@@ -138,7 +138,7 @@ function SearchPage() {
                 <span className="text-lg sm:text-xl">📌</span>
                 Pinned
               </h2>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {pinnedGuidelines.map((g: any) => (
                   <GuidelineCard
                     key={g._id}
@@ -198,7 +198,7 @@ function SearchPage() {
               <span className="text-lg sm:text-xl">📚</span>
               All Guidelines
             </h2>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {allGuidelines?.map((g: any) => (
                 <GuidelineCard
                   key={g._id}

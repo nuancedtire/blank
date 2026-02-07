@@ -36,7 +36,7 @@ function CategoryPage() {
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-3">
         {guidelines?.map((g: any) => (
           <GuidelineCard
             key={g._id}
