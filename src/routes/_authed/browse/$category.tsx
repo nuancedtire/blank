@@ -18,23 +18,25 @@ function CategoryPage() {
   );
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <Link to="/browse">
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
+    <div className="space-y-5 sm:space-y-6 pb-6">
+      <div className="flex items-center gap-3">
+        <Link to="/browse" className="group">
+          <div className="clay-card h-10 w-10 flex items-center justify-center rounded-xl hover:bg-gradient-to-br hover:from-muted/50 hover:to-muted/30 transition-all">
+            <ArrowLeft className="h-4 w-4 group-hover:scale-110 transition-transform" />
+          </div>
         </Link>
         <div>
-          <h1 className="text-xl font-bold">{category}</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-extrabold bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent">
+            {category}
+          </h1>
+          <p className="text-sm sm:text-base text-muted-foreground font-light">
             {guidelines?.length ?? 0} guideline
             {(guidelines?.length ?? 0) !== 1 ? "s" : ""}
           </p>
         </div>
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         {guidelines?.map((g: any) => (
           <GuidelineCard
             key={g._id}

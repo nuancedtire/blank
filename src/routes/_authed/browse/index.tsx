@@ -37,15 +37,17 @@ function BrowsePage() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 sm:space-y-6">
       <div>
-        <h1 className="text-xl font-bold mb-1">Browse Guidelines</h1>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="text-2xl sm:text-3xl font-extrabold mb-1.5 bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent">
+          Browse Guidelines
+        </h1>
+        <p className="text-sm sm:text-base text-muted-foreground font-light">
           Navigate by category to find the guideline you need
         </p>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         {categories?.map((cat: { name: string; count: number }) => {
           const meta = CATEGORY_META[cat.name];
           return (
@@ -53,23 +55,25 @@ function BrowsePage() {
               key={cat.name}
               to="/browse/$category"
               params={{ category: cat.name }}
-              className="flex items-center gap-3 rounded-lg border bg-card p-4 hover:bg-accent/50 transition-colors"
+              className="group"
             >
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/5 text-2xl">
-                {meta?.icon ?? "📄"}
-              </div>
-              <div className="flex-1 min-w-0">
-                <h2 className="font-semibold text-sm">{cat.name}</h2>
-                {meta?.description && (
-                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-                    {meta.description}
+              <div className="clay-card flex items-center gap-3 sm:gap-4 p-4 sm:p-5 cursor-pointer">
+                <div className="flex h-14 w-14 sm:h-16 sm:w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/10 to-accent/10 text-3xl sm:text-4xl transition-transform group-hover:scale-110">
+                  {meta?.icon ?? "📄"}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h2 className="font-bold text-base sm:text-lg">{cat.name}</h2>
+                  {meta?.description && (
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-1 line-clamp-1 font-light">
+                      {meta.description}
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground/70 mt-1 font-light">
+                    {cat.count} guideline{cat.count !== 1 ? "s" : ""}
                   </p>
-                )}
-                <p className="text-xs text-muted-foreground/70 mt-0.5">
-                  {cat.count} guideline{cat.count !== 1 ? "s" : ""}
-                </p>
+                </div>
+                <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0 transition-transform group-hover:translate-x-1" />
               </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
             </Link>
           );
         })}

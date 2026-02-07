@@ -104,24 +104,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   key={item.href}
                   to={item.href}
                   className={cn(
-                    "animate-slide-in-right",
+                    "animate-slide-in-right group",
                     idx === 0 && "stagger-1",
                     idx === 1 && "stagger-2",
                     idx === 2 && "stagger-3"
                   )}
                 >
-                  <Button
-                    variant="ghost"
+                  <div
                     className={cn(
-                      "w-full justify-start gap-3 h-12 font-semibold rounded-2xl transition-all",
+                      "w-full flex items-center justify-start gap-3 h-12 px-4 font-semibold rounded-2xl transition-all cursor-pointer",
                       isActive &&
-                        "clay-card bg-gradient-to-r from-primary/10 to-accent/10 text-primary hover:scale-[1.02]",
-                      !isActive && "hover:scale-[1.02]"
+                        "clay-card bg-gradient-to-r from-primary/10 to-accent/10 text-primary",
+                      !isActive && "clay-card hover:bg-gradient-to-r hover:from-muted/50 hover:to-muted/30"
                     )}
                   >
-                    <item.icon className="h-5 w-5" />
+                    <item.icon className={cn("h-5 w-5 transition-transform", !isActive && "group-hover:scale-110")} />
                     {item.label}
-                  </Button>
+                  </div>
                 </Link>
               );
             })}
@@ -146,12 +145,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 key={item.href}
                 to={item.href}
                 className={cn(
-                  "flex flex-1 flex-col items-center justify-center gap-1 py-2 text-muted-foreground rounded-2xl transition-all",
-                  isActive && "clay-card bg-gradient-to-b from-primary/10 to-accent/10 text-primary scale-105"
+                  "flex flex-1 flex-col items-center justify-center gap-1 py-2 text-muted-foreground rounded-2xl transition-all group",
+                  isActive && "clay-card bg-gradient-to-b from-primary/10 to-accent/10 text-primary scale-105",
+                  !isActive && "clay-card hover:bg-gradient-to-b hover:from-muted/50 hover:to-muted/30"
                 )}
               >
                 <item.icon
-                  className={cn("h-6 w-6", isActive && "text-primary")}
+                  className={cn("h-6 w-6 transition-transform", isActive && "text-primary", !isActive && "group-hover:scale-110")}
                 />
                 <span
                   className={cn(
