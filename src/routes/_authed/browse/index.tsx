@@ -47,7 +47,7 @@ function BrowsePage() {
         </p>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-3">
         {categories?.map((cat: { name: string; count: number }) => {
           const meta = CATEGORY_META[cat.name];
           return (
