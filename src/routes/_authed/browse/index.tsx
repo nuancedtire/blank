@@ -47,7 +47,7 @@ function BrowsePage() {
         </p>
       </div>
 
-      <div className="space-y-2.5">
+      <div className="space-y-2">
         {categories?.map((cat: { name: string; count: number }) => {
           const meta = CATEGORY_META[cat.name];
           return (
@@ -57,19 +57,19 @@ function BrowsePage() {
               params={{ category: cat.name }}
               className="group"
             >
-              <div className="clay-card flex items-center gap-3 sm:gap-4 p-4 sm:p-5 cursor-pointer">
-                <div className="flex h-14 w-14 sm:h-16 sm:w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/10 to-accent/10 text-3xl sm:text-4xl transition-transform group-hover:scale-110">
+              <div className="clay-card flex items-center gap-3 sm:gap-4 p-3 sm:p-4 cursor-pointer">
+                <div className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/10 to-accent/10 text-2xl sm:text-3xl transition-transform group-hover:scale-110">
                   {meta?.icon ?? "📄"}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h2 className="font-bold text-base sm:text-lg">{cat.name}</h2>
+                  <h2 className="font-bold text-sm sm:text-base">{cat.name}</h2>
                   {meta?.description && (
-                    <p className="text-xs sm:text-sm text-muted-foreground mt-1 line-clamp-1 font-light">
+                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1 font-light">
                       {meta.description}
                     </p>
                   )}
-                  <p className="text-xs text-muted-foreground/70 mt-1 font-light">
-                    {cat.count} guideline{cat.count !== 1 ? "s" : ""}
+                  <p className="text-[10px] sm:text-xs text-muted-foreground/70 mt-0.5 font-light">
+                    {cat.count} guide{cat.count !== 1 ? "s" : ""}
                   </p>
                 </div>
                 <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0 transition-transform group-hover:translate-x-1" />
