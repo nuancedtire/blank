@@ -32,39 +32,39 @@ export function SearchBar({
 
   return (
     <form onSubmit={handleSubmit} className={cn("relative", className)}>
-      <div className="relative flex items-center">
-        <Search className="absolute left-3 h-4 w-4 text-muted-foreground pointer-events-none" />
+      <div className="relative flex items-center clay-card p-1.5">
+        <Search className="absolute left-5 h-5 w-5 text-muted-foreground/60 pointer-events-none z-10" />
         <Input
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="pl-9 pr-20 h-12 text-base rounded-xl border-2 focus:border-primary"
+          className="clay-input pl-12 pr-24 h-14 text-base border-0 bg-transparent font-light placeholder:font-light"
           autoFocus={autoFocus}
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}
         />
-        <div className="absolute right-1.5 flex items-center gap-1">
+        <div className="absolute right-2 flex items-center gap-1.5">
           {value && (
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className="h-7 w-7 p-0"
+              className="h-8 w-8 p-0 rounded-full hover:bg-muted/50 transition-all"
               onClick={() => onChange("")}
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="h-4 w-4" />
             </Button>
           )}
           <Button
             type="submit"
             size="sm"
-            className="h-8 px-3 rounded-lg"
+            className="clay-button h-10 px-5 font-semibold"
             disabled={!value.trim() || isLoading}
           >
             {isLoading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               "Search"
             )}

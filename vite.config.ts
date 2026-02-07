@@ -27,6 +27,9 @@ const config = defineConfig({
   ssr: {
     noExternal: ["@convex-dev/better-auth"],
   },
+  server: {
+    allowedHosts: ["test.fazeen.dev"],
+  },
 });
 
 export default config;

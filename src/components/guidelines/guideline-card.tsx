@@ -15,9 +15,9 @@ interface GuidelineCardProps {
 }
 
 const sourceColors: Record<string, string> = {
-  local: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  rcem: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  nice: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
+  local: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
+  rcem: "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30",
+  nice: "bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30",
 };
 
 export function GuidelineCard({
@@ -34,31 +34,31 @@ export function GuidelineCard({
     <Link
       to="/guideline/$slug"
       params={{ slug }}
-      className="flex items-center gap-3 rounded-lg border bg-card p-3 hover:bg-accent/50 transition-colors"
+      className="clay-card flex items-center gap-4 p-4 group"
     >
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/5">
-        <FileText className="h-5 w-5 text-primary/70" />
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/10 to-accent/10 group-hover:from-primary/20 group-hover:to-accent/20 transition-all">
+        <FileText className="h-6 w-6 text-primary group-hover:scale-110 transition-transform" />
       </div>
       <div className="flex-1 min-w-0">
-        <h3 className="font-medium text-sm leading-tight truncate">{title}</h3>
+        <h3 className="font-semibold text-base leading-tight truncate group-hover:text-primary transition-colors">{title}</h3>
         {!compact && summary && (
-          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+          <p className="text-sm text-muted-foreground mt-1.5 line-clamp-1 font-light">
             {summary}
           </p>
         )}
-        <div className="flex items-center gap-1.5 mt-1">
+        <div className="flex items-center gap-2 mt-2">
           <Badge
             variant="outline"
-            className={cn("text-[10px] px-1.5 py-0", sourceColors[source])}
+            className={cn("text-xs px-2.5 py-0.5 rounded-full font-semibold border", sourceColors[source])}
           >
             {source.toUpperCase()}
           </Badge>
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-xs text-muted-foreground font-light">
             v{version}
           </span>
         </div>
       </div>
-      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+      <ChevronRight className="h-5 w-5 text-muted-foreground/50 shrink-0 group-hover:text-primary group-hover:translate-x-1 transition-all" />
     </Link>
   );
 }

@@ -25,6 +25,24 @@ function SearchPage() {
   const [query, setQuery] = React.useState("");
   const [searchQuery, setSearchQuery] = React.useState("");
 
+  // Debounced search: update searchQuery 300ms after user stops typing
+  React.useEffect(() => {
+    const trimmedQuery = query.trim();
+
+    // If query is empty, clear search immediately
+    if (!trimmedQuery) {
+      setSearchQuery("");
+      return;
+    }
+
+    // Debounce search for non-empty queries
+    const timeoutId = setTimeout(() => {
+      setSearchQuery(trimmedQuery);
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [query]);
+
   // Fetch all published guidelines for browsing
   const { data: allGuidelines } = useQuery(
     convexQuery(api.guidelines.listPublished, {})
@@ -50,6 +68,7 @@ function SearchPage() {
   });
 
   const handleSearch = (q: string) => {
+    // Still support pressing Enter to search immediately
     setSearchQuery(q);
   };
 
@@ -72,12 +91,14 @@ function SearchPage() {
   const showSearchResults = !!searchQuery;
 
   return (
-    <div className="space-y-6">
-      {/* Search Bar */}
+    <div className="space-y-5 sm:space-y-6 pb-6">
+      {/* Search Bar Section - Mobile first */}
       <div>
-        <h1 className="text-xl font-bold mb-1">Search Guidelines</h1>
-        <p className="text-sm text-muted-foreground mb-3">
-          Find local trust guidelines, RCEM protocols, and NICE guidance
+        <h1 className="text-2xl sm:text-3xl font-extrabold mb-1.5 bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent">
+          Search Guidelines
+        </h1>
+        <p className="text-sm sm:text-base text-muted-foreground mb-3 font-light">
+          Find trust guidelines, RCEM, NICE
         </p>
         <SearchBar
           value={query}
@@ -91,13 +112,13 @@ function SearchPage() {
       {showSearchResults ? (
         /* Search Results */
         <div>
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-medium">Results</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base sm:text-lg font-bold">Results</h2>
             <button
               onClick={handleClearSearch}
-              className="text-xs text-primary hover:underline"
+              className="clay-button text-xs sm:text-sm px-3 py-1.5 font-bold"
             >
-              Clear search
+              Clear
             </button>
           </div>
           <SearchResults
@@ -113,10 +134,11 @@ function SearchPage() {
           {/* Pinned Guidelines */}
           {pinnedGuidelines.length > 0 && (
             <div>
-              <h2 className="text-sm font-medium mb-2 flex items-center gap-1.5">
+              <h2 className="text-base sm:text-lg font-bold mb-2.5 flex items-center gap-1.5">
+                <span className="text-lg sm:text-xl">📌</span>
                 Pinned
               </h2>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {pinnedGuidelines.map((g: any) => (
                   <GuidelineCard
                     key={g._id}
@@ -133,11 +155,14 @@ function SearchPage() {
             </div>
           )}
 
-          <Separator />
+          {pinnedGuidelines.length > 0 && <Separator className="my-5" />}
 
-          {/* Quick Categories */}
+          {/* Quick Categories - Compact mobile grid */}
           <div>
-            <h2 className="text-sm font-medium mb-2">Browse by Category</h2>
+            <h2 className="text-base sm:text-lg font-bold mb-2.5 flex items-center gap-1.5">
+              <span className="text-lg sm:text-xl">🗂️</span>
+              Browse
+            </h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {CATEGORIES.map((cat) => {
                 const count =
@@ -148,13 +173,15 @@ function SearchPage() {
                   <a
                     key={cat.name}
                     href={`/browse/${encodeURIComponent(cat.name)}`}
-                    className="flex items-center gap-2 rounded-lg border bg-card p-3 hover:bg-accent/50 transition-colors"
+                    className="clay-card flex items-center gap-2 sm:gap-2.5 p-2.5 sm:p-3 group"
                   >
-                    <span className="text-lg">{cat.icon}</span>
-                    <div>
-                      <p className="text-sm font-medium">{cat.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {count} guideline{count !== 1 ? "s" : ""}
+                    <span className="text-xl sm:text-2xl group-hover:scale-110 transition-transform">
+                      {cat.icon}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-xs sm:text-sm font-bold truncate">{cat.name}</p>
+                      <p className="text-[10px] sm:text-xs text-muted-foreground font-light">
+                        {count} guide{count !== 1 ? "s" : ""}
                       </p>
                     </div>
                   </a>
@@ -163,12 +190,15 @@ function SearchPage() {
             </div>
           </div>
 
-          <Separator />
+          <Separator className="my-5" />
 
           {/* Recent / All Guidelines */}
           <div>
-            <h2 className="text-sm font-medium mb-2">All Guidelines</h2>
-            <div className="space-y-1.5">
+            <h2 className="text-base sm:text-lg font-bold mb-2.5 flex items-center gap-1.5">
+              <span className="text-lg sm:text-xl">📚</span>
+              All Guidelines
+            </h2>
+            <div className="space-y-2">
               {allGuidelines?.map((g: any) => (
                 <GuidelineCard
                   key={g._id}
@@ -182,15 +212,18 @@ function SearchPage() {
                 />
               ))}
               {!allGuidelines && (
-                <p className="text-sm text-muted-foreground py-8 text-center">
-                  Loading guidelines...
-                </p>
+                <div className="clay-card p-6 text-center">
+                  <p className="text-sm text-muted-foreground font-light">
+                    Loading guidelines...
+                  </p>
+                </div>
               )}
               {allGuidelines?.length === 0 && (
-                <p className="text-sm text-muted-foreground py-8 text-center">
-                  No guidelines have been uploaded yet. Ask an admin to add
-                  guidelines.
-                </p>
+                <div className="clay-card p-6 text-center">
+                  <p className="text-sm text-muted-foreground font-light">
+                    No guidelines yet. Ask admin to add.
+                  </p>
+                </div>
               )}
             </div>
           </div>
