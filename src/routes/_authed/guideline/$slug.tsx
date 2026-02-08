@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "convex/_generated/api";
 import { GuidelineContent } from "@/components/guidelines/guideline-content";
@@ -12,6 +12,7 @@ export const Route = createFileRoute("/_authed/guideline/$slug")({
 
 function GuidelineDetailPage() {
   const { slug } = Route.useParams();
+  const queryClient = useQueryClient();
 
   const { data: guideline, isLoading } = useQuery(
     convexQuery(api.guidelines.getBySlug, { slug })
@@ -25,6 +26,9 @@ function GuidelineDetailPage() {
   const pinMutation = useMutation({
     mutationFn: () =>
       togglePin({ guidelineId: (guideline as any)?._id }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: convexQuery(api.users.me, {}).queryKey });
+    },
   });
 
   const submitFeedback = useConvexMutation(api.auditLog.submitFeedback);
