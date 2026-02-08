@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalQuery } from "./_generated/server";
 
 // Get all published guidelines (full, including content)
 export const listPublished = query({
@@ -699,3 +699,31 @@ If request declined and clinical concern remains:
     return `Seeded ${guidelines.length} guidelines`;
   },
 });
+
+// Internal search that returns full content (for agent tool use)
+export const searchInternal = internalQuery({
+  args: {
+    query: v.string(),
+    source: v.optional(
+      v.union(v.literal("local"), v.literal("rcem"), v.literal("nice"))
+    ),
+    category: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const searchQuery = ctx.db
+      .query("guidelines")
+      .withSearchIndex("search_guidelines", (q) => {
+        let sq = q.search("content", args.query).eq("status", "published");
+        if (args.source) {
+          sq = sq.eq("source", args.source);
+        }
+        if (args.category) {
+          sq = sq.eq("category", args.category);
+        }
+        return sq;
+      });
+    return await searchQuery.take(10);
+  },
+});
+
+

@@ -1,15 +1,23 @@
 import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  keepPreviousData,
+} from "@tanstack/react-query";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "convex/_generated/api";
 import { SearchBar } from "@/components/search/search-bar";
 import { SearchResults } from "@/components/search/search-results";
+import { AgentChat } from "@/components/search/agent-chat";
 import { GuidelineCard } from "@/components/guidelines/guideline-card";
 import { GuidelineCardSkeleton } from "@/components/guidelines/guideline-card-skeleton";
 import { Card, CardInteractive } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/_authed/search")({
   component: SearchPage,
@@ -26,19 +34,18 @@ const CATEGORIES = [
 function SearchPage() {
   const [query, setQuery] = React.useState("");
   const [searchQuery, setSearchQuery] = React.useState("");
+  const [agentQuery, setAgentQuery] = React.useState<string | null>(null);
   const queryClient = useQueryClient();
 
   // Debounced search: update searchQuery 300ms after user stops typing
   React.useEffect(() => {
     const trimmedQuery = query.trim();
 
-    // If query is empty, clear search immediately
     if (!trimmedQuery) {
       setSearchQuery("");
       return;
     }
 
-    // Debounce search for non-empty queries
     const timeoutId = setTimeout(() => {
       setSearchQuery(trimmedQuery);
     }, 300);
@@ -46,12 +53,12 @@ function SearchPage() {
     return () => clearTimeout(timeoutId);
   }, [query]);
 
-  // Fetch published guideline summaries (no content field — lightweight)
+  // Fetch published guideline summaries
   const { data: allGuidelines } = useQuery(
-    convexQuery(api.guidelines.listPublishedSummaries, {})
+    convexQuery(api.guidelines.listPublishedSummaries, {}),
   );
 
-  // Search when query changes — keep previous results visible while loading
+  // Search when query changes
   const { data: searchResults, isLoading: isSearching } = useQuery({
     ...convexQuery(api.guidelines.search, {
       query: searchQuery,
@@ -61,27 +68,34 @@ function SearchPage() {
   });
 
   // Get current user for pinned guidelines
-  const { data: currentUser } = useQuery(
-    convexQuery(api.users.me, {})
-  );
+  const { data: currentUser } = useQuery(convexQuery(api.users.me, {}));
 
   const togglePin = useConvexMutation(api.users.togglePin);
   const pinMutation = useMutation({
     mutationFn: (guidelineId: string) =>
       togglePin({ guidelineId: guidelineId as any }),
     onSuccess: () => {
-      // Invalidate user query so pinnedGuidelines refreshes
-      queryClient.invalidateQueries({ queryKey: convexQuery(api.users.me, {}).queryKey });
+      queryClient.invalidateQueries({
+        queryKey: convexQuery(api.users.me, {}).queryKey,
+      });
     },
   });
 
-  const handleSearch = (q: string) => {
-    setSearchQuery(q);
+  // When user presses Enter, activate the agent
+  const handleSubmit = (q: string) => {
+    if (q.trim()) {
+      setAgentQuery(q.trim());
+    }
+  };
+
+  const handleCloseAgent = () => {
+    setAgentQuery(null);
   };
 
   const handleClearSearch = () => {
     setQuery("");
     setSearchQuery("");
+    setAgentQuery(null);
   };
 
   const pinnedIds =
@@ -89,13 +103,12 @@ function SearchPage() {
       ? (currentUser as any).pinnedGuidelines ?? []
       : [];
 
-  // Get pinned guidelines
   const pinnedGuidelines = React.useMemo(() => {
     if (!allGuidelines || pinnedIds.length === 0) return [];
     return allGuidelines.filter((g: any) => pinnedIds.includes(g._id));
   }, [allGuidelines, pinnedIds]);
 
-  const showSearchResults = !!searchQuery;
+  const showSearchResults = !!searchQuery && !agentQuery;
 
   return (
     <div className="space-y-5 sm:space-y-6 pb-6">
@@ -105,22 +118,49 @@ function SearchPage() {
           Search Guidelines
         </h1>
         <p className="text-sm sm:text-base text-muted-foreground mb-3 font-light">
-          Find trust guidelines, RCEM, NICE
+          Type to search · Press{" "}
+          <kbd className="px-1.5 py-0.5 text-xs rounded-md bg-muted border font-mono">
+            Enter
+          </kbd>{" "}
+          to ask the AI agent
         </p>
         <SearchBar
           value={query}
-          onChange={setQuery}
-          onSubmit={handleSearch}
+          onChange={(v) => {
+            setQuery(v);
+            // If agent is active and user types, close agent to show live results
+            if (agentQuery) setAgentQuery(null);
+          }}
+          onSubmit={handleSubmit}
           isLoading={isSearching}
           autoFocus
+          submitLabel={
+            <span className="flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5" />
+              Ask Agent
+            </span>
+          }
         />
       </div>
 
-      {showSearchResults ? (
-        /* Search Results */
+      {/* Agent Chat (appears when user presses Enter) */}
+      {agentQuery && (
+        <AgentChat initialQuery={agentQuery} onClose={handleCloseAgent} />
+      )}
+
+      {/* Live Search Results (visible as user types, hidden when agent is active) */}
+      {showSearchResults && (
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base sm:text-lg font-bold">Results</h2>
+            <h2 className="text-base sm:text-lg font-bold flex items-center gap-2">
+              Results
+              <Badge
+                variant="secondary"
+                className="text-[10px] font-normal"
+              >
+                live search
+              </Badge>
+            </h2>
             <Button
               variant="outline"
               size="sm"
@@ -138,7 +178,10 @@ function SearchPage() {
             pinnedIds={pinnedIds.map(String)}
           />
         </div>
-      ) : (
+      )}
+
+      {/* Default view: pinned, categories, all guidelines */}
+      {!showSearchResults && !agentQuery && (
         <>
           {/* Pinned Guidelines */}
           {pinnedGuidelines.length > 0 && (
@@ -178,7 +221,7 @@ function SearchPage() {
               {CATEGORIES.map((cat) => {
                 const count =
                   allGuidelines?.filter(
-                    (g: any) => g.category === cat.name
+                    (g: any) => g.category === cat.name,
                   ).length ?? 0;
                 return (
                   <Link
@@ -191,7 +234,9 @@ function SearchPage() {
                         {cat.icon}
                       </span>
                       <div className="min-w-0">
-                        <p className="text-xs sm:text-sm font-bold truncate">{cat.name}</p>
+                        <p className="text-xs sm:text-sm font-bold truncate">
+                          {cat.name}
+                        </p>
                         <p className="text-[10px] sm:text-xs text-muted-foreground font-light">
                           {count} guide{count !== 1 ? "s" : ""}
                         </p>

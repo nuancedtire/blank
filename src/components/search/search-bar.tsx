@@ -13,6 +13,7 @@ interface SearchBarProps {
   isLoading?: boolean;
   className?: string;
   autoFocus?: boolean;
+  submitLabel?: React.ReactNode;
 }
 
 export function SearchBar({
@@ -23,6 +24,7 @@ export function SearchBar({
   isLoading = false,
   className,
   autoFocus = false,
+  submitLabel,
 }: SearchBarProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,7 +69,7 @@ export function SearchBar({
             {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              "Search"
+              submitLabel ?? "Search"
             )}
           </Button>
         </div>

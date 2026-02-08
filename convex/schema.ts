@@ -103,6 +103,28 @@ export default defineSchema({
     .index("by_action", ["action"])
     .index("by_timestamp", ["timestamp"]),
 
+  // Uploaded documents for RAG indexing
+  uploadedDocuments: defineTable({
+    storageId: v.id("_storage"),
+    fileName: v.string(),
+    fileType: v.string(),
+    source: v.union(
+      v.literal("local"),
+      v.literal("rcem"),
+      v.literal("nice")
+    ),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("indexing"),
+      v.literal("indexed"),
+      v.literal("error")
+    ),
+    errorMessage: v.optional(v.string()),
+    uploadedAt: v.number(),
+  })
+    .index("by_status", ["status"])
+    .index("by_uploadedAt", ["uploadedAt"]),
+
   // Search feedback for improving results
   searchFeedback: defineTable({
     query: v.string(),
