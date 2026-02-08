@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "convex/_generated/api";
 import { GuidelineCard } from "@/components/guidelines/guideline-card";
+import { GuidelineCardSkeleton } from "@/components/guidelines/guideline-card-skeleton";
 import { ArrowLeft, FileText } from "lucide-react";
 
 export const Route = createFileRoute("/_authed/browse/$category")({
