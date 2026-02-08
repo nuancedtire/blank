@@ -64,7 +64,7 @@ function LoginPage() {
         />
       </div>
 
-      <Card className="relative z-10 w-full max-w-md clay-card backdrop-blur-sm bg-card/98">
+      <Card className="relative z-10 w-full max-w-md backdrop-blur-sm bg-card/98">
         <CardHeader className="text-center space-y-2 px-4 sm:px-6">
           <CardTitle className="text-2xl sm:text-3xl font-extrabold tracking-tight bg-gradient-to-br from-primary to-accent bg-clip-text text-transparent">
             ED Guidelines
@@ -77,7 +77,7 @@ function LoginPage() {
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-3 px-4 sm:px-6">
             {error && (
-              <div className="clay-card rounded-xl bg-destructive/15 px-3.5 py-2.5 text-xs sm:text-sm text-destructive font-bold border border-destructive/25">
+              <div className="rounded-xl bg-destructive/15 px-3.5 py-2.5 text-xs sm:text-sm text-destructive font-bold border border-destructive/25 shadow-[var(--clay-shadow-sm)]">
                 {error}
               </div>
             )}
@@ -116,7 +116,7 @@ function LoginPage() {
           <CardFooter className="flex flex-col gap-2.5 pt-4 px-4 sm:px-6">
             <Button
               type="submit"
-              className="clay-button w-full h-10 sm:h-11 text-sm sm:text-base font-bold tracking-wide"
+              className="w-full h-10 sm:h-11 text-sm sm:text-base font-bold tracking-wide"
               disabled={isLoading}
             >
               {isLoading ? "Signing in..." : "Sign In"}

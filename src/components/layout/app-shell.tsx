@@ -72,14 +72,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   size="icon"
                   className="relative rounded-full hover:scale-105 transition-transform"
                 >
-                  <Avatar className="h-9 w-9 clay-card">
+                  <Avatar className="h-9 w-9 shadow-[var(--clay-shadow-sm)] rounded-full">
                     <AvatarFallback className="text-sm font-bold bg-gradient-to-br from-primary to-accent text-primary-foreground">
                       U
                     </AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52 clay-card">
+              <DropdownMenuContent align="end" className="w-52 shadow-[var(--clay-shadow-md)]">
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer font-semibold">
                   <LogOut className="mr-2 h-4 w-4" />
@@ -114,8 +114,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     className={cn(
                       "w-full flex items-center justify-start gap-3 h-12 px-4 font-semibold rounded-2xl transition-all cursor-pointer",
                       isActive &&
-                        "clay-card bg-gradient-to-r from-primary/10 to-accent/10 text-primary",
-                      !isActive && "clay-card hover:bg-gradient-to-r hover:from-muted/50 hover:to-muted/30"
+                        "shadow-[var(--clay-shadow-md)] bg-gradient-to-r from-primary/10 to-accent/10 text-primary",
+                      !isActive && "shadow-[var(--clay-shadow-sm)] hover:shadow-[var(--clay-shadow-md)] hover:bg-gradient-to-r hover:from-muted/50 hover:to-muted/30"
                     )}
                   >
                     <item.icon className={cn("h-5 w-5 transition-transform", !isActive && "group-hover:scale-110")} />
@@ -146,8 +146,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 to={item.href}
                 className={cn(
                   "flex flex-1 flex-col items-center justify-center gap-1 py-2 text-muted-foreground rounded-2xl transition-all group",
-                  isActive && "clay-card bg-gradient-to-b from-primary/10 to-accent/10 text-primary scale-105",
-                  !isActive && "clay-card hover:bg-gradient-to-b hover:from-muted/50 hover:to-muted/30"
+                  isActive && "shadow-[var(--clay-shadow-md)] bg-gradient-to-b from-primary/10 to-accent/10 text-primary scale-105",
+                  !isActive && "shadow-[var(--clay-shadow-sm)] hover:shadow-[var(--clay-shadow-md)] hover:bg-gradient-to-b hover:from-muted/50 hover:to-muted/30"
                 )}
               >
                 <item.icon

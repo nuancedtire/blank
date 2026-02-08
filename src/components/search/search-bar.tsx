@@ -2,6 +2,7 @@ import * as React from "react";
 import { Search, X, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 interface SearchBarProps {
@@ -32,7 +33,7 @@ export function SearchBar({
 
   return (
     <form onSubmit={handleSubmit} className={cn("relative", className)}>
-      <div className="relative flex items-center clay-card p-1.5">
+      <Card className="relative flex-row items-center p-1.5 py-1.5">
         <Search className="absolute left-5 h-5 w-5 text-muted-foreground/60 pointer-events-none z-10" />
         <Input
           type="text"
@@ -60,7 +61,7 @@ export function SearchBar({
           <Button
             type="submit"
             size="sm"
-            className="clay-button h-10 px-5 font-semibold"
+            className="h-10 px-5 font-semibold"
             disabled={!value.trim() || isLoading}
           >
             {isLoading ? (
@@ -70,7 +71,7 @@ export function SearchBar({
             )}
           </Button>
         </div>
-      </div>
+      </Card>
     </form>
   );
 }

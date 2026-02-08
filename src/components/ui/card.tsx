@@ -7,9 +7,32 @@ function Card({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card"
       className={cn(
-        "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm",
+        "bg-card text-card-foreground flex flex-col rounded-xl border py-6 shadow-[var(--clay-shadow-md)] transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
         className
       )}
+      style={{
+        background: 'linear-gradient(135deg, var(--card) 0%, color-mix(in oklch, var(--card), var(--accent) 3%) 100%)',
+      }}
+      {...props}
+    />
+  )
+}
+
+/**
+ * Interactive card variant — use as a wrapper for clickable cards (links, buttons).
+ * Adds hover lift + shadow upgrade.
+ */
+function CardInteractive({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card"
+      className={cn(
+        "bg-card text-card-foreground flex flex-col rounded-xl border shadow-[var(--clay-shadow-md)] transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:shadow-[var(--clay-shadow-lg)] hover:-translate-y-0.5 cursor-pointer",
+        className
+      )}
+      style={{
+        background: 'linear-gradient(135deg, var(--card) 0%, color-mix(in oklch, var(--card), var(--accent) 3%) 100%)',
+      }}
       {...props}
     />
   )
@@ -83,6 +106,7 @@ function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
 
 export {
   Card,
+  CardInteractive,
   CardHeader,
   CardFooter,
   CardTitle,

@@ -1,11 +1,13 @@
 import * as React from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "convex/_generated/api";
 import { SearchBar } from "@/components/search/search-bar";
 import { SearchResults } from "@/components/search/search-results";
 import { GuidelineCard } from "@/components/guidelines/guideline-card";
+import { Card, CardInteractive } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
 export const Route = createFileRoute("/_authed/search")({
@@ -23,6 +25,7 @@ const CATEGORIES = [
 function SearchPage() {
   const [query, setQuery] = React.useState("");
   const [searchQuery, setSearchQuery] = React.useState("");
+  const queryClient = useQueryClient();
 
   // Debounced search: update searchQuery 300ms after user stops typing
   React.useEffect(() => {
@@ -64,10 +67,13 @@ function SearchPage() {
   const pinMutation = useMutation({
     mutationFn: (guidelineId: string) =>
       togglePin({ guidelineId: guidelineId as any }),
+    onSuccess: () => {
+      // Invalidate user query so pinnedGuidelines refreshes
+      queryClient.invalidateQueries({ queryKey: convexQuery(api.users.me, {}).queryKey });
+    },
   });
 
   const handleSearch = (q: string) => {
-    // Still support pressing Enter to search immediately
     setSearchQuery(q);
   };
 
@@ -91,7 +97,7 @@ function SearchPage() {
 
   return (
     <div className="space-y-5 sm:space-y-6 pb-6">
-      {/* Search Bar Section - Mobile first */}
+      {/* Search Bar Section */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-extrabold mb-1.5 bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent">
           Search Guidelines
@@ -113,12 +119,14 @@ function SearchPage() {
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-base sm:text-lg font-bold">Results</h2>
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleClearSearch}
-              className="clay-button text-xs sm:text-sm px-3 py-1.5 font-bold"
+              className="text-xs sm:text-sm font-bold"
             >
               Clear
-            </button>
+            </Button>
           </div>
           <SearchResults
             results={(searchResults ?? []) as any}
@@ -148,6 +156,8 @@ function SearchPage() {
                     version={g.version}
                     lastUpdated={g.lastUpdated}
                     compact
+                    isPinned
+                    onTogglePin={() => pinMutation.mutate(g._id)}
                   />
                 ))}
               </div>
@@ -156,7 +166,7 @@ function SearchPage() {
 
           {pinnedGuidelines.length > 0 && <Separator className="my-5" />}
 
-          {/* Quick Categories - Compact mobile grid */}
+          {/* Quick Categories */}
           <div>
             <h2 className="text-base sm:text-lg font-bold mb-2.5 flex items-center gap-1.5">
               <span className="text-lg sm:text-xl">🗂️</span>
@@ -172,17 +182,18 @@ function SearchPage() {
                   <a
                     key={cat.name}
                     href={`/browse/${encodeURIComponent(cat.name)}`}
-                    className="clay-card flex items-center gap-2 sm:gap-2.5 p-2.5 sm:p-3 group"
                   >
-                    <span className="text-xl sm:text-2xl group-hover:scale-110 transition-transform">
-                      {cat.icon}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-xs sm:text-sm font-bold truncate">{cat.name}</p>
-                      <p className="text-[10px] sm:text-xs text-muted-foreground font-light">
-                        {count} guide{count !== 1 ? "s" : ""}
-                      </p>
-                    </div>
+                    <CardInteractive className="flex-row items-center gap-2 sm:gap-2.5 p-2.5 sm:p-3 group">
+                      <span className="text-xl sm:text-2xl group-hover:scale-110 transition-transform">
+                        {cat.icon}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-xs sm:text-sm font-bold truncate">{cat.name}</p>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground font-light">
+                          {count} guide{count !== 1 ? "s" : ""}
+                        </p>
+                      </div>
+                    </CardInteractive>
                   </a>
                 );
               })}
@@ -191,7 +202,7 @@ function SearchPage() {
 
           <Separator className="my-5" />
 
-          {/* Recent / All Guidelines */}
+          {/* All Guidelines */}
           <div>
             <h2 className="text-base sm:text-lg font-bold mb-2.5 flex items-center gap-1.5">
               <span className="text-lg sm:text-xl">📚</span>
@@ -208,21 +219,23 @@ function SearchPage() {
                   summary={g.summary}
                   version={g.version}
                   lastUpdated={g.lastUpdated}
+                  isPinned={pinnedIds.includes(g._id)}
+                  onTogglePin={() => pinMutation.mutate(g._id)}
                 />
               ))}
               {!allGuidelines && (
-                <div className="clay-card p-6 text-center">
+                <Card className="p-6 text-center">
                   <p className="text-sm text-muted-foreground font-light">
                     Loading guidelines...
                   </p>
-                </div>
+                </Card>
               )}
               {allGuidelines?.length === 0 && (
-                <div className="clay-card p-6 text-center">
+                <Card className="p-6 text-center">
                   <p className="text-sm text-muted-foreground font-light">
                     No guidelines yet. Ask admin to add.
                   </p>
-                </div>
+                </Card>
               )}
             </div>
           </div>

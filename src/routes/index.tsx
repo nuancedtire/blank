@@ -42,7 +42,7 @@ function LandingPage() {
       </div>
 
       {/* Main Content - Compact mobile-first */}
-      <Card className="relative z-10 w-full max-w-md clay-card backdrop-blur-sm bg-card/98 animate-fade-in-up stagger-1">
+      <Card className="relative z-10 w-full max-w-md backdrop-blur-sm bg-card/98 animate-fade-in-up stagger-1">
         <CardHeader className="text-center space-y-2.5 pb-4 px-4 sm:px-6">
           <CardTitle className="text-3xl sm:text-4xl font-extrabold tracking-tight bg-gradient-to-br from-primary via-accent to-secondary bg-clip-text text-transparent leading-[1.15]">
             ED Guidelines
@@ -53,13 +53,13 @@ function LandingPage() {
         </CardHeader>
 
         <CardContent className="flex flex-col gap-2.5 px-4 sm:px-6 pb-5">
-          <Button asChild className="clay-button h-11 text-base font-bold tracking-wide">
+          <Button asChild className="h-11 text-base font-bold tracking-wide">
             <Link to="/login">Sign In</Link>
           </Button>
           <Button
             asChild
             variant="outline"
-            className="h-11 text-base font-bold tracking-wide clay-card border-2"
+            className="h-11 text-base font-bold tracking-wide shadow-[var(--clay-shadow-sm)] border-2"
           >
             <Link to="/signup">Sign Up</Link>
           </Button>
