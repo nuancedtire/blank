@@ -1,11 +1,12 @@
 import * as React from "react";
-import { createFileRoute } from "@tanstack/react-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "convex/_generated/api";
 import { SearchBar } from "@/components/search/search-bar";
 import { SearchResults } from "@/components/search/search-results";
 import { GuidelineCard } from "@/components/guidelines/guideline-card";
+import { GuidelineCardSkeleton } from "@/components/guidelines/guideline-card-skeleton";
 import { Card, CardInteractive } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -45,17 +46,18 @@ function SearchPage() {
     return () => clearTimeout(timeoutId);
   }, [query]);
 
-  // Fetch all published guidelines for browsing
+  // Fetch published guideline summaries (no content field — lightweight)
   const { data: allGuidelines } = useQuery(
-    convexQuery(api.guidelines.listPublished, {})
+    convexQuery(api.guidelines.listPublishedSummaries, {})
   );
 
-  // Search when query is submitted
+  // Search when query changes — keep previous results visible while loading
   const { data: searchResults, isLoading: isSearching } = useQuery({
     ...convexQuery(api.guidelines.search, {
       query: searchQuery,
     }),
     enabled: !!searchQuery,
+    placeholderData: keepPreviousData,
   });
 
   // Get current user for pinned guidelines
@@ -179,9 +181,10 @@ function SearchPage() {
                     (g: any) => g.category === cat.name
                   ).length ?? 0;
                 return (
-                  <a
+                  <Link
                     key={cat.name}
-                    href={`/browse/${encodeURIComponent(cat.name)}`}
+                    to="/browse/$category"
+                    params={{ category: cat.name }}
                   >
                     <CardInteractive className="flex-row items-center gap-2 sm:gap-2.5 p-2.5 sm:p-3 group">
                       <span className="text-xl sm:text-2xl group-hover:scale-110 transition-transform">
@@ -194,7 +197,7 @@ function SearchPage() {
                         </p>
                       </div>
                     </CardInteractive>
-                  </a>
+                  </Link>
                 );
               })}
             </div>
@@ -223,13 +226,7 @@ function SearchPage() {
                   onTogglePin={() => pinMutation.mutate(g._id)}
                 />
               ))}
-              {!allGuidelines && (
-                <Card className="p-6 text-center">
-                  <p className="text-sm text-muted-foreground font-light">
-                    Loading guidelines...
-                  </p>
-                </Card>
-              )}
+              {!allGuidelines && <GuidelineCardSkeleton count={4} />}
               {allGuidelines?.length === 0 && (
                 <Card className="p-6 text-center">
                   <p className="text-sm text-muted-foreground font-light">

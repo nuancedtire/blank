@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 
-// Get all published guidelines
+// Get all published guidelines (full, including content)
 export const listPublished = query({
   args: {},
   handler: async (ctx) => {
@@ -9,6 +9,21 @@ export const listPublished = query({
       .query("guidelines")
       .withIndex("by_status", (q) => q.eq("status", "published"))
       .collect();
+  },
+});
+
+// Get published guidelines without heavy content field (for lists/cards)
+export const listPublishedSummaries = query({
+  args: {},
+  handler: async (ctx) => {
+    const guidelines = await ctx.db
+      .query("guidelines")
+      .withIndex("by_status", (q) => q.eq("status", "published"))
+      .collect();
+
+    return guidelines.map(
+      ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest
+    );
   },
 });
 
@@ -20,16 +35,20 @@ export const listAll = query({
   },
 });
 
-// Get guidelines by category
+// Get guidelines by category (without content for list views)
 export const getByCategory = query({
   args: { category: v.string() },
   handler: async (ctx, { category }) => {
-    return await ctx.db
+    const guidelines = await ctx.db
       .query("guidelines")
       .withIndex("by_category_status", (q) =>
         q.eq("category", category).eq("status", "published")
       )
       .collect();
+
+    return guidelines.map(
+      ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest
+    );
   },
 });
 
@@ -95,7 +114,12 @@ export const search = query({
         return sq;
       });
 
-    return await searchQuery.take(10);
+    const results = await searchQuery.take(10);
+
+    // Strip heavy content field for search results
+    return results.map(
+      ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest
+    );
   },
 });
 

@@ -45,6 +45,8 @@ function CategoryPage() {
           />
         ))}
 
+        {!guidelines && <GuidelineCardSkeleton count={3} />}
+
         {guidelines?.length === 0 && (
           <div className="text-center py-12">
             <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />

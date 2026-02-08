@@ -4,6 +4,7 @@ import { convexQuery } from "@convex-dev/react-query";
 import { api } from "convex/_generated/api";
 import { CardInteractive } from "@/components/ui/card";
 import { FolderOpen, ChevronRight } from "lucide-react";
+import { CategoryCardSkeleton } from "@/components/guidelines/guideline-card-skeleton";
 
 export const Route = createFileRoute("/_authed/browse/")({
   component: BrowsePage,
@@ -78,12 +79,7 @@ function BrowsePage() {
         );
       })}
 
-      {!categories && (
-        <div className="text-center py-12">
-          <FolderOpen className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
-          <p className="text-muted-foreground">Loading categories...</p>
-        </div>
-      )}
+      {!categories && <CategoryCardSkeleton />}
 
       {categories?.length === 0 && (
         <div className="text-center py-12">
