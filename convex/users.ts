@@ -102,12 +102,21 @@ export const togglePin = mutation({
     const authUser = await authComponent.getAuthUser(ctx);
     if (!authUser) throw new Error("Not authenticated");
 
-    const user = await ctx.db
+    let user = await ctx.db
       .query("users")
       .withIndex("by_email", (q) => q.eq("email", authUser.email))
       .first();
 
-    if (!user) throw new Error("User profile not found");
+    if (!user) {
+      // Auto-create user profile if it doesn't exist yet
+      const id = await ctx.db.insert("users", {
+        email: authUser.email,
+        name: authUser.name ?? authUser.email.split("@")[0],
+        role: "user",
+        lastActive: Date.now(),
+      });
+      user = (await ctx.db.get(id))!;
+    }
 
     const pinned = user.pinnedGuidelines ?? [];
     const idx = pinned.indexOf(guidelineId);
