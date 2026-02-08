@@ -1,12 +1,20 @@
 // DO NOT DELETE THIS FILE!!!
-// This file is a good smoke test to make sure the custom server entry is working
-import handler from "@tanstack/react-start/server-entry";
+// Custom server entry: intercepts auth requests and proxies to Convex Better Auth
+import tanstackHandler from "@tanstack/react-start/server-entry";
+import { handler as authHandler } from "./lib/auth-server";
 
 console.log("[server-entry]: using custom server entry in 'src/server.ts'");
 
 export default {
-  fetch(request: Request) {
-    return handler.fetch(request, {
+  async fetch(request: Request) {
+    const url = new URL(request.url);
+
+    // Proxy /api/auth/* requests to Better Auth handler on Convex
+    if (url.pathname.startsWith("/api/auth")) {
+      return authHandler(request);
+    }
+
+    return tanstackHandler.fetch(request, {
       context: {
         fromFetch: true,
       },

@@ -9,38 +9,169 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SignupRouteImport } from './routes/signup'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthedSearchRouteImport } from './routes/_authed/search'
+import { Route as AuthedBrowseIndexRouteImport } from './routes/_authed/browse/index'
+import { Route as AuthedAdminIndexRouteImport } from './routes/_authed/admin/index'
+import { Route as AuthedGuidelineSlugRouteImport } from './routes/_authed/guideline/$slug'
+import { Route as AuthedBrowseCategoryRouteImport } from './routes/_authed/browse/$category'
+import { Route as AuthedAdminGuidelinesRouteImport } from './routes/_authed/admin/guidelines'
 
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthedRoute = AuthedRouteImport.update({
+  id: '/_authed',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthedSearchRoute = AuthedSearchRouteImport.update({
+  id: '/search',
+  path: '/search',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedBrowseIndexRoute = AuthedBrowseIndexRouteImport.update({
+  id: '/browse/',
+  path: '/browse/',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedAdminIndexRoute = AuthedAdminIndexRouteImport.update({
+  id: '/admin/',
+  path: '/admin/',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedGuidelineSlugRoute = AuthedGuidelineSlugRouteImport.update({
+  id: '/guideline/$slug',
+  path: '/guideline/$slug',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedBrowseCategoryRoute = AuthedBrowseCategoryRouteImport.update({
+  id: '/browse/$category',
+  path: '/browse/$category',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedAdminGuidelinesRoute = AuthedAdminGuidelinesRouteImport.update({
+  id: '/admin/guidelines',
+  path: '/admin/guidelines',
+  getParentRoute: () => AuthedRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
+  '/search': typeof AuthedSearchRoute
+  '/admin/guidelines': typeof AuthedAdminGuidelinesRoute
+  '/browse/$category': typeof AuthedBrowseCategoryRoute
+  '/guideline/$slug': typeof AuthedGuidelineSlugRoute
+  '/admin': typeof AuthedAdminIndexRoute
+  '/browse': typeof AuthedBrowseIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
+  '/search': typeof AuthedSearchRoute
+  '/admin/guidelines': typeof AuthedAdminGuidelinesRoute
+  '/browse/$category': typeof AuthedBrowseCategoryRoute
+  '/guideline/$slug': typeof AuthedGuidelineSlugRoute
+  '/admin': typeof AuthedAdminIndexRoute
+  '/browse': typeof AuthedBrowseIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_authed': typeof AuthedRouteWithChildren
+  '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
+  '/_authed/search': typeof AuthedSearchRoute
+  '/_authed/admin/guidelines': typeof AuthedAdminGuidelinesRoute
+  '/_authed/browse/$category': typeof AuthedBrowseCategoryRoute
+  '/_authed/guideline/$slug': typeof AuthedGuidelineSlugRoute
+  '/_authed/admin/': typeof AuthedAdminIndexRoute
+  '/_authed/browse/': typeof AuthedBrowseIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/signup'
+    | '/search'
+    | '/admin/guidelines'
+    | '/browse/$category'
+    | '/guideline/$slug'
+    | '/admin'
+    | '/browse'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/login'
+    | '/signup'
+    | '/search'
+    | '/admin/guidelines'
+    | '/browse/$category'
+    | '/guideline/$slug'
+    | '/admin'
+    | '/browse'
+  id:
+    | '__root__'
+    | '/'
+    | '/_authed'
+    | '/login'
+    | '/signup'
+    | '/_authed/search'
+    | '/_authed/admin/guidelines'
+    | '/_authed/browse/$category'
+    | '/_authed/guideline/$slug'
+    | '/_authed/admin/'
+    | '/_authed/browse/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthedRoute: typeof AuthedRouteWithChildren
+  LoginRoute: typeof LoginRoute
+  SignupRoute: typeof SignupRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authed': {
+      id: '/_authed'
+      path: ''
+      fullPath: ''
+      preLoaderRoute: typeof AuthedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +179,77 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authed/search': {
+      id: '/_authed/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof AuthedSearchRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/browse/': {
+      id: '/_authed/browse/'
+      path: '/browse'
+      fullPath: '/browse'
+      preLoaderRoute: typeof AuthedBrowseIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/admin/': {
+      id: '/_authed/admin/'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AuthedAdminIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/guideline/$slug': {
+      id: '/_authed/guideline/$slug'
+      path: '/guideline/$slug'
+      fullPath: '/guideline/$slug'
+      preLoaderRoute: typeof AuthedGuidelineSlugRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/browse/$category': {
+      id: '/_authed/browse/$category'
+      path: '/browse/$category'
+      fullPath: '/browse/$category'
+      preLoaderRoute: typeof AuthedBrowseCategoryRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/admin/guidelines': {
+      id: '/_authed/admin/guidelines'
+      path: '/admin/guidelines'
+      fullPath: '/admin/guidelines'
+      preLoaderRoute: typeof AuthedAdminGuidelinesRouteImport
+      parentRoute: typeof AuthedRoute
+    }
   }
 }
 
+interface AuthedRouteChildren {
+  AuthedSearchRoute: typeof AuthedSearchRoute
+  AuthedAdminGuidelinesRoute: typeof AuthedAdminGuidelinesRoute
+  AuthedBrowseCategoryRoute: typeof AuthedBrowseCategoryRoute
+  AuthedGuidelineSlugRoute: typeof AuthedGuidelineSlugRoute
+  AuthedAdminIndexRoute: typeof AuthedAdminIndexRoute
+  AuthedBrowseIndexRoute: typeof AuthedBrowseIndexRoute
+}
+
+const AuthedRouteChildren: AuthedRouteChildren = {
+  AuthedSearchRoute: AuthedSearchRoute,
+  AuthedAdminGuidelinesRoute: AuthedAdminGuidelinesRoute,
+  AuthedBrowseCategoryRoute: AuthedBrowseCategoryRoute,
+  AuthedGuidelineSlugRoute: AuthedGuidelineSlugRoute,
+  AuthedAdminIndexRoute: AuthedAdminIndexRoute,
+  AuthedBrowseIndexRoute: AuthedBrowseIndexRoute,
+}
+
+const AuthedRouteWithChildren =
+  AuthedRoute._addFileChildren(AuthedRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthedRoute: AuthedRouteWithChildren,
+  LoginRoute: LoginRoute,
+  SignupRoute: SignupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -24,6 +24,12 @@ const config = defineConfig({
       },
     }),
   ],
+  ssr: {
+    noExternal: ["@convex-dev/better-auth"],
+  },
+  server: {
+    allowedHosts: ["blank.exe.xyz"],
+  },
 });
 
 export default config;
