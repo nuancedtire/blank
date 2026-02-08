@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite dev --port 3000",
+    "dev": "vite dev --port 8000",
     "build": "vite build",
     "deploy": "pnpm run build && wrangler deploy",
     "serve": "vite preview",

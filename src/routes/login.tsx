@@ -65,7 +65,7 @@ function LoginPage() {
       </div>
 
       <Card className="relative z-10 w-full max-w-md clay-card backdrop-blur-sm bg-card/98">
-        <CardHeader className="text-center space-y-2 pb-3 px-4 sm:px-6 pt-5">
+        <CardHeader className="text-center space-y-2 px-4 sm:px-6">
           <CardTitle className="text-2xl sm:text-3xl font-extrabold tracking-tight bg-gradient-to-br from-primary to-accent bg-clip-text text-transparent">
             ED Guidelines
           </CardTitle>
@@ -113,7 +113,7 @@ function LoginPage() {
             </div>
           </CardContent>
 
-          <CardFooter className="flex flex-col gap-2.5 pt-1 px-4 sm:px-6 pb-5">
+          <CardFooter className="flex flex-col gap-2.5 pt-4 px-4 sm:px-6">
             <Button
               type="submit"
               className="clay-button w-full h-10 sm:h-11 text-sm sm:text-base font-bold tracking-wide"

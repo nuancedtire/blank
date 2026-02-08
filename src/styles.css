@@ -20,25 +20,31 @@ code {
 
 :root {
   /* Claymorphism Light Theme - Terracotta & Clay */
-  --background: oklch(0.94 0.025 60); /* Warm clay background */
-  --foreground: oklch(0.22 0.04 30); /* Deep brown-red */
+  --background: oklch(0.94 0.025 60);
+  /* Warm clay background */
+  --foreground: oklch(0.22 0.04 30);
+  /* Deep brown-red */
 
-  --card: oklch(0.97 0.015 55); /* Lighter clay */
+  --card: oklch(0.97 0.015 55);
+  /* Lighter clay */
   --card-foreground: oklch(0.24 0.04 35);
 
   --popover: oklch(0.96 0.018 58);
   --popover-foreground: oklch(0.23 0.04 32);
 
-  --primary: oklch(0.55 0.18 30); /* Terracotta red */
+  --primary: oklch(0.55 0.18 30);
+  /* Terracotta red */
   --primary-foreground: oklch(0.98 0.008 30);
 
-  --secondary: oklch(0.62 0.12 100); /* Warm ochre */
+  --secondary: oklch(0.62 0.12 100);
+  /* Warm ochre */
   --secondary-foreground: oklch(0.20 0.03 100);
 
   --muted: oklch(0.88 0.02 60);
   --muted-foreground: oklch(0.50 0.05 35);
 
-  --accent: oklch(0.68 0.14 50); /* Burnt orange */
+  --accent: oklch(0.68 0.14 50);
+  /* Burnt orange */
   --accent-foreground: oklch(0.18 0.03 50);
 
   --destructive: oklch(0.58 0.22 20);
@@ -85,25 +91,31 @@ code {
 
 .dark {
   /* Claymorphism Dark Theme - Fired Clay */
-  --background: oklch(0.20 0.04 25); /* Deep charcoal-brown */
-  --foreground: oklch(0.92 0.015 50); /* Warm off-white */
+  --background: oklch(0.20 0.04 25);
+  /* Deep charcoal-brown */
+  --foreground: oklch(0.92 0.015 50);
+  /* Warm off-white */
 
-  --card: oklch(0.25 0.045 30); /* Dark fired clay */
+  --card: oklch(0.25 0.045 30);
+  /* Dark fired clay */
   --card-foreground: oklch(0.90 0.018 45);
 
   --popover: oklch(0.23 0.042 28);
   --popover-foreground: oklch(0.91 0.016 48);
 
-  --primary: oklch(0.68 0.20 35); /* Bright terracotta */
+  --primary: oklch(0.68 0.20 35);
+  /* Bright terracotta */
   --primary-foreground: oklch(0.15 0.04 35);
 
-  --secondary: oklch(0.58 0.14 90); /* Mustard yellow */
+  --secondary: oklch(0.58 0.14 90);
+  /* Mustard yellow */
   --secondary-foreground: oklch(0.12 0.02 90);
 
   --muted: oklch(0.32 0.04 30);
   --muted-foreground: oklch(0.62 0.06 35);
 
-  --accent: oklch(0.65 0.16 45); /* Burnt sienna */
+  --accent: oklch(0.65 0.16 45);
+  /* Burnt sienna */
   --accent-foreground: oklch(0.12 0.02 45);
 
   --destructive: oklch(0.55 0.22 15);
@@ -189,6 +201,7 @@ code {
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
@@ -196,9 +209,12 @@ code {
 
 /* Claymorphism Animation & Motion */
 @keyframes float {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translateY(0px);
   }
+
   50% {
     transform: translateY(-8px);
   }
@@ -208,9 +224,11 @@ code {
   0% {
     transform: scale(1);
   }
+
   50% {
     transform: scale(1.03);
   }
+
   100% {
     transform: scale(1);
   }
@@ -221,6 +239,7 @@ code {
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -232,6 +251,7 @@ code {
     opacity: 0;
     transform: translateX(-20px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);

@@ -6,7 +6,6 @@ import { api } from "convex/_generated/api";
 import { SearchBar } from "@/components/search/search-bar";
 import { SearchResults } from "@/components/search/search-results";
 import { GuidelineCard } from "@/components/guidelines/guideline-card";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
 export const Route = createFileRoute("/_authed/search")({
