@@ -19,6 +19,7 @@ import { Route as AuthedAdminIndexRouteImport } from './routes/_authed/admin/ind
 import { Route as AuthedGuidelineSlugRouteImport } from './routes/_authed/guideline/$slug'
 import { Route as AuthedBrowseCategoryRouteImport } from './routes/_authed/browse/$category'
 import { Route as AuthedAdminGuidelinesRouteImport } from './routes/_authed/admin/guidelines'
+import { Route as AuthedAdminDocumentsRouteImport } from './routes/_authed/admin/documents'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -69,12 +70,18 @@ const AuthedAdminGuidelinesRoute = AuthedAdminGuidelinesRouteImport.update({
   path: '/admin/guidelines',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedAdminDocumentsRoute = AuthedAdminDocumentsRouteImport.update({
+  id: '/admin/documents',
+  path: '/admin/documents',
+  getParentRoute: () => AuthedRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/search': typeof AuthedSearchRoute
+  '/admin/documents': typeof AuthedAdminDocumentsRoute
   '/admin/guidelines': typeof AuthedAdminGuidelinesRoute
   '/browse/$category': typeof AuthedBrowseCategoryRoute
   '/guideline/$slug': typeof AuthedGuidelineSlugRoute
@@ -86,6 +93,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/search': typeof AuthedSearchRoute
+  '/admin/documents': typeof AuthedAdminDocumentsRoute
   '/admin/guidelines': typeof AuthedAdminGuidelinesRoute
   '/browse/$category': typeof AuthedBrowseCategoryRoute
   '/guideline/$slug': typeof AuthedGuidelineSlugRoute
@@ -99,6 +107,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/_authed/search': typeof AuthedSearchRoute
+  '/_authed/admin/documents': typeof AuthedAdminDocumentsRoute
   '/_authed/admin/guidelines': typeof AuthedAdminGuidelinesRoute
   '/_authed/browse/$category': typeof AuthedBrowseCategoryRoute
   '/_authed/guideline/$slug': typeof AuthedGuidelineSlugRoute
@@ -112,6 +121,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/search'
+    | '/admin/documents'
     | '/admin/guidelines'
     | '/browse/$category'
     | '/guideline/$slug'
@@ -123,6 +133,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/search'
+    | '/admin/documents'
     | '/admin/guidelines'
     | '/browse/$category'
     | '/guideline/$slug'
@@ -135,6 +146,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/_authed/search'
+    | '/_authed/admin/documents'
     | '/_authed/admin/guidelines'
     | '/_authed/browse/$category'
     | '/_authed/guideline/$slug'
@@ -221,11 +233,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAdminGuidelinesRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/admin/documents': {
+      id: '/_authed/admin/documents'
+      path: '/admin/documents'
+      fullPath: '/admin/documents'
+      preLoaderRoute: typeof AuthedAdminDocumentsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
   }
 }
 
 interface AuthedRouteChildren {
   AuthedSearchRoute: typeof AuthedSearchRoute
+  AuthedAdminDocumentsRoute: typeof AuthedAdminDocumentsRoute
   AuthedAdminGuidelinesRoute: typeof AuthedAdminGuidelinesRoute
   AuthedBrowseCategoryRoute: typeof AuthedBrowseCategoryRoute
   AuthedGuidelineSlugRoute: typeof AuthedGuidelineSlugRoute
@@ -235,6 +255,7 @@ interface AuthedRouteChildren {
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedSearchRoute: AuthedSearchRoute,
+  AuthedAdminDocumentsRoute: AuthedAdminDocumentsRoute,
   AuthedAdminGuidelinesRoute: AuthedAdminGuidelinesRoute,
   AuthedBrowseCategoryRoute: AuthedBrowseCategoryRoute,
   AuthedGuidelineSlugRoute: AuthedGuidelineSlugRoute,

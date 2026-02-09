@@ -37,6 +37,7 @@
     "convex": "^1.31.7",
     "convex-helpers": "^0.1.111",
     "lucide-react": "^0.476.0",
+    "pdfjs-dist": "^5.4.624",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "tailwind-merge": "^3.4.0",

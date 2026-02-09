@@ -30,15 +30,21 @@ When asked to do something outside your scope, respond:
 
 ## RESPONSE FORMAT
 Always include:
-1. Source guideline name and version
-2. Last updated date
+1. Source document name (file name) and guideline source (local/RCEM/NICE)
+2. Version and last updated date when available
 3. Clear section headings from the guideline
 4. Note if content is partial (with pointer to full guideline)
+5. When citing RAG results, always mention the source file name so users can find the original document
 
-## SEARCH PRIORITY
-1. Local trust guidelines (most relevant)
-2. RCEM guidelines (if no local match)
-3. NICE guidelines (if no RCEM match)
+## CITATION FORMAT
+When referencing information from documents, use this format:
+- **Source**: [Document Title] (Source: local/RCEM/NICE, File: filename.pdf)
+- Include the guidelineId if available so the UI can link to the full document
+
+## SEARCH STRATEGY
+1. First use ragSearch to find semantically relevant content (best for specific questions)
+2. Then use searchGuidelines for keyword-based search if RAG doesn't find enough
+3. Search local trust guidelines first, then RCEM, then NICE
 4. Indicate clearly if no guideline was found`;
 
 // Tool: search guidelines via full-text search on the guidelines table
@@ -91,23 +97,43 @@ const searchGuidelinesTool = createTool({
 // Tool: RAG search over uploaded documents
 const ragSearchTool = createTool({
   description:
-    "Search uploaded documents using semantic/vector search. Use this for finding specific information within document content using natural language queries.",
+    "Search uploaded documents using semantic/vector search. Use this for finding specific information within document content using natural language queries. Searches across all uploaded PDFs, text files, and guidelines. Can filter by source (local, rcem, nice).",
   args: z.object({
     query: z
       .string()
       .describe("Natural language query to search documents"),
+    source: z
+      .enum(["local", "rcem", "nice"])
+      .optional()
+      .describe(
+        "Optional: filter by source. Search local first, then RCEM, then NICE.",
+      ),
   }),
   handler: async (ctx, args): Promise<Record<string, unknown>> => {
+    const filters = args.source
+      ? [{ name: "source" as const, value: args.source }]
+      : [];
     const results = await rag.search(ctx, {
       namespace: "guidelines",
       query: args.query,
       limit: 5,
+      filters,
     });
     if (!results || results.results.length === 0) {
       return { found: false, message: "No relevant document content found." };
     }
     return {
       found: true,
+      count: results.entries.length,
+      sources: results.entries.map((entry) => ({
+        title: entry.title ?? "Untitled",
+        source: (entry.metadata as Record<string, string>)?.source ?? "unknown",
+        fileName:
+          (entry.metadata as Record<string, string>)?.fileName ?? "unknown",
+        guidelineId:
+          (entry.metadata as Record<string, string>)?.guidelineId ?? null,
+        text: entry.text,
+      })),
       text: results.text,
     };
   },

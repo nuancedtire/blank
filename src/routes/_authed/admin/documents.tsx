@@ -5,7 +5,6 @@ import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { useConvex } from "convex/react";
 import { api } from "convex/_generated/api";
 import { Button } from "@/components/ui/button";
-
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -24,19 +23,32 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  Eye,
 } from "lucide-react";
+import { extractTextFromPdf } from "@/lib/pdf-extract";
 
 export const Route = createFileRoute("/_authed/admin/documents")({
   component: ManageDocumentsPage,
 });
 
+const CATEGORIES = [
+  "Medical",
+  "Trauma",
+  "Resuscitation",
+  "Paediatrics",
+  "Policies",
+  "Other",
+];
+
 function ManageDocumentsPage() {
   const convex = useConvex();
   const queryClient = useQueryClient();
   const [isUploading, setIsUploading] = React.useState(false);
+  const [uploadProgress, setUploadProgress] = React.useState("");
   const [selectedSource, setSelectedSource] = React.useState<
     "local" | "rcem" | "nice"
   >("local");
+  const [selectedCategory, setSelectedCategory] = React.useState("Medical");
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const { data: documents } = useQuery(
@@ -56,10 +68,12 @@ function ManageDocumentsPage() {
 
     try {
       for (const file of Array.from(files)) {
+        setUploadProgress(`Uploading ${file.name}...`);
+
         // Step 1: Get upload URL
         const uploadUrl = await generateUploadUrl({});
 
-        // Step 2: Upload file
+        // Step 2: Upload file to Convex storage
         const result = await fetch(uploadUrl, {
           method: "POST",
           headers: { "Content-Type": file.type },
@@ -74,23 +88,32 @@ function ManageDocumentsPage() {
           fileName: file.name,
           fileType: file.type,
           source: selectedSource,
+          category: selectedCategory,
         });
 
-        // Step 4: Extract text and index
-        const text = await extractTextFromFile(file);
-        if (text) {
-          // Call the index action
+        // Step 4: Extract text
+        setUploadProgress(`Extracting text from ${file.name}...`);
+        const text = await extractText(file);
+
+        if (text && text.length > 50) {
+          // Step 5: Index the document (RAG + create guideline)
+          setUploadProgress(`Indexing ${file.name}...`);
+          const title = file.name.replace(/\.[^/.]+$/, "");
           convex
             .action(api.documents.indexDocument, {
               documentId,
               content: text,
-              title: file.name.replace(/\.[^/.]+$/, ""),
+              title,
             })
             .catch((e) => console.error("Indexing error:", e));
+        } else {
+          console.warn(
+            `Could not extract enough text from ${file.name}. File may be image-based.`,
+          );
         }
       }
 
-      // Refresh the document list
+      // Refresh lists
       queryClient.invalidateQueries({
         queryKey: convexQuery(api.documents.listDocuments, {}).queryKey,
       });
@@ -98,6 +121,7 @@ function ManageDocumentsPage() {
       console.error("Upload error:", e);
     } finally {
       setIsUploading(false);
+      setUploadProgress("");
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -105,7 +129,7 @@ function ManageDocumentsPage() {
   };
 
   const handleDelete = async (documentId: string) => {
-    if (!confirm("Delete this document? This cannot be undone.")) return;
+    if (!confirm("Delete this document and its guideline entry?")) return;
     try {
       await convex.action(api.documents.deleteDocument, {
         documentId: documentId as any,
@@ -158,7 +182,7 @@ function ManageDocumentsPage() {
           <div>
             <h1 className="text-xl font-bold">Upload Documents</h1>
             <p className="text-sm text-muted-foreground">
-              Upload guidelines for RAG search
+              Upload PDFs & text files — auto-indexed for search and RAG
             </p>
           </div>
         </div>
@@ -169,13 +193,14 @@ function ManageDocumentsPage() {
         <CardHeader className="p-4 pb-2">
           <CardTitle className="text-sm">Upload Files</CardTitle>
           <CardDescription className="text-xs">
-            Upload PDF or text files. They will be indexed for AI-powered search.
+            Upload PDF, text, or markdown files. They’ll be parsed, indexed into
+            RAG, and added as browsable guidelines automatically.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-4 pt-2">
           <div className="space-y-4">
-            <div className="flex items-end gap-3">
-              <div className="space-y-1.5 flex-1">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
                 <Label htmlFor="source" className="text-xs">
                   Guideline Source
                 </Label>
@@ -194,6 +219,23 @@ function ManageDocumentsPage() {
                   <option value="nice">NICE</option>
                 </select>
               </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="category" className="text-xs">
+                  Category
+                </Label>
+                <select
+                  id="category"
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="flex h-9 w-full rounded-xl border border-input bg-transparent px-3 py-1 text-sm transition-shadow focus:outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  {CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div
@@ -203,7 +245,7 @@ function ManageDocumentsPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".txt,.md,.pdf,.doc,.docx"
+                accept=".txt,.md,.pdf"
                 multiple
                 className="hidden"
                 onChange={handleFileUpload}
@@ -212,14 +254,14 @@ function ManageDocumentsPage() {
               {isUploading ? (
                 <div className="flex flex-col items-center gap-2">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  <p className="text-sm font-medium">Uploading & indexing...</p>
+                  <p className="text-sm font-medium">{uploadProgress}</p>
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-2">
                   <Upload className="h-8 w-8 text-muted-foreground" />
                   <p className="text-sm font-medium">Click to upload files</p>
                   <p className="text-xs text-muted-foreground">
-                    Supports .txt, .md, .pdf, .doc, .docx
+                    Supports .pdf, .txt, .md
                   </p>
                 </div>
               )}
@@ -238,48 +280,13 @@ function ManageDocumentsPage() {
           {documents?.map((doc: any) => {
             const source = sourceLabels[doc.source];
             return (
-              <div key={doc._id} className="flex items-center gap-3 p-3">
-                {statusIcon(doc.status)}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{doc.fileName}</p>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <Badge
-                      variant="outline"
-                      className={`text-[10px] px-1.5 py-0 ${source?.className ?? ""}`}
-                    >
-                      {source?.label ?? doc.source}
-                    </Badge>
-                    <Badge
-                      variant={
-                        doc.status === "indexed"
-                          ? "default"
-                          : doc.status === "error"
-                            ? "destructive"
-                            : "secondary"
-                      }
-                      className="text-[10px] px-1.5 py-0"
-                    >
-                      {doc.status}
-                    </Badge>
-                    <span className="text-[10px] text-muted-foreground">
-                      {new Date(doc.uploadedAt).toLocaleDateString("en-GB")}
-                    </span>
-                  </div>
-                  {doc.errorMessage && (
-                    <p className="text-xs text-destructive mt-1 truncate">
-                      {doc.errorMessage}
-                    </p>
-                  )}
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                  onClick={() => handleDelete(doc._id)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
+              <DocumentRow
+                key={doc._id}
+                doc={doc}
+                source={source}
+                statusIcon={statusIcon(doc.status)}
+                onDelete={() => handleDelete(doc._id)}
+              />
             );
           })}
           {(!documents || documents.length === 0) && (
@@ -294,8 +301,89 @@ function ManageDocumentsPage() {
   );
 }
 
-// Extract text from files client-side
-async function extractTextFromFile(file: File): Promise<string | null> {
+function DocumentRow({
+  doc,
+  source,
+  statusIcon,
+  onDelete,
+}: {
+  doc: any;
+  source: { label: string; className: string } | undefined;
+  statusIcon: React.ReactNode;
+  onDelete: () => void;
+}) {
+  const { data: fileUrl } = useQuery({
+    ...convexQuery(api.documents.getFileUrl, { storageId: doc.storageId }),
+    enabled: !!doc.storageId,
+  });
+
+  return (
+    <div className="flex items-center gap-3 p-3">
+      {statusIcon}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate">{doc.fileName}</p>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <Badge
+            variant="outline"
+            className={`text-[10px] px-1.5 py-0 ${source?.className ?? ""}`}
+          >
+            {source?.label ?? doc.source}
+          </Badge>
+          {doc.category && (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+              {doc.category}
+            </Badge>
+          )}
+          <Badge
+            variant={
+              doc.status === "indexed"
+                ? "default"
+                : doc.status === "error"
+                  ? "destructive"
+                  : "secondary"
+            }
+            className="text-[10px] px-1.5 py-0"
+          >
+            {doc.status}
+          </Badge>
+          <span className="text-[10px] text-muted-foreground">
+            {new Date(doc.uploadedAt).toLocaleDateString("en-GB")}
+          </span>
+        </div>
+        {doc.errorMessage && (
+          <p className="text-xs text-destructive mt-1 truncate">
+            {doc.errorMessage}
+          </p>
+        )}
+      </div>
+      <div className="flex items-center gap-1">
+        {fileUrl && (
+          <a href={fileUrl} target="_blank" rel="noopener noreferrer">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              title="View file"
+            >
+              <Eye className="h-3.5 w-3.5" />
+            </Button>
+          </a>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+          onClick={onDelete}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// Extract text from any supported file type
+async function extractText(file: File): Promise<string | null> {
   const type = file.type;
   const name = file.name.toLowerCase();
 
@@ -309,25 +397,21 @@ async function extractTextFromFile(file: File): Promise<string | null> {
     return await file.text();
   }
 
-  // For PDF - try basic text extraction
-  // Note: Full PDF parsing should use pdf.js in production
+  // PDF files - use pdf.js for proper extraction
   if (type === "application/pdf" || name.endsWith(".pdf")) {
-    // For now, return a placeholder - PDF parsing needs pdf.js
-    // The user should upload text/markdown files for best results
     try {
-      const text = await file.text();
-      // Try to extract readable text from PDF binary
-      const readable = text.replace(/[^\x20-\x7E\n\r\t]/g, " ").trim();
-      if (readable.length > 100) {
-        return readable;
+      const text = await extractTextFromPdf(file);
+      if (text && text.trim().length > 50) {
+        return text;
       }
-    } catch {
-      // ignore
+      console.warn(
+        `PDF ${file.name} appears to be image-based or has very little text.`,
+      );
+      return null;
+    } catch (e) {
+      console.error(`Failed to parse PDF ${file.name}:`, e);
+      return null;
     }
-    console.warn(
-      "PDF text extraction is limited. For best results, upload .txt or .md files.",
-    );
-    return null;
   }
 
   return null;

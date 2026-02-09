@@ -4,7 +4,14 @@ import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "convex/_generated/api";
 import { GuidelineContent } from "@/components/guidelines/guideline-content";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Star, ThumbsUp, ThumbsDown, FileText } from "lucide-react";
+import {
+  ArrowLeft,
+  Star,
+  ThumbsUp,
+  ThumbsDown,
+  FileText,
+  Download,
+} from "lucide-react";
 
 export const Route = createFileRoute("/_authed/guideline/$slug")({
   component: GuidelineDetailPage,
@@ -18,9 +25,16 @@ function GuidelineDetailPage() {
     convexQuery(api.guidelines.getBySlug, { slug })
   );
 
-  const { data: currentUser } = useQuery(
-    convexQuery(api.users.me, {})
-  );
+  const { data: currentUser } = useQuery(convexQuery(api.users.me, {}));
+
+  // Get file URL if this guideline has an associated PDF
+  const storageId = (guideline as any)?.storageId;
+  const { data: fileUrl } = useQuery({
+    ...convexQuery(api.documents.getFileUrl, {
+      storageId: storageId ?? ("skip" as any),
+    }),
+    enabled: !!storageId,
+  });
 
   const togglePin = useConvexMutation(api.users.togglePin);
   const pinMutation = useMutation({
@@ -82,21 +96,31 @@ function GuidelineDetailPage() {
             Back
           </Button>
         </Link>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-8 gap-1"
-          onClick={() => pinMutation.mutate()}
-        >
-          <Star
-            className={
-              isPinned
-                ? "h-4 w-4 fill-yellow-400 text-yellow-400"
-                : "h-4 w-4"
-            }
-          />
-          {isPinned ? "Pinned" : "Pin"}
-        </Button>
+        <div className="flex items-center gap-2">
+          {fileUrl && (
+            <a href={fileUrl} target="_blank" rel="noopener noreferrer">
+              <Button variant="outline" size="sm" className="h-8 gap-1">
+                <Download className="h-4 w-4" />
+                View PDF
+              </Button>
+            </a>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1"
+            onClick={() => pinMutation.mutate()}
+          >
+            <Star
+              className={
+                isPinned
+                  ? "h-4 w-4 fill-yellow-400 text-yellow-400"
+                  : "h-4 w-4"
+              }
+            />
+            {isPinned ? "Pinned" : "Pin"}
+          </Button>
+        </div>
       </div>
 
       {/* Guideline Content */}

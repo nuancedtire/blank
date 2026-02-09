@@ -38,8 +38,11 @@ export default defineSchema({
       v.literal("rcem"),
       v.literal("nice")
     ),
-    // Original file in R2 (if uploaded as PDF/DOCX)
+    // Original file in storage (if uploaded as PDF/DOCX)
     fileKey: v.optional(v.string()),
+    storageId: v.optional(v.id("_storage")),
+    // Link back to uploaded document
+    uploadedDocumentId: v.optional(v.id("uploadedDocuments")),
     // Metadata
     createdBy: v.optional(v.id("users")),
     lastUpdatedBy: v.optional(v.id("users")),
@@ -113,6 +116,7 @@ export default defineSchema({
       v.literal("rcem"),
       v.literal("nice")
     ),
+    category: v.optional(v.string()),
     status: v.union(
       v.literal("pending"),
       v.literal("indexing"),
@@ -120,10 +124,13 @@ export default defineSchema({
       v.literal("error")
     ),
     errorMessage: v.optional(v.string()),
+    // Link to auto-created guideline entry
+    guidelineId: v.optional(v.id("guidelines")),
     uploadedAt: v.number(),
   })
     .index("by_status", ["status"])
-    .index("by_uploadedAt", ["uploadedAt"]),
+    .index("by_uploadedAt", ["uploadedAt"])
+    .index("by_guidelineId", ["guidelineId"]),
 
   // Search feedback for improving results
   searchFeedback: defineTable({
