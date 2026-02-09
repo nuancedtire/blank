@@ -40,19 +40,34 @@ export const indexDocument = action({
     title: v.string(),
   },
   handler: async (ctx, args) => {
-    // Add to RAG index
-    await rag.add(ctx, {
-      namespace: "guidelines",
-      key: args.documentId,
-      text: args.content,
-      title: args.title,
-    });
-
-    // Update document status
+    // Set status to indexing
     await ctx.runMutation(internal.documents.updateStatus, {
       documentId: args.documentId,
-      status: "indexed",
+      status: "indexing",
     });
+
+    try {
+      // Add to RAG index
+      await rag.add(ctx, {
+        namespace: "guidelines",
+        key: args.documentId,
+        text: args.content,
+        title: args.title,
+      });
+
+      // Update document status
+      await ctx.runMutation(internal.documents.updateStatus, {
+        documentId: args.documentId,
+        status: "indexed",
+      });
+    } catch (e) {
+      console.error("Failed to index document:", e);
+      await ctx.runMutation(internal.documents.updateStatusWithError, {
+        documentId: args.documentId,
+        errorMessage: e instanceof Error ? e.message : "Unknown indexing error",
+      });
+      throw e;
+    }
   },
 });
 
@@ -62,12 +77,24 @@ export const updateStatus = internalMutation({
     documentId: v.id("uploadedDocuments"),
     status: v.union(
       v.literal("pending"),
+      v.literal("indexing"),
       v.literal("indexed"),
       v.literal("error")
     ),
   },
   handler: async (ctx, { documentId, status }) => {
     await ctx.db.patch(documentId, { status });
+  },
+});
+
+// Update document status with error message (internal)
+export const updateStatusWithError = internalMutation({
+  args: {
+    documentId: v.id("uploadedDocuments"),
+    errorMessage: v.string(),
+  },
+  handler: async (ctx, { documentId, errorMessage }) => {
+    await ctx.db.patch(documentId, { status: "error" as const, errorMessage });
   },
 });
 
