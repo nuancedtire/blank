@@ -182,7 +182,7 @@ function ManageGuidelinesPage() {
 
       {/* Create/Edit Form */}
       {showForm && (
-        <Card>
+        <Card className="py-0">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-sm">
               {editingId ? "Edit Guideline" : "New Guideline"}

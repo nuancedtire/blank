@@ -31,6 +31,7 @@ import {
   X,
 } from "lucide-react";
 import { extractTextFromPdf } from "@/lib/pdf-extract";
+import { Textarea } from "@/components/ui/textarea";
 
 export const Route = createFileRoute("/_authed/admin/documents")({
   component: ManageDocumentsPage,
@@ -192,7 +193,7 @@ function ManageDocumentsPage() {
       </div>
 
       {/* Upload Section */}
-      <Card>
+      <Card className="py-0">
         <CardHeader className="p-4 pb-2">
           <CardTitle className="text-sm">Upload Files</CardTitle>
           <CardDescription className="text-xs">
@@ -313,7 +314,7 @@ function DocumentRow({
   const isDraft = guideline?.status === "draft";
 
   return (
-    <Card className={isDraft ? "border-amber-500/40 bg-amber-500/5" : ""}>
+    <Card className={isDraft ? "border-amber-500/40 bg-amber-500/5 p-0" : "p-0"}>
       <div className="flex items-center gap-3 p-3">
         {statusIcon}
         <div className="flex-1 min-w-0">
@@ -468,10 +469,11 @@ function ReviewPanel({ guideline }: { guideline: any }) {
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Summary</Label>
-            <Input
+            <Textarea
               value={summary}
               onChange={(e) => setSummary(e.target.value)}
               className="h-8 text-sm"
+              rows={4}
             />
           </div>
           <div className="grid grid-cols-2 gap-2">
