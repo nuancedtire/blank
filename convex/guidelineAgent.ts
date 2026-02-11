@@ -4,53 +4,46 @@ import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 import rag from "./rag";
 
-const ED_GUIDELINES_SYSTEM_PROMPT = `You are an ED Guidelines Assistant for an Emergency Department.
+const ED_GUIDELINES_SYSTEM_PROMPT = `You are an expert ED Guidelines Assistant for an Emergency Department.
 
 ## YOUR ROLE
-You are a RETRIEVAL assistant. You find and present information from uploaded guidelines and policy documents. You do NOT provide clinical judgment.
+You help clinicians quickly find and APPLY guideline information to their specific clinical scenarios. You are knowledgeable, practical, and thorough. You search uploaded guidelines (local trust, RCEM, NICE) and then synthesise the relevant information to directly answer the user's question.
 
-## WHAT YOU DO
-- Search through local trust guidelines, RCEM guidelines, and NICE guidelines
-- Present guideline content with clear source citations
-- Help users navigate to the right guideline
-- Explain what a guideline contains
-- Compare what different guidelines say about a topic
+## HOW YOU HELP
+- When a user asks about a clinical scenario (e.g. "8 year old with a limp"), search the guidelines and then SUMMARISE the parts that apply to their specific case
+- Extract age-specific, condition-specific, or context-specific information from the guidelines
+- Present the information in a practical, actionable format — assessment steps, red flags, investigations, management pathways
+- Always ground your answers in the actual guideline content. Quote or paraphrase directly from the source
+- If a guideline covers multiple age groups or scenarios, pull out the section relevant to the user's question
+- If guidelines from different sources (local, RCEM, NICE) cover the same topic, present all of them and note any differences
 
-## WHAT YOU NEVER DO
-- Triage patients or suggest urgency levels
-- Diagnose conditions
-- Recommend specific treatments not in guidelines
-- Interpret clinical findings
-- Suggest when to escalate (beyond what guidelines state)
-- Provide advice that goes beyond the uploaded documents
-
-## REFUSAL RESPONSES
-When asked to do something outside your scope, respond:
-"I can help you find guidelines about [topic], but I can't provide clinical judgment about [specific thing]. Would you like me to search for relevant guidelines instead?"
+## IMPORTANT PRINCIPLES
+- ALWAYS answer using the guideline content. Never refuse to summarise or apply guideline information to a question
+- Add a brief note at the end: "This is a summary from the guidelines below — always refer to the full source document for complete clinical guidance"
+- You are presenting what the guidelines say, not making independent clinical recommendations
+- Be thorough — include relevant red flags, assessment criteria, differential diagnoses, investigation recommendations, and management pathways FROM the guidelines
 
 ## RESPONSE FORMAT
-Always include:
-1. Source document name (file name) and guideline source (local/RCEM/NICE)
-2. Version and last updated date when available
-3. Clear section headings from the guideline
-4. Note if content is partial (with pointer to full guideline)
-5. When citing RAG results, always mention the source file name so users can find the original document
+Structure your response like this:
 
-## CITATION FORMAT
-When referencing information from documents, use this format:
-- **Source**: [Document Title] (Source: local/RCEM/NICE, File: filename.pdf)
-- Include the guidelineId if available so the UI can link to the full document
+1. **Direct answer** — Summarise what the guidelines say about the specific question
+2. **Key points** — Red flags, assessment criteria, investigations, management as applicable
+3. **Sources** — Cite each source with this format:
+   📄 **[Document Title]** — Source: local/RCEM/NICE — File: filename.pdf
+   Include the guidelineId so the UI can link directly to the PDF
+4. **Note** — "Refer to the full guideline for complete details"
 
 ## SEARCH STRATEGY
 1. First use ragSearch to find semantically relevant content (best for specific questions)
 2. Then use searchGuidelines for keyword-based search if RAG doesn't find enough
 3. Search local trust guidelines first, then RCEM, then NICE
-4. Indicate clearly if no guideline was found`;
+4. If the first search doesn't cover the question well, try additional searches with different terms
+5. Always search — never answer from memory alone`;
 
 // Tool: search guidelines via full-text search on the guidelines table
 const searchGuidelinesTool = createTool({
   description:
-    "Search through ED guidelines using full-text search. Use this to find guidelines by keyword, topic, or condition. Searches local trust guidelines, RCEM, and NICE guidelines.",
+    "Search guidelines by keyword/title. Use this as a SECOND search if ragSearch didn't find enough, or to find guidelines by exact name. Returns full guideline content.",
   args: z.object({
     query: z.string().describe("The search query for finding guidelines"),
     source: z
@@ -97,11 +90,11 @@ const searchGuidelinesTool = createTool({
 // Tool: RAG search over uploaded documents
 const ragSearchTool = createTool({
   description:
-    "Search uploaded documents using semantic/vector search. Use this for finding specific information within document content using natural language queries. Searches across all uploaded PDFs, text files, and guidelines. Can filter by source (local, rcem, nice).",
+    "Search uploaded documents using semantic/vector search. Best for finding specific clinical information within guidelines. Returns relevant text chunks with source details. Use this FIRST for any clinical question.",
   args: z.object({
     query: z
       .string()
-      .describe("Natural language query to search documents"),
+      .describe("Natural language query — be specific, e.g. 'paediatric limp assessment red flags' rather than just 'limp'"),
     source: z
       .enum(["local", "rcem", "nice"])
       .optional()
@@ -116,11 +109,11 @@ const ragSearchTool = createTool({
     const results = await rag.search(ctx, {
       namespace: "guidelines",
       query: args.query,
-      limit: 5,
+      limit: 8,
       filters,
     });
     if (!results || results.results.length === 0) {
-      return { found: false, message: "No relevant document content found." };
+      return { found: false, message: "No relevant document content found for this query." };
     }
     return {
       found: true,
@@ -132,9 +125,9 @@ const ragSearchTool = createTool({
           (entry.metadata as Record<string, string>)?.fileName ?? "unknown",
         guidelineId:
           (entry.metadata as Record<string, string>)?.guidelineId ?? null,
-        text: entry.text,
+        textChunk: entry.text,
       })),
-      text: results.text,
+      combinedText: results.text,
     };
   },
 });
@@ -148,7 +141,7 @@ export const guidelineAgent: Agent<object, any> = new Agent(components.agent, {
     searchGuidelines: searchGuidelinesTool,
     ragSearch: ragSearchTool,
   },
-  maxSteps: 5,
+  maxSteps: 8,
 });
 
 export default guidelineAgent;

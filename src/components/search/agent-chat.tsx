@@ -2,7 +2,16 @@ import * as React from "react";
 import { useConvex } from "convex/react";
 import { useUIMessages } from "@convex-dev/agent/react";
 import { api } from "convex/_generated/api";
-import { Bot, User, Loader2, CornerDownLeft, X, Sparkles } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import {
+  Bot,
+  User,
+  Loader2,
+  CornerDownLeft,
+  X,
+  Sparkles,
+  FileText,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -293,14 +302,32 @@ function formatMarkdownLight(text: string): React.ReactNode {
       );
     }
 
+    // Source citation blocks (📄 **Title** — Source: xxx — File: yyy)
+    if (p.includes("\ud83d\udcc4") || p.match(/\*\*Source\*\*:/)) {
+      const lines = p.split(/\n/).filter(Boolean);
+      return (
+        <div key={i} className="space-y-1.5 my-2">
+          {lines.map((line, j) => {
+            const sourceCard = renderSourceCard(line);
+            if (sourceCard) return <React.Fragment key={j}>{sourceCard}</React.Fragment>;
+            return (
+              <p key={j} className="text-sm">
+                {formatInline(line)}
+              </p>
+            );
+          })}
+        </div>
+      );
+    }
+
     // List items
-    if (p.match(/^[-*•]\s/m)) {
+    if (p.match(/^[-*\u2022]\s/m)) {
       const items = p.split(/\n/).filter(Boolean);
       return (
         <ul key={i} className="list-disc list-inside space-y-0.5 my-1">
           {items.map((item, j) => (
             <li key={j} className="text-sm">
-              {formatInline(item.replace(/^[-*•]\s*/, ""))}
+              {formatInline(item.replace(/^[-*\u2022]\s*/, ""))}
             </li>
           ))}
         </ul>
@@ -329,15 +356,56 @@ function formatMarkdownLight(text: string): React.ReactNode {
   });
 }
 
+// Render a source citation line as a clickable card
+function renderSourceCard(line: string): React.ReactNode | null {
+  // Match patterns like: 📄 **Title** — Source: local — File: something.pdf
+  // or: **Source**: Title (Source: local, File: something.pdf)
+  const pdfMatch = line.match(
+    /(?:\ud83d\udcc4\s*)?\*\*(.+?)\*\*.*?(?:Source:|source:)\s*(\w+).*?(?:File:|file:)\s*([\w.-]+)/i,
+  );
+  if (!pdfMatch) return null;
+
+  const [, title, source, fileName] = pdfMatch;
+
+  return (
+    <Link
+      to="/browse"
+      className="flex items-center gap-3 px-3 py-2 rounded-lg border bg-muted/30 hover:bg-muted/60 transition-colors group no-underline"
+    >
+      <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+        <FileText className="h-4 w-4 text-primary" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium truncate text-foreground group-hover:text-primary transition-colors">
+          {title}
+        </p>
+        <p className="text-[10px] text-muted-foreground">
+          {source.toUpperCase()} · {fileName}
+        </p>
+      </div>
+    </Link>
+  );
+}
+
 function formatInline(text: string): React.ReactNode {
-  // Bold
-  const parts = text.split(/(\*\*[^*]+\*\*)/);
+  // Bold + inline code
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/);
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return (
         <strong key={i} className="font-bold">
           {part.slice(2, -2)}
         </strong>
+      );
+    }
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return (
+        <code
+          key={i}
+          className="bg-muted px-1 py-0.5 rounded text-xs font-mono"
+        >
+          {part.slice(1, -1)}
+        </code>
       );
     }
     return part;
