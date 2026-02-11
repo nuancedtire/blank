@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface AgentChatProps {
   initialQuery: string;
@@ -264,10 +266,47 @@ function StreamingText({
   }
 
   return (
-    <div className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none">
-      <MarkdownRenderer text={visibleText} />
+    <div className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:leading-relaxed [&_p]:my-1.5">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          // Render source cards for lines matching the citation format
+          p: ({ children, ...props }) => {
+            const text = extractText(children);
+            const sourceMatch = text?.match(
+              /\u{1F4C4}\s*\*?\*?(.+?)\*?\*?\s*[\u2014—-]+\s*Source:\s*(\w+)\s*[\u2014—-]+\s*File:\s*([\w.-]+)/u,
+            );
+            if (sourceMatch) {
+              return (
+                <SourceCard
+                  title={sourceMatch[1].trim()}
+                  source={sourceMatch[2]}
+                  fileName={sourceMatch[3]}
+                />
+              );
+            }
+            return <p {...props}>{children}</p>;
+          },
+        }}
+      >
+        {visibleText}
+      </ReactMarkdown>
     </div>
   );
+}
+
+/** Recursively extract plain text from React children */
+function extractText(children: React.ReactNode): string | null {
+  if (typeof children === "string") return children;
+  if (typeof children === "number") return String(children);
+  if (Array.isArray(children)) return children.map(extractText).join("");
+  if (React.isValidElement(children)) {
+    const props = children.props as Record<string, unknown>;
+    if (props.children) {
+      return extractText(props.children as React.ReactNode);
+    }
+  }
+  return null;
 }
 
 // ─── Tool call chip ────────────────────────────────────────────────────────
@@ -338,153 +377,6 @@ function PulsingDots() {
   );
 }
 
-// ─── Markdown renderer ─────────────────────────────────────────────────────
-
-function MarkdownRenderer({ text }: { text: string }) {
-  const blocks = React.useMemo(() => parseMarkdown(text), [text]);
-
-  return (
-    <>
-      {blocks.map((block, i) => (
-        <MarkdownBlock key={i} block={block} />
-      ))}
-    </>
-  );
-}
-
-type Block =
-  | { type: "heading"; level: number; text: string }
-  | { type: "paragraph"; text: string }
-  | { type: "list"; ordered: boolean; items: string[] }
-  | { type: "source-card"; title: string; source: string; fileName: string };
-
-function parseMarkdown(text: string): Block[] {
-  const lines = text.split("\n");
-  const blocks: Block[] = [];
-  let i = 0;
-
-  while (i < lines.length) {
-    const line = lines[i];
-
-    // Skip empty lines
-    if (!line.trim()) {
-      i++;
-      continue;
-    }
-
-    // Source citation: 📄 **Title** — Source: xxx — File: yyy
-    const sourceMatch = line.match(
-      /(?:\u{1F4C4}\s*)?\*\*(.+?)\*\*.*?(?:Source:|source:)\s*(\w+).*?(?:File:|file:)\s*([\w.-]+)/u,
-    );
-    if (sourceMatch) {
-      blocks.push({
-        type: "source-card",
-        title: sourceMatch[1],
-        source: sourceMatch[2],
-        fileName: sourceMatch[3],
-      });
-      i++;
-      continue;
-    }
-
-    // Headings
-    const headingMatch = line.match(/^(#{1,4})\s+(.+)/);
-    if (headingMatch) {
-      blocks.push({
-        type: "heading",
-        level: headingMatch[1].length,
-        text: headingMatch[2],
-      });
-      i++;
-      continue;
-    }
-
-    // Unordered list
-    if (line.match(/^\s*[-*•]\s/)) {
-      const items: string[] = [];
-      while (i < lines.length && lines[i].match(/^\s*[-*•]\s/)) {
-        items.push(lines[i].replace(/^\s*[-*•]\s*/, ""));
-        i++;
-      }
-      blocks.push({ type: "list", ordered: false, items });
-      continue;
-    }
-
-    // Ordered list
-    if (line.match(/^\s*\d+[.)\s]\s*/)) {
-      const items: string[] = [];
-      while (i < lines.length && lines[i].match(/^\s*\d+[.)\s]\s*/)) {
-        items.push(lines[i].replace(/^\s*\d+[.)\s]\s*/, ""));
-        i++;
-      }
-      blocks.push({ type: "list", ordered: true, items });
-      continue;
-    }
-
-    // Paragraph — collect consecutive non-empty lines
-    const paraLines: string[] = [];
-    while (
-      i < lines.length &&
-      lines[i].trim() &&
-      !lines[i].match(/^#{1,4}\s/) &&
-      !lines[i].match(/^\s*[-*•]\s/) &&
-      !lines[i].match(/^\s*\d+[.)\s]\s*/)
-    ) {
-      paraLines.push(lines[i]);
-      i++;
-    }
-    if (paraLines.length) {
-      blocks.push({ type: "paragraph", text: paraLines.join(" ") });
-    }
-  }
-
-  return blocks;
-}
-
-function MarkdownBlock({ block }: { block: Block }) {
-  switch (block.type) {
-    case "heading": {
-      const Tag = (`h${Math.min(block.level, 4)}` as "h1" | "h2" | "h3" | "h4");
-      const sizes = {
-        h1: "text-base font-extrabold mt-4 mb-1.5",
-        h2: "text-[15px] font-bold mt-3.5 mb-1",
-        h3: "text-sm font-bold mt-3 mb-1",
-        h4: "text-sm font-semibold mt-2 mb-0.5",
-      };
-      return (
-        <Tag className={sizes[Tag]}>
-          <InlineText text={block.text} />
-        </Tag>
-      );
-    }
-    case "paragraph":
-      return (
-        <p className="my-1.5 leading-relaxed">
-          <InlineText text={block.text} />
-        </p>
-      );
-    case "list":
-      return block.ordered ? (
-        <ol className="my-1.5 ml-4 space-y-1 list-decimal list-outside">
-          {block.items.map((item, j) => (
-            <li key={j} className="leading-relaxed pl-1">
-              <InlineText text={item} />
-            </li>
-          ))}
-        </ol>
-      ) : (
-        <ul className="my-1.5 ml-4 space-y-1 list-disc list-outside">
-          {block.items.map((item, j) => (
-            <li key={j} className="leading-relaxed pl-1">
-              <InlineText text={item} />
-            </li>
-          ))}
-        </ul>
-      );
-    case "source-card":
-      return <SourceCard title={block.title} source={block.source} fileName={block.fileName} />;
-  }
-}
 
 // ─── Source card ───────────────────────────────────────────────────────────
 
@@ -514,35 +406,5 @@ function SourceCard({
         </p>
       </div>
     </Link>
-  );
-}
-
-// ─── Inline text with bold / code ──────────────────────────────────────────
-
-function InlineText({ text }: { text: string }) {
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/);
-  return (
-    <>
-      {parts.map((part, i) => {
-        if (part.startsWith("**") && part.endsWith("**")) {
-          return (
-            <strong key={i} className="font-semibold">
-              {part.slice(2, -2)}
-            </strong>
-          );
-        }
-        if (part.startsWith("`") && part.endsWith("`")) {
-          return (
-            <code
-              key={i}
-              className="bg-muted px-1 py-0.5 rounded text-xs font-mono"
-            >
-              {part.slice(1, -1)}
-            </code>
-          );
-        }
-        return <React.Fragment key={i}>{part}</React.Fragment>;
-      })}
-    </>
   );
 }
