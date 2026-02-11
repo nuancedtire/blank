@@ -1,6 +1,11 @@
 import * as React from "react";
-import { useConvex } from "convex/react";
-import { useUIMessages } from "@convex-dev/agent/react";
+import { useMutation as useConvexRawMutation } from "convex/react";
+import {
+  useUIMessages,
+  useSmoothText,
+  optimisticallySendMessage,
+  type UIMessage,
+} from "@convex-dev/agent/react";
 import { api } from "convex/_generated/api";
 import { Link } from "@tanstack/react-router";
 import {
@@ -11,6 +16,8 @@ import {
   X,
   Sparkles,
   FileText,
+  Search,
+  BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -21,52 +28,53 @@ interface AgentChatProps {
 }
 
 export function AgentChat({ initialQuery, onClose }: AgentChatProps) {
-  const convex = useConvex();
   const [threadId, setThreadId] = React.useState<string | null>(null);
-  const [isCreatingThread, setIsCreatingThread] = React.useState(false);
-  const [isSending, setIsSending] = React.useState(false);
+  const [isCreating, setIsCreating] = React.useState(false);
   const [inputValue, setInputValue] = React.useState("");
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
   const sentInitialRef = React.useRef(false);
 
-  // Fetch messages with streaming support
+  // Create thread mutation
+  const createThread = useConvexRawMutation(api.agentActions.createAgentThread);
+
+  // Send message mutation with optimistic update
+  const sendMessage = useConvexRawMutation(
+    api.agentActions.sendMessage,
+  ).withOptimisticUpdate(
+    optimisticallySendMessage(api.agentActions.listThreadMessages),
+  );
+
+  // Fetch messages with streaming
   const messages = useUIMessages(
     api.agentActions.listThreadMessages,
     threadId ? { threadId } : "skip",
     { initialNumItems: 50, stream: true },
   );
 
-  // Create thread & send initial query on mount
+  // Create thread & send initial query
   React.useEffect(() => {
     if (sentInitialRef.current || !initialQuery.trim()) return;
     sentInitialRef.current = true;
 
     (async () => {
-      setIsCreatingThread(true);
+      setIsCreating(true);
       try {
-        const { threadId: newThreadId } = await convex.action(
-          api.agentActions.createAgentThread,
-          {},
-        );
+        const { threadId: newThreadId } = await createThread({});
         setThreadId(newThreadId);
-        setIsSending(true);
-        // Fire and forget - streaming will show results
-        convex
-          .action(api.agentActions.sendMessage, {
-            threadId: newThreadId,
-            prompt: initialQuery.trim(),
-          })
-          .finally(() => setIsSending(false));
+        await sendMessage({
+          threadId: newThreadId,
+          prompt: initialQuery.trim(),
+        });
       } catch (e) {
         console.error("Failed to create thread:", e);
       } finally {
-        setIsCreatingThread(false);
+        setIsCreating(false);
       }
     })();
-  }, [initialQuery, convex]);
+  }, [initialQuery, createThread, sendMessage]);
 
-  // Auto-scroll to bottom when messages change
+  // Auto-scroll on new messages
   React.useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -74,21 +82,13 @@ export function AgentChat({ initialQuery, onClose }: AgentChatProps) {
   }, [messages.results]);
 
   const handleSend = async () => {
-    if (!inputValue.trim() || !threadId || isSending) return;
-
+    if (!inputValue.trim() || !threadId) return;
     const prompt = inputValue.trim();
     setInputValue("");
-    setIsSending(true);
-
     try {
-      await convex.action(api.agentActions.sendMessage, {
-        threadId,
-        prompt,
-      });
+      await sendMessage({ threadId, prompt });
     } catch (e) {
-      console.error("Failed to send message:", e);
-    } finally {
-      setIsSending(false);
+      console.error("Failed to send:", e);
     }
   };
 
@@ -100,9 +100,12 @@ export function AgentChat({ initialQuery, onClose }: AgentChatProps) {
   };
 
   const isLoading =
-    isCreatingThread ||
-    messages.status === "LoadingFirstPage" ||
-    (isSending && messages.results.length === 0);
+    isCreating || messages.status === "LoadingFirstPage";
+
+  // Check if agent is currently generating (any message is streaming)
+  const isAgentThinking = messages.results.some(
+    (m) => m.status === "streaming",
+  );
 
   return (
     <div className="flex flex-col border rounded-2xl bg-card shadow-[var(--clay-shadow-md)] overflow-hidden animate-in slide-in-from-top-2 fade-in duration-300">
@@ -115,7 +118,9 @@ export function AgentChat({ initialQuery, onClose }: AgentChatProps) {
           <div>
             <p className="text-sm font-bold">Guidelines Agent</p>
             <p className="text-[10px] text-muted-foreground">
-              Searching guidelines for you
+              {isAgentThinking
+                ? "Searching & analysing guidelines..."
+                : "Ask about any clinical guideline"}
             </p>
           </div>
         </div>
@@ -137,106 +142,13 @@ export function AgentChat({ initialQuery, onClose }: AgentChatProps) {
         {isLoading && (
           <div className="flex items-center gap-3 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="text-sm">Searching guidelines...</span>
+            <span className="text-sm">Starting conversation...</span>
           </div>
         )}
 
-        {messages.results.map((msg) => {
-          const isUser = msg.role === "user";
-          const textPart = msg.parts?.find(
-            (p: { type: string }) => p.type === "text",
-          ) as { type: "text"; text: string } | undefined;
-          const toolParts = msg.parts?.filter(
-            (p: { type: string }) => p.type === "tool-invocation",
-          ) as unknown as Array<{
-            type: "tool-invocation";
-            toolInvocation: {
-              toolName: string;
-              state: string;
-              args?: Record<string, unknown>;
-            };
-          }>;
-
-          return (
-            <div
-              key={msg.order + "-" + msg.stepOrder}
-              className={cn(
-                "flex gap-3",
-                isUser ? "justify-end" : "justify-start",
-              )}
-            >
-              {!isUser && (
-                <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center shrink-0 mt-0.5">
-                  <Bot className="h-3.5 w-3.5 text-primary" />
-                </div>
-              )}
-              <div
-                className={cn(
-                  "max-w-[85%] space-y-2",
-                  isUser
-                    ? "bg-primary text-primary-foreground rounded-2xl rounded-br-md px-4 py-2.5"
-                    : "",
-                )}
-              >
-                {/* Tool invocations */}
-                {toolParts?.map((tp, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-1.5"
-                  >
-                    {tp.toolInvocation.state === "call" ||
-                    tp.toolInvocation.state === "partial-call" ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <Sparkles className="h-3 w-3" />
-                    )}
-                    <span>
-                      {tp.toolInvocation.toolName === "searchGuidelines"
-                        ? `Searching: ${(tp.toolInvocation.args as Record<string, string>)?.query ?? "guidelines"}`
-                        : tp.toolInvocation.toolName === "ragSearch"
-                          ? `RAG search: ${(tp.toolInvocation.args as Record<string, string>)?.query ?? "documents"}`
-                          : tp.toolInvocation.toolName}
-                    </span>
-                  </div>
-                ))}
-
-                {/* Text content */}
-                {textPart?.text && (
-                  <div
-                    className={cn(
-                      "text-sm leading-relaxed whitespace-pre-wrap",
-                      !isUser && "prose prose-sm dark:prose-invert max-w-none",
-                    )}
-                  >
-                    {formatMarkdownLight(textPart.text)}
-                  </div>
-                )}
-
-                {/* Streaming indicator */}
-                {!isUser &&
-                  (msg as { status?: string }).status === "streaming" &&
-                  !textPart?.text && (
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-primary/60 animate-pulse" />
-                      <span
-                        className="w-2 h-2 rounded-full bg-primary/40 animate-pulse"
-                        style={{ animationDelay: "0.2s" }}
-                      />
-                      <span
-                        className="w-2 h-2 rounded-full bg-primary/20 animate-pulse"
-                        style={{ animationDelay: "0.4s" }}
-                      />
-                    </div>
-                  )}
-              </div>
-              {isUser && (
-                <div className="h-7 w-7 rounded-full bg-gradient-to-br from-muted to-muted/60 flex items-center justify-center shrink-0 mt-0.5">
-                  <User className="h-3.5 w-3.5 text-muted-foreground" />
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {messages.results.map((msg) => (
+          <MessageBubble key={msg.key} message={msg} />
+        ))}
       </div>
 
       {/* Input */}
@@ -250,19 +162,15 @@ export function AgentChat({ initialQuery, onClose }: AgentChatProps) {
             placeholder="Ask a follow-up question..."
             className="flex-1 resize-none rounded-xl border bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-[40px] max-h-[120px]"
             rows={1}
-            disabled={!threadId || isSending}
+            disabled={!threadId}
           />
           <Button
             size="sm"
             className="h-10 w-10 p-0 rounded-xl shrink-0"
             onClick={handleSend}
-            disabled={!inputValue.trim() || !threadId || isSending}
+            disabled={!inputValue.trim() || !threadId}
           >
-            {isSending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <CornerDownLeft className="h-4 w-4" />
-            )}
+            <CornerDownLeft className="h-4 w-4" />
           </Button>
         </div>
         <p className="text-[10px] text-muted-foreground/50 mt-1.5 px-1">
@@ -273,113 +181,335 @@ export function AgentChat({ initialQuery, onClose }: AgentChatProps) {
   );
 }
 
-// Lightweight markdown-ish formatting for agent responses
-function formatMarkdownLight(text: string): React.ReactNode {
-  // Split into paragraphs
-  const paragraphs = text.split(/\n\n+/);
+// ─── Message bubble ────────────────────────────────────────────────────────
 
-  return paragraphs.map((p, i) => {
-    // Headers
-    if (p.startsWith("### ")) {
-      return (
-        <h4 key={i} className="font-bold text-sm mt-3 mb-1">
-          {p.slice(4)}
-        </h4>
-      );
-    }
-    if (p.startsWith("## ")) {
-      return (
-        <h3 key={i} className="font-bold text-base mt-3 mb-1">
-          {p.slice(3)}
-        </h3>
-      );
-    }
-    if (p.startsWith("# ")) {
-      return (
-        <h2 key={i} className="font-extrabold text-lg mt-3 mb-1">
-          {p.slice(2)}
-        </h2>
-      );
-    }
+function MessageBubble({ message }: { message: UIMessage }) {
+  const isUser = message.role === "user";
 
-    // Source citation blocks (📄 **Title** — Source: xxx — File: yyy)
-    if (p.includes("\ud83d\udcc4") || p.match(/\*\*Source\*\*:/)) {
-      const lines = p.split(/\n/).filter(Boolean);
-      return (
-        <div key={i} className="space-y-1.5 my-2">
-          {lines.map((line, j) => {
-            const sourceCard = renderSourceCard(line);
-            if (sourceCard) return <React.Fragment key={j}>{sourceCard}</React.Fragment>;
-            return (
-              <p key={j} className="text-sm">
-                {formatInline(line)}
-              </p>
-            );
-          })}
+  const textParts = message.parts?.filter(
+    (p): p is { type: "text"; text: string } => p.type === "text",
+  );
+  const toolParts = message.parts?.filter(
+    (p): p is Extract<(typeof message.parts)[number], { type: "tool-invocation" }> =>
+      p.type === "tool-invocation",
+  );
+
+  const fullText = textParts?.map((t) => t.text).join("") ?? "";
+  const isStreaming = message.status === "streaming";
+
+  return (
+    <div
+      className={cn(
+        "flex gap-3",
+        isUser ? "justify-end" : "justify-start",
+      )}
+    >
+      {!isUser && (
+        <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center shrink-0 mt-0.5">
+          <Bot className="h-3.5 w-3.5 text-primary" />
         </div>
-      );
+      )}
+
+      <div
+        className={cn(
+          "max-w-[85%] space-y-2",
+          isUser
+            ? "bg-primary text-primary-foreground rounded-2xl rounded-br-md px-4 py-2.5"
+            : "",
+        )}
+      >
+        {/* Tool invocations — show as thinking steps */}
+        {toolParts?.map((tp, i) => (
+          <ToolCallChip key={i} invocation={(tp as any).toolInvocation} />
+        ))}
+
+        {/* Text content with smooth streaming */}
+        {fullText ? (
+          <StreamingText text={fullText} isStreaming={isStreaming} isUser={isUser} />
+        ) : (
+          /* Streaming but no text yet — pulsing dots */
+          isStreaming &&
+          !toolParts?.length && (
+            <PulsingDots />
+          )
+        )}
+      </div>
+
+      {isUser && (
+        <div className="h-7 w-7 rounded-full bg-gradient-to-br from-muted to-muted/60 flex items-center justify-center shrink-0 mt-0.5">
+          <User className="h-3.5 w-3.5 text-muted-foreground" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Streaming text with smooth reveal ─────────────────────────────────────
+
+function StreamingText({
+  text,
+  isStreaming,
+  isUser,
+}: {
+  text: string;
+  isStreaming: boolean;
+  isUser: boolean;
+}) {
+  const [visibleText] = useSmoothText(text, {
+    startStreaming: isStreaming,
+  });
+
+  if (isUser) {
+    return <p className="text-sm leading-relaxed whitespace-pre-wrap">{visibleText}</p>;
+  }
+
+  return (
+    <div className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none">
+      <MarkdownRenderer text={visibleText} />
+    </div>
+  );
+}
+
+// ─── Tool call chip ────────────────────────────────────────────────────────
+
+function ToolCallChip({
+  invocation,
+}: {
+  invocation: {
+    toolName: string;
+    state: string;
+    args?: Record<string, unknown>;
+  };
+}) {
+  const isRunning =
+    invocation.state === "call" || invocation.state === "partial-call";
+  const query =
+    (invocation.args as Record<string, string>)?.query ?? "guidelines";
+
+  let icon = <Sparkles className="h-3 w-3" />;
+  let label = invocation.toolName;
+
+  if (invocation.toolName === "ragSearch") {
+    icon = isRunning ? (
+      <Loader2 className="h-3 w-3 animate-spin" />
+    ) : (
+      <BookOpen className="h-3 w-3" />
+    );
+    label = `RAG: "${query}"`;
+  } else if (invocation.toolName === "searchGuidelines") {
+    icon = isRunning ? (
+      <Loader2 className="h-3 w-3 animate-spin" />
+    ) : (
+      <Search className="h-3 w-3" />
+    );
+    label = `Search: "${query}"`;
+  }
+
+  return (
+    <div
+      className={cn(
+        "inline-flex items-center gap-2 text-xs rounded-lg px-3 py-1.5 transition-colors",
+        isRunning
+          ? "bg-primary/10 text-primary border border-primary/20"
+          : "bg-muted/50 text-muted-foreground",
+      )}
+    >
+      {icon}
+      <span className="truncate max-w-[250px]">{label}</span>
+    </div>
+  );
+}
+
+// ─── Pulsing dots ──────────────────────────────────────────────────────────
+
+function PulsingDots() {
+  return (
+    <div className="flex items-center gap-1.5 py-1">
+      <span className="w-2 h-2 rounded-full bg-primary/60 animate-pulse" />
+      <span
+        className="w-2 h-2 rounded-full bg-primary/40 animate-pulse"
+        style={{ animationDelay: "0.2s" }}
+      />
+      <span
+        className="w-2 h-2 rounded-full bg-primary/20 animate-pulse"
+        style={{ animationDelay: "0.4s" }}
+      />
+    </div>
+  );
+}
+
+// ─── Markdown renderer ─────────────────────────────────────────────────────
+
+function MarkdownRenderer({ text }: { text: string }) {
+  const blocks = React.useMemo(() => parseMarkdown(text), [text]);
+
+  return (
+    <>
+      {blocks.map((block, i) => (
+        <MarkdownBlock key={i} block={block} />
+      ))}
+    </>
+  );
+}
+
+type Block =
+  | { type: "heading"; level: number; text: string }
+  | { type: "paragraph"; text: string }
+  | { type: "list"; ordered: boolean; items: string[] }
+  | { type: "source-card"; title: string; source: string; fileName: string };
+
+function parseMarkdown(text: string): Block[] {
+  const lines = text.split("\n");
+  const blocks: Block[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Skip empty lines
+    if (!line.trim()) {
+      i++;
+      continue;
     }
 
-    // List items
-    if (p.match(/^[-*\u2022]\s/m)) {
-      const items = p.split(/\n/).filter(Boolean);
+    // Source citation: 📄 **Title** — Source: xxx — File: yyy
+    const sourceMatch = line.match(
+      /(?:\u{1F4C4}\s*)?\*\*(.+?)\*\*.*?(?:Source:|source:)\s*(\w+).*?(?:File:|file:)\s*([\w.-]+)/u,
+    );
+    if (sourceMatch) {
+      blocks.push({
+        type: "source-card",
+        title: sourceMatch[1],
+        source: sourceMatch[2],
+        fileName: sourceMatch[3],
+      });
+      i++;
+      continue;
+    }
+
+    // Headings
+    const headingMatch = line.match(/^(#{1,4})\s+(.+)/);
+    if (headingMatch) {
+      blocks.push({
+        type: "heading",
+        level: headingMatch[1].length,
+        text: headingMatch[2],
+      });
+      i++;
+      continue;
+    }
+
+    // Unordered list
+    if (line.match(/^\s*[-*•]\s/)) {
+      const items: string[] = [];
+      while (i < lines.length && lines[i].match(/^\s*[-*•]\s/)) {
+        items.push(lines[i].replace(/^\s*[-*•]\s*/, ""));
+        i++;
+      }
+      blocks.push({ type: "list", ordered: false, items });
+      continue;
+    }
+
+    // Ordered list
+    if (line.match(/^\s*\d+[.)\s]\s*/)) {
+      const items: string[] = [];
+      while (i < lines.length && lines[i].match(/^\s*\d+[.)\s]\s*/)) {
+        items.push(lines[i].replace(/^\s*\d+[.)\s]\s*/, ""));
+        i++;
+      }
+      blocks.push({ type: "list", ordered: true, items });
+      continue;
+    }
+
+    // Paragraph — collect consecutive non-empty lines
+    const paraLines: string[] = [];
+    while (
+      i < lines.length &&
+      lines[i].trim() &&
+      !lines[i].match(/^#{1,4}\s/) &&
+      !lines[i].match(/^\s*[-*•]\s/) &&
+      !lines[i].match(/^\s*\d+[.)\s]\s*/)
+    ) {
+      paraLines.push(lines[i]);
+      i++;
+    }
+    if (paraLines.length) {
+      blocks.push({ type: "paragraph", text: paraLines.join(" ") });
+    }
+  }
+
+  return blocks;
+}
+
+function MarkdownBlock({ block }: { block: Block }) {
+  switch (block.type) {
+    case "heading": {
+      const Tag = (`h${Math.min(block.level, 4)}` as "h1" | "h2" | "h3" | "h4");
+      const sizes = {
+        h1: "text-base font-extrabold mt-4 mb-1.5",
+        h2: "text-[15px] font-bold mt-3.5 mb-1",
+        h3: "text-sm font-bold mt-3 mb-1",
+        h4: "text-sm font-semibold mt-2 mb-0.5",
+      };
       return (
-        <ul key={i} className="list-disc list-inside space-y-0.5 my-1">
-          {items.map((item, j) => (
-            <li key={j} className="text-sm">
-              {formatInline(item.replace(/^[-*\u2022]\s*/, ""))}
+        <Tag className={sizes[Tag]}>
+          <InlineText text={block.text} />
+        </Tag>
+      );
+    }
+    case "paragraph":
+      return (
+        <p className="my-1.5 leading-relaxed">
+          <InlineText text={block.text} />
+        </p>
+      );
+    case "list":
+      return block.ordered ? (
+        <ol className="my-1.5 ml-4 space-y-1 list-decimal list-outside">
+          {block.items.map((item, j) => (
+            <li key={j} className="leading-relaxed pl-1">
+              <InlineText text={item} />
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <ul className="my-1.5 ml-4 space-y-1 list-disc list-outside">
+          {block.items.map((item, j) => (
+            <li key={j} className="leading-relaxed pl-1">
+              <InlineText text={item} />
             </li>
           ))}
         </ul>
       );
-    }
-
-    // Numbered lists
-    if (p.match(/^\d+\.\s/m)) {
-      const items = p.split(/\n/).filter(Boolean);
-      return (
-        <ol key={i} className="list-decimal list-inside space-y-0.5 my-1">
-          {items.map((item, j) => (
-            <li key={j} className="text-sm">
-              {formatInline(item.replace(/^\d+\.\s*/, ""))}
-            </li>
-          ))}
-        </ol>
-      );
-    }
-
-    return (
-      <p key={i} className="my-1">
-        {formatInline(p)}
-      </p>
-    );
-  });
+    case "source-card":
+      return <SourceCard title={block.title} source={block.source} fileName={block.fileName} />;
+  }
 }
 
-// Render a source citation line as a clickable card
-function renderSourceCard(line: string): React.ReactNode | null {
-  // Match patterns like: 📄 **Title** — Source: local — File: something.pdf
-  // or: **Source**: Title (Source: local, File: something.pdf)
-  const pdfMatch = line.match(
-    /(?:\ud83d\udcc4\s*)?\*\*(.+?)\*\*.*?(?:Source:|source:)\s*(\w+).*?(?:File:|file:)\s*([\w.-]+)/i,
-  );
-  if (!pdfMatch) return null;
+// ─── Source card ───────────────────────────────────────────────────────────
 
-  const [, title, source, fileName] = pdfMatch;
-
+function SourceCard({
+  title,
+  source,
+  fileName,
+}: {
+  title: string;
+  source: string;
+  fileName: string;
+}) {
   return (
     <Link
       to="/browse"
-      className="flex items-center gap-3 px-3 py-2 rounded-lg border bg-muted/30 hover:bg-muted/60 transition-colors group no-underline"
+      className="flex items-center gap-3 px-3 py-2.5 my-1.5 rounded-lg border bg-muted/30 hover:bg-muted/60 transition-colors group no-underline"
     >
-      <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+      <div className="h-9 w-9 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
         <FileText className="h-4 w-4 text-primary" />
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium truncate text-foreground group-hover:text-primary transition-colors">
           {title}
         </p>
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-[11px] text-muted-foreground">
           {source.toUpperCase()} · {fileName}
         </p>
       </div>
@@ -387,27 +517,32 @@ function renderSourceCard(line: string): React.ReactNode | null {
   );
 }
 
-function formatInline(text: string): React.ReactNode {
-  // Bold + inline code
+// ─── Inline text with bold / code ──────────────────────────────────────────
+
+function InlineText({ text }: { text: string }) {
   const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/);
-  return parts.map((part, i) => {
-    if (part.startsWith("**") && part.endsWith("**")) {
-      return (
-        <strong key={i} className="font-bold">
-          {part.slice(2, -2)}
-        </strong>
-      );
-    }
-    if (part.startsWith("`") && part.endsWith("`")) {
-      return (
-        <code
-          key={i}
-          className="bg-muted px-1 py-0.5 rounded text-xs font-mono"
-        >
-          {part.slice(1, -1)}
-        </code>
-      );
-    }
-    return part;
-  });
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith("**") && part.endsWith("**")) {
+          return (
+            <strong key={i} className="font-semibold">
+              {part.slice(2, -2)}
+            </strong>
+          );
+        }
+        if (part.startsWith("`") && part.endsWith("`")) {
+          return (
+            <code
+              key={i}
+              className="bg-muted px-1 py-0.5 rounded text-xs font-mono"
+            >
+              {part.slice(1, -1)}
+            </code>
+          );
+        }
+        return <React.Fragment key={i}>{part}</React.Fragment>;
+      })}
+    </>
+  );
 }
