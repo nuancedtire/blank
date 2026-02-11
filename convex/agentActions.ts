@@ -19,24 +19,21 @@ export const createAgentThread = action({
   },
 });
 
-// Send a message to the agent and stream the response
+// Send a message to the agent (uses generateText for reliable tool execution)
 export const sendMessage = action({
   args: {
     threadId: v.string(),
     prompt: v.string(),
   },
   handler: async (ctx, { threadId, prompt }): Promise<{ text: string }> => {
-    const result = await guidelineAgent.streamText(
+    const result = await guidelineAgent.generateText(
       ctx,
       { threadId },
-      // @ts-expect-error - generated types need regeneration via `npx convex dev`
+      // @ts-expect-error - tool types from agent definition aren't perfectly inferred
       { prompt },
-      { saveStreamDeltas: true },
     );
-    // Wait for the stream to complete
-    await result.consumeStream();
     return {
-      text: await result.text,
+      text: result.text,
     };
   },
 });

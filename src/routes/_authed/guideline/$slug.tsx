@@ -1,9 +1,11 @@
+import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "convex/_generated/api";
 import { GuidelineContent } from "@/components/guidelines/guideline-content";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft,
   Star,
@@ -11,7 +13,10 @@ import {
   ThumbsDown,
   FileText,
   Download,
+  Eye,
+  FileCode,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authed/guideline/$slug")({
   component: GuidelineDetailPage,
@@ -20,9 +25,10 @@ export const Route = createFileRoute("/_authed/guideline/$slug")({
 function GuidelineDetailPage() {
   const { slug } = Route.useParams();
   const queryClient = useQueryClient();
+  const [viewMode, setViewMode] = React.useState<"pdf" | "text">("pdf");
 
   const { data: guideline, isLoading } = useQuery(
-    convexQuery(api.guidelines.getBySlug, { slug })
+    convexQuery(api.guidelines.getBySlug, { slug }),
   );
 
   const { data: currentUser } = useQuery(convexQuery(api.users.me, {}));
@@ -36,12 +42,15 @@ function GuidelineDetailPage() {
     enabled: !!storageId,
   });
 
+  const hasPdf = !!storageId && !!fileUrl;
+
   const togglePin = useConvexMutation(api.users.togglePin);
   const pinMutation = useMutation({
-    mutationFn: () =>
-      togglePin({ guidelineId: (guideline as any)?._id }),
+    mutationFn: () => togglePin({ guidelineId: (guideline as any)?._id }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: convexQuery(api.users.me, {}).queryKey });
+      queryClient.invalidateQueries({
+        queryKey: convexQuery(api.users.me, {}).queryKey,
+      });
     },
   });
 
@@ -97,13 +106,42 @@ function GuidelineDetailPage() {
           </Button>
         </Link>
         <div className="flex items-center gap-2">
-          {fileUrl && (
-            <a href={fileUrl} target="_blank" rel="noopener noreferrer">
-              <Button variant="outline" size="sm" className="h-8 gap-1">
-                <Download className="h-4 w-4" />
-                View PDF
-              </Button>
-            </a>
+          {hasPdf && (
+            <>
+              {/* Toggle between PDF and text view */}
+              <div className="flex items-center rounded-lg border bg-muted p-0.5">
+                <button
+                  onClick={() => setViewMode("pdf")}
+                  className={cn(
+                    "flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                    viewMode === "pdf"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <Eye className="h-3 w-3" />
+                  PDF
+                </button>
+                <button
+                  onClick={() => setViewMode("text")}
+                  className={cn(
+                    "flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                    viewMode === "text"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <FileCode className="h-3 w-3" />
+                  Text
+                </button>
+              </div>
+              <a href={fileUrl} target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" size="sm" className="h-8 gap-1">
+                  <Download className="h-4 w-4" />
+                  Download
+                </Button>
+              </a>
+            </>
           )}
           <Button
             variant="ghost"
@@ -123,17 +161,55 @@ function GuidelineDetailPage() {
         </div>
       </div>
 
-      {/* Guideline Content */}
-      <div className="rounded-lg border bg-card p-4 sm:p-6">
-        <GuidelineContent
-          title={guideline.title}
-          content={guideline.content}
-          version={guideline.version}
-          source={guideline.source}
-          category={guideline.category}
-          lastUpdated={guideline.lastUpdated}
-        />
+      {/* Guideline metadata header */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge
+          variant="outline"
+          className={cn(
+            "text-xs",
+            guideline.source === "local"
+              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+              : guideline.source === "rcem"
+                ? "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                : "bg-purple-500/10 text-purple-600 dark:text-purple-400",
+          )}
+        >
+          {guideline.source.toUpperCase()}
+        </Badge>
+        <Badge variant="secondary" className="text-xs">
+          {guideline.category}
+        </Badge>
+        <span className="text-xs text-muted-foreground">
+          v{guideline.version} · Updated{" "}
+          {new Date(guideline.lastUpdated).toLocaleDateString("en-GB")}
+        </span>
       </div>
+
+      {/* Content: PDF viewer or extracted text */}
+      {hasPdf && viewMode === "pdf" ? (
+        <div className="rounded-lg border bg-card overflow-hidden">
+          <div className="bg-muted/50 px-4 py-2 border-b">
+            <h1 className="text-lg font-bold">{guideline.title}</h1>
+          </div>
+          <iframe
+            src={fileUrl}
+            className="w-full border-0"
+            style={{ height: "calc(100vh - 220px)", minHeight: "500px" }}
+            title={guideline.title}
+          />
+        </div>
+      ) : (
+        <div className="rounded-lg border bg-card p-4 sm:p-6">
+          <GuidelineContent
+            title={guideline.title}
+            content={guideline.content}
+            version={guideline.version}
+            source={guideline.source}
+            category={guideline.category}
+            lastUpdated={guideline.lastUpdated}
+          />
+        </div>
+      )}
 
       {/* Feedback */}
       <div className="flex items-center justify-center gap-3 py-4">
