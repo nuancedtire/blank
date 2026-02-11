@@ -13,6 +13,7 @@
     "convex:deploy": "npx convex deploy"
   },
   "dependencies": {
+    "@ai-sdk/cerebras": "^2.0.31",
     "@ai-sdk/openai": "^3.0.25",
     "@convex-dev/agent": "^0.3.2",
     "@convex-dev/better-auth": "^0.10.10",

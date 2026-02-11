@@ -10,7 +10,7 @@ import {
 import { internal } from "./_generated/api";
 import rag from "./rag";
 import { generateObject } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { cerebras } from "@ai-sdk/cerebras";
 import { z } from "zod";
 
 // Generate upload URL for file storage
@@ -192,7 +192,7 @@ export const processDocumentWithLLM = internalAction({
     const { rawText, fileName } = args;
 
     const result = await generateObject({
-      model: openai.chat("gpt-5-mini"),
+      model: cerebras.chat("zai-glm-4.7"),
       schema: DocumentMetadataSchema,
       system: `You are a medical document processor for an Emergency Department guidelines system.
 
