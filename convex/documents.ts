@@ -28,7 +28,6 @@ export const saveDocument = mutation({
     fileName: v.string(),
     fileType: v.string(),
     source: v.union(v.literal("local"), v.literal("rcem"), v.literal("nice")),
-    category: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const id = await ctx.db.insert("uploadedDocuments", {
@@ -36,7 +35,6 @@ export const saveDocument = mutation({
       fileName: args.fileName,
       fileType: args.fileType,
       source: args.source,
-      category: args.category,
       status: "pending",
       uploadedAt: Date.now(),
     });
@@ -71,14 +69,13 @@ export const indexDocument = action({
         {
           rawText: args.content,
           fileName: doc.fileName,
-          userSelectedCategory: doc.category,
         },
       );
 
       // If LLM says text is unusable, fail with a clear error
       if (!llmResult.hasUsableContent) {
         const reason =
-          llmResult.errorReason ??
+          llmResult.errorReason ||
           "No usable text could be extracted from this document.";
         throw new Error(reason);
       }
@@ -155,9 +152,8 @@ const DocumentMetadataSchema = z.object({
     ),
   errorReason: z
     .string()
-    .optional()
     .describe(
-      "If hasUsableContent is false, explain why (e.g. 'Text appears to be OCR noise with no readable content', 'Document is not a medical guideline').",
+      "If hasUsableContent is false, explain why (e.g. 'Text appears to be OCR noise with no readable content', 'Document is not a medical guideline'). Empty string if content is usable.",
     ),
   title: z
     .string()
@@ -191,10 +187,9 @@ export const processDocumentWithLLM = internalAction({
   args: {
     rawText: v.string(),
     fileName: v.string(),
-    userSelectedCategory: v.optional(v.string()),
   },
   handler: async (_ctx, args) => {
-    const { rawText, fileName, userSelectedCategory } = args;
+    const { rawText, fileName } = args;
 
     const result = await generateObject({
       model: openai.chat("gpt-5-mini"),
@@ -210,11 +205,11 @@ IMPORTANT:
 - NEVER invent clinical information. Only clean and restructure what's already there.
 - Fix common OCR issues: broken words, stray characters, misread numbers in dosages
 - Preserve tables, dosage information, and clinical criteria exactly
-- If the user pre-selected a category, respect it unless it's clearly wrong`,
+- Classify into the most appropriate category based on content`,
       prompt: `Process this uploaded document.
 
 Filename: ${fileName}
-User-selected category: ${userSelectedCategory ?? "(none — please infer)"}
+Category: (please infer from content)
 
 --- RAW EXTRACTED TEXT ---
 ${rawText.slice(0, 50000)}
@@ -247,7 +242,7 @@ export const createGuidelineFromDocument = internalMutation({
       summary: args.summary,
       keywords: args.keywords,
       version: "1.0",
-      status: "published",
+      status: "draft",
       source: args.source,
       storageId: args.storageId,
       uploadedDocumentId: args.uploadedDocumentId,
@@ -358,5 +353,47 @@ export const deleteGuideline = internalMutation({
   args: { guidelineId: v.id("guidelines") },
   handler: async (ctx, { guidelineId }) => {
     await ctx.db.delete(guidelineId);
+  },
+});
+
+// Approve and publish a draft guideline (with optional metadata overrides)
+export const publishGuideline = mutation({
+  args: {
+    guidelineId: v.id("guidelines"),
+    title: v.optional(v.string()),
+    summary: v.optional(v.string()),
+    category: v.optional(v.string()),
+    keywords: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db.get(args.guidelineId);
+    if (!existing) throw new Error("Guideline not found");
+
+    const updates: Record<string, unknown> = {
+      status: "published",
+      lastUpdated: Date.now(),
+    };
+    if (args.title !== undefined) updates.title = args.title;
+    if (args.summary !== undefined) updates.summary = args.summary;
+    if (args.category !== undefined) updates.category = args.category;
+    if (args.keywords !== undefined) updates.keywords = args.keywords;
+
+    // Update slug if title changed
+    if (args.title !== undefined) {
+      updates.slug = args.title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "") + "-" + Date.now();
+    }
+
+    await ctx.db.patch(args.guidelineId, updates);
+  },
+});
+
+// Get the guideline linked to a document (for review UI)
+export const getLinkedGuideline = query({
+  args: { guidelineId: v.id("guidelines") },
+  handler: async (ctx, { guidelineId }) => {
+    return await ctx.db.get(guidelineId);
   },
 });

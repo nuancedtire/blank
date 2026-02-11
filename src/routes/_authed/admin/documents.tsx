@@ -5,6 +5,7 @@ import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { useConvex } from "convex/react";
 import { api } from "convex/_generated/api";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -24,6 +25,10 @@ import {
   XCircle,
   Clock,
   Eye,
+  Sparkles,
+  Check,
+  Pencil,
+  X,
 } from "lucide-react";
 import { extractTextFromPdf } from "@/lib/pdf-extract";
 
@@ -48,7 +53,6 @@ function ManageDocumentsPage() {
   const [selectedSource, setSelectedSource] = React.useState<
     "local" | "rcem" | "nice"
   >("local");
-  const [selectedCategory, setSelectedCategory] = React.useState("Medical");
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const { data: documents } = useQuery(
@@ -82,13 +86,12 @@ function ManageDocumentsPage() {
         const json = await result.json();
         const storageId = (json as any).storageId;
 
-        // Step 3: Save document metadata
+        // Step 3: Save document metadata (no category — LLM will infer)
         const documentId = await saveDocument({
           storageId,
           fileName: file.name,
           fileType: file.type,
           source: selectedSource,
-          category: selectedCategory,
         });
 
         // Step 4: Extract text
@@ -96,7 +99,7 @@ function ManageDocumentsPage() {
         const text = await extractText(file);
 
         if (text && text.length > 50) {
-          // Step 5: LLM-process + RAG index + create guideline
+          // Step 5: LLM-process + RAG index + create draft guideline
           setUploadProgress(`Processing ${file.name} with AI...`);
           const title = file.name.replace(/\.[^/.]+$/, "");
           convex
@@ -182,7 +185,7 @@ function ManageDocumentsPage() {
           <div>
             <h1 className="text-xl font-bold">Upload Documents</h1>
             <p className="text-sm text-muted-foreground">
-              Upload PDFs & text files — auto-indexed for search and RAG
+              Upload PDFs & text files — AI extracts metadata, you review before publishing
             </p>
           </div>
         </div>
@@ -193,49 +196,31 @@ function ManageDocumentsPage() {
         <CardHeader className="p-4 pb-2">
           <CardTitle className="text-sm">Upload Files</CardTitle>
           <CardDescription className="text-xs">
-            Upload PDF, text, or markdown files. They’ll be parsed, indexed into
-            RAG, and added as browsable guidelines automatically.
+            Upload PDF, text, or markdown files. AI will extract the title,
+            category, summary, and tags — you can review and adjust before
+            publishing.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-4 pt-2">
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="source" className="text-xs">
-                  Guideline Source
-                </Label>
-                <select
-                  id="source"
-                  value={selectedSource}
-                  onChange={(e) =>
-                    setSelectedSource(
-                      e.target.value as "local" | "rcem" | "nice",
-                    )
-                  }
-                  className="flex h-9 w-full rounded-xl border border-input bg-transparent px-3 py-1 text-sm transition-shadow focus:outline-none focus:ring-2 focus:ring-primary/20"
-                >
-                  <option value="local">Local Trust</option>
-                  <option value="rcem">RCEM</option>
-                  <option value="nice">NICE</option>
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="category" className="text-xs">
-                  Category
-                </Label>
-                <select
-                  id="category"
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="flex h-9 w-full rounded-xl border border-input bg-transparent px-3 py-1 text-sm transition-shadow focus:outline-none focus:ring-2 focus:ring-primary/20"
-                >
-                  {CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="source" className="text-xs">
+                Guideline Source
+              </Label>
+              <select
+                id="source"
+                value={selectedSource}
+                onChange={(e) =>
+                  setSelectedSource(
+                    e.target.value as "local" | "rcem" | "nice",
+                  )
+                }
+                className="flex h-9 w-full max-w-xs rounded-xl border border-input bg-transparent px-3 py-1 text-sm transition-shadow focus:outline-none focus:ring-2 focus:ring-primary/20"
+              >
+                <option value="local">Local Trust</option>
+                <option value="rcem">RCEM</option>
+                <option value="nice">NICE</option>
+              </select>
             </div>
 
             <div
@@ -261,7 +246,7 @@ function ManageDocumentsPage() {
                   <Upload className="h-8 w-8 text-muted-foreground" />
                   <p className="text-sm font-medium">Click to upload files</p>
                   <p className="text-xs text-muted-foreground">
-                    Supports .pdf, .txt, .md
+                    Supports .pdf, .txt, .md — category & metadata auto-detected by AI
                   </p>
                 </div>
               )}
@@ -276,7 +261,7 @@ function ManageDocumentsPage() {
           <FileText className="h-4 w-4" />
           Uploaded Documents ({documents?.length ?? 0})
         </h2>
-        <div className="rounded-lg border bg-card divide-y">
+        <div className="space-y-2">
           {documents?.map((doc: any) => {
             const source = sourceLabels[doc.source];
             return (
@@ -290,9 +275,8 @@ function ManageDocumentsPage() {
             );
           })}
           {(!documents || documents.length === 0) && (
-            <div className="p-6 text-center text-sm text-muted-foreground">
-              No documents uploaded yet. Upload files above to enable RAG
-              search.
+            <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
+              No documents uploaded yet. Upload files above to get started.
             </div>
           )}
         </div>
@@ -317,65 +301,268 @@ function DocumentRow({
     enabled: !!doc.storageId,
   });
 
+  // Fetch linked guideline when indexed (to show review UI)
+  const { data: guideline } = useQuery({
+    ...convexQuery(
+      api.documents.getLinkedGuideline,
+      doc.guidelineId ? { guidelineId: doc.guidelineId } : "skip",
+    ),
+    enabled: !!doc.guidelineId,
+  });
+
+  const isDraft = guideline?.status === "draft";
+
   return (
-    <div className="flex items-center gap-3 p-3">
-      {statusIcon}
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{doc.fileName}</p>
-        <div className="flex items-center gap-1.5 mt-0.5">
-          <Badge
-            variant="outline"
-            className={`text-[10px] px-1.5 py-0 ${source?.className ?? ""}`}
-          >
-            {source?.label ?? doc.source}
-          </Badge>
-          {doc.category && (
-            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-              {doc.category}
+    <Card className={isDraft ? "border-amber-500/40 bg-amber-500/5" : ""}>
+      <div className="flex items-center gap-3 p-3">
+        {statusIcon}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium truncate">{doc.fileName}</p>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <Badge
+              variant="outline"
+              className={`text-[10px] px-1.5 py-0 ${source?.className ?? ""}`}
+            >
+              {source?.label ?? doc.source}
             </Badge>
+            <Badge
+              variant={
+                doc.status === "indexed"
+                  ? "default"
+                  : doc.status === "error"
+                    ? "destructive"
+                    : "secondary"
+              }
+              className="text-[10px] px-1.5 py-0"
+            >
+              {doc.status}
+            </Badge>
+            {isDraft && (
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30"
+              >
+                <Sparkles className="h-2.5 w-2.5 mr-0.5" />
+                Needs Review
+              </Badge>
+            )}
+            <span className="text-[10px] text-muted-foreground">
+              {new Date(doc.uploadedAt).toLocaleDateString("en-GB")}
+            </span>
+          </div>
+          {doc.errorMessage && (
+            <p className="text-xs text-destructive mt-1">{doc.errorMessage}</p>
           )}
-          <Badge
-            variant={
-              doc.status === "indexed"
-                ? "default"
-                : doc.status === "error"
-                  ? "destructive"
-                  : "secondary"
-            }
-            className="text-[10px] px-1.5 py-0"
-          >
-            {doc.status}
-          </Badge>
-          <span className="text-[10px] text-muted-foreground">
-            {new Date(doc.uploadedAt).toLocaleDateString("en-GB")}
-          </span>
         </div>
-        {doc.errorMessage && (
-          <p className="text-xs text-destructive mt-1 truncate">
-            {doc.errorMessage}
-          </p>
+        <div className="flex items-center gap-1">
+          {fileUrl && (
+            <a href={fileUrl} target="_blank" rel="noopener noreferrer">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0"
+                title="View file"
+              >
+                <Eye className="h-3.5 w-3.5" />
+              </Button>
+            </a>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+            onClick={onDelete}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Review panel for draft guidelines */}
+      {isDraft && guideline && (
+        <ReviewPanel guideline={guideline} />
+      )}
+    </Card>
+  );
+}
+
+function ReviewPanel({ guideline }: { guideline: any }) {
+  const queryClient = useQueryClient();
+  const publishGuideline = useConvexMutation(api.documents.publishGuideline);
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [isPublishing, setIsPublishing] = React.useState(false);
+
+  // Editable fields
+  const [title, setTitle] = React.useState(guideline.title);
+  const [summary, setSummary] = React.useState(guideline.summary ?? "");
+  const [category, setCategory] = React.useState(guideline.category);
+  const [keywords, setKeywords] = React.useState(
+    (guideline.keywords ?? []).join(", "),
+  );
+
+  // Reset when guideline changes
+  React.useEffect(() => {
+    setTitle(guideline.title);
+    setSummary(guideline.summary ?? "");
+    setCategory(guideline.category);
+    setKeywords((guideline.keywords ?? []).join(", "));
+  }, [guideline]);
+
+  const handlePublish = async () => {
+    setIsPublishing(true);
+    try {
+      const overrides: any = {};
+      if (title !== guideline.title) overrides.title = title;
+      if (summary !== (guideline.summary ?? "")) overrides.summary = summary;
+      if (category !== guideline.category) overrides.category = category;
+      const parsedKeywords = keywords
+        .split(",")
+        .map((k: string) => k.trim())
+        .filter(Boolean);
+      const originalKeywords = (guideline.keywords ?? []).join(", ");
+      if (keywords !== originalKeywords) overrides.keywords = parsedKeywords;
+
+      await publishGuideline({
+        guidelineId: guideline._id,
+        ...overrides,
+      });
+
+      setIsEditing(false);
+      queryClient.invalidateQueries();
+    } catch (e) {
+      console.error("Publish error:", e);
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  return (
+    <div className="border-t px-4 py-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1">
+          <Sparkles className="h-3 w-3" />
+          AI-suggested metadata — review before publishing
+        </p>
+        {!isEditing && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 text-xs gap-1"
+            onClick={() => setIsEditing(true)}
+          >
+            <Pencil className="h-3 w-3" />
+            Edit
+          </Button>
         )}
       </div>
-      <div className="flex items-center gap-1">
-        {fileUrl && (
-          <a href={fileUrl} target="_blank" rel="noopener noreferrer">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              title="View file"
-            >
-              <Eye className="h-3.5 w-3.5" />
-            </Button>
-          </a>
+
+      {isEditing ? (
+        <div className="space-y-2.5">
+          <div className="space-y-1">
+            <Label className="text-xs">Title</Label>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="h-8 text-sm"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Summary</Label>
+            <Input
+              value={summary}
+              onChange={(e) => setSummary(e.target.value)}
+              className="h-8 text-sm"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Category</Label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="flex h-8 w-full rounded-xl border border-input bg-transparent px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+              >
+                {CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Tags</Label>
+              <Input
+                value={keywords}
+                onChange={(e) => setKeywords(e.target.value)}
+                className="h-8 text-sm"
+                placeholder="sepsis, infection, ..."
+              />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <div className="flex items-baseline gap-2">
+            <span className="text-xs text-muted-foreground w-14 shrink-0">Title</span>
+            <span className="text-sm font-medium">{title}</span>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-xs text-muted-foreground w-14 shrink-0">Summary</span>
+            <span className="text-xs">{summary}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground w-14 shrink-0">Category</span>
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+              {category}
+            </Badge>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="text-xs text-muted-foreground w-14 shrink-0 pt-0.5">Tags</span>
+            <div className="flex flex-wrap gap-1">
+              {(guideline.keywords ?? []).map((tag: string) => (
+                <Badge
+                  key={tag}
+                  variant="secondary"
+                  className="text-[10px] px-1.5 py-0"
+                >
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex gap-2 justify-end pt-1">
+        {isEditing && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs gap-1"
+            onClick={() => {
+              setTitle(guideline.title);
+              setSummary(guideline.summary ?? "");
+              setCategory(guideline.category);
+              setKeywords((guideline.keywords ?? []).join(", "));
+              setIsEditing(false);
+            }}
+          >
+            <X className="h-3 w-3" />
+            Cancel
+          </Button>
         )}
         <Button
-          variant="ghost"
           size="sm"
-          className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-          onClick={onDelete}
+          className="h-7 text-xs gap-1"
+          onClick={handlePublish}
+          disabled={isPublishing}
         >
-          <Trash2 className="h-3.5 w-3.5" />
+          {isPublishing ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Check className="h-3 w-3" />
+          )}
+          {isEditing ? "Save & Publish" : "Approve & Publish"}
         </Button>
       </div>
     </div>
