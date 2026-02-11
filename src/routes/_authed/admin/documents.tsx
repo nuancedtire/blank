@@ -96,8 +96,8 @@ function ManageDocumentsPage() {
         const text = await extractText(file);
 
         if (text && text.length > 50) {
-          // Step 5: Index the document (RAG + create guideline)
-          setUploadProgress(`Indexing ${file.name}...`);
+          // Step 5: LLM-process + RAG index + create guideline
+          setUploadProgress(`Processing ${file.name} with AI...`);
           const title = file.name.replace(/\.[^/.]+$/, "");
           convex
             .action(api.documents.indexDocument, {

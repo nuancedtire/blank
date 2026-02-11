@@ -5,9 +5,13 @@ import {
   query,
   internalMutation,
   internalQuery,
+  internalAction,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import rag from "./rag";
+import { generateObject } from "ai";
+import { openai } from "@ai-sdk/openai";
+import { z } from "zod";
 
 // Generate upload URL for file storage
 export const generateUploadUrl = mutation({
@@ -40,7 +44,7 @@ export const saveDocument = mutation({
   },
 });
 
-// Index document: RAG index + create browsable guideline entry
+// Index document: LLM-process → RAG index → create browsable guideline
 export const indexDocument = action({
   args: {
     documentId: v.id("uploadedDocuments"),
@@ -61,8 +65,26 @@ export const indexDocument = action({
       });
       if (!doc) throw new Error("Document not found");
 
-      // Create a guideline entry so it appears in browse/search
-      const slug = args.title
+      // Step 1: Run LLM to clean text, extract metadata, and validate content
+      const llmResult = await ctx.runAction(
+        internal.documents.processDocumentWithLLM,
+        {
+          rawText: args.content,
+          fileName: doc.fileName,
+          userSelectedCategory: doc.category,
+        },
+      );
+
+      // If LLM says text is unusable, fail with a clear error
+      if (!llmResult.hasUsableContent) {
+        const reason =
+          llmResult.errorReason ??
+          "No usable text could be extracted from this document.";
+        throw new Error(reason);
+      }
+
+      // Step 2: Create a guideline entry with LLM-enriched metadata
+      const slug = llmResult.title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "");
@@ -70,22 +92,24 @@ export const indexDocument = action({
       const guidelineId = await ctx.runMutation(
         internal.documents.createGuidelineFromDocument,
         {
-          title: args.title,
+          title: llmResult.title,
           slug: slug + "-" + Date.now(),
-          content: args.content,
+          content: llmResult.cleanedContent,
+          summary: llmResult.summary,
           source: doc.source,
-          category: doc.category ?? inferCategory(args.title),
+          category: llmResult.category,
+          keywords: llmResult.tags,
           storageId: doc.storageId,
           uploadedDocumentId: args.documentId,
         },
       );
 
-      // Add to RAG index with metadata for citations
+      // Step 3: Add to RAG index with the cleaned content
       await rag.add(ctx, {
         namespace: "guidelines",
         key: args.documentId,
-        text: args.content,
-        title: args.title,
+        text: llmResult.cleanedContent,
+        title: llmResult.title,
         metadata: {
           fileName: doc.fileName,
           source: doc.source,
@@ -95,7 +119,7 @@ export const indexDocument = action({
         filterValues: [{ name: "source", value: doc.source }],
       });
 
-      // Update document status and link to guideline
+      // Step 4: Update document status and link to guideline
       await ctx.runMutation(internal.documents.markIndexed, {
         documentId: args.documentId,
         guidelineId,
@@ -112,35 +136,94 @@ export const indexDocument = action({
   },
 });
 
-// Infer category from title keywords
-function inferCategory(title: string): string {
-  const lower = title.toLowerCase();
-  if (
-    lower.includes("trauma") ||
-    lower.includes("fracture") ||
-    lower.includes("injury")
-  )
-    return "Trauma";
-  if (
-    lower.includes("paed") ||
-    lower.includes("child") ||
-    lower.includes("neonat")
-  )
-    return "Paediatrics";
-  if (
-    lower.includes("resus") ||
-    lower.includes("cardiac arrest") ||
-    lower.includes("anaphylaxis")
-  )
-    return "Resuscitation";
-  if (
-    lower.includes("policy") ||
-    lower.includes("protocol") ||
-    lower.includes("pathway")
-  )
-    return "Policies";
-  return "Medical";
-}
+// Valid categories for classification
+const VALID_CATEGORIES = [
+  "Medical",
+  "Trauma",
+  "Resuscitation",
+  "Paediatrics",
+  "Policies",
+  "Other",
+] as const;
+
+// Schema for the LLM's structured output
+const DocumentMetadataSchema = z.object({
+  hasUsableContent: z
+    .boolean()
+    .describe(
+      "Whether the extracted text contains meaningful clinical/policy content. False if the text is garbled, empty, unreadable OCR noise, or clearly not a medical guideline.",
+    ),
+  errorReason: z
+    .string()
+    .optional()
+    .describe(
+      "If hasUsableContent is false, explain why (e.g. 'Text appears to be OCR noise with no readable content', 'Document is not a medical guideline').",
+    ),
+  title: z
+    .string()
+    .describe(
+      "A clean, concise title for this guideline/document. Derive from the content — not the filename.",
+    ),
+  summary: z
+    .string()
+    .describe(
+      "A 1-2 sentence clinical summary of what this guideline covers, suitable for display in search results.",
+    ),
+  category: z
+    .enum(VALID_CATEGORIES)
+    .describe(
+      "The most appropriate category: Medical (general medical conditions), Trauma (injuries, fractures, wounds), Resuscitation (cardiac arrest, anaphylaxis, critical care), Paediatrics (children & neonates), Policies (protocols, SOPs, administrative), Other (if none fit).",
+    ),
+  tags: z
+    .array(z.string())
+    .describe(
+      "5-15 relevant clinical keywords/tags for search. Include conditions, procedures, medications, and synonyms clinicians might search for.",
+    ),
+  cleanedContent: z
+    .string()
+    .describe(
+      "The document text cleaned up into well-structured Markdown. Fix OCR artefacts, normalize formatting, add proper headings, fix broken tables. Preserve all clinical content faithfully — do NOT add or invent information.",
+    ),
+});
+
+// LLM-powered document processing: clean text, extract metadata, classify
+export const processDocumentWithLLM = internalAction({
+  args: {
+    rawText: v.string(),
+    fileName: v.string(),
+    userSelectedCategory: v.optional(v.string()),
+  },
+  handler: async (_ctx, args) => {
+    const { rawText, fileName, userSelectedCategory } = args;
+
+    const result = await generateObject({
+      model: openai.chat("gpt-5-mini"),
+      schema: DocumentMetadataSchema,
+      system: `You are a medical document processor for an Emergency Department guidelines system.
+
+You receive raw text extracted from uploaded PDFs (often via OCR). Your job:
+1. Determine if the text is usable — reject garbled OCR, empty text, or non-medical content
+2. Clean the text into well-structured Markdown, fixing OCR artefacts and formatting issues
+3. Extract a proper title, clinical summary, category, and search tags
+
+IMPORTANT:
+- NEVER invent clinical information. Only clean and restructure what's already there.
+- Fix common OCR issues: broken words, stray characters, misread numbers in dosages
+- Preserve tables, dosage information, and clinical criteria exactly
+- If the user pre-selected a category, respect it unless it's clearly wrong`,
+      prompt: `Process this uploaded document.
+
+Filename: ${fileName}
+User-selected category: ${userSelectedCategory ?? "(none — please infer)"}
+
+--- RAW EXTRACTED TEXT ---
+${rawText.slice(0, 50000)}
+--- END ---`,
+    });
+
+    return result.object;
+  },
+});
 
 // Create a guideline entry from an uploaded document
 export const createGuidelineFromDocument = internalMutation({
@@ -148,22 +231,21 @@ export const createGuidelineFromDocument = internalMutation({
     title: v.string(),
     slug: v.string(),
     content: v.string(),
+    summary: v.string(),
     source: v.union(v.literal("local"), v.literal("rcem"), v.literal("nice")),
     category: v.string(),
+    keywords: v.array(v.string()),
     storageId: v.id("_storage"),
     uploadedDocumentId: v.id("uploadedDocuments"),
   },
   handler: async (ctx, args) => {
-    // Generate a brief summary from the first ~300 chars
-    const summary =
-      args.content.slice(0, 300).replace(/\n+/g, " ").trim() + "...";
-
     return await ctx.db.insert("guidelines", {
       title: args.title,
       slug: args.slug,
       category: args.category,
       content: args.content,
-      summary,
+      summary: args.summary,
+      keywords: args.keywords,
       version: "1.0",
       status: "published",
       source: args.source,

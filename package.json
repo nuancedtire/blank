@@ -6,7 +6,7 @@
     "dev": "vite dev --port 8000",
     "build": "vite build",
     "deploy": "pnpm run build && wrangler deploy",
-    "serve": "vite preview",
+    "serve": "vite preview --port 8000",
     "test": "vitest",
     "cf-typegen": "wrangler types --env-interface Env",
     "convex:dev": "npx convex dev",

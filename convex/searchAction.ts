@@ -14,7 +14,6 @@ export const aiSearch = action({
     // This provides a graceful fallback
 
     const results = await ctx.runQuery(
-      // @ts-expect-error - internal API types not generated yet
       "guidelines:search" as any,
       {
         query: args.query,
