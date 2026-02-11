@@ -700,6 +700,14 @@ If request declined and clinical concern remains:
   },
 });
 
+// Internal get by ID (for agent tool slug lookup)
+export const getByIdInternal = internalQuery({
+  args: { id: v.id("guidelines") },
+  handler: async (ctx, { id }) => {
+    return await ctx.db.get(id);
+  },
+});
+
 // Internal search that returns full content (for agent tool use)
 export const searchInternal = internalQuery({
   args: {

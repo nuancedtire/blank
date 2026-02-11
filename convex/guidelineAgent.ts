@@ -1,6 +1,6 @@
 import { Agent, createTool } from "@convex-dev/agent";
 import { components, internal } from "./_generated/api";
-import { openai } from "@ai-sdk/openai";
+import { cerebras } from "@ai-sdk/cerebras";
 import { z } from "zod";
 import rag from "./rag";
 
@@ -19,9 +19,9 @@ You help clinicians quickly find and APPLY guideline information to their specif
 ## HOW TO RESPOND
 - **Lead with the action.** Start with what the clinician should DO — the immediate management step, the pathway to follow, the drug/dose/route. No preamble.
 - **Add essential context underneath.** Red flags to watch for, key assessment criteria, or important caveats — but only those relevant to the specific scenario.
-- **Cite your sources at the end.** Use this format:
-  📄 **[Document Title]** — Source: local/RCEM/NICE — File: filename.pdf
-  Include the guidelineId so the UI can link directly to the PDF.
+- **Cite your sources at the end.** Use this EXACT format (one line per source):
+  📄 **[Document Title]** — Source: local/RCEM/NICE — File: filename.pdf — Slug: the-slug-value
+  The slug comes from the tool results. Always include it so the UI can link to the guideline page.
 - **Close with a one-line note:** "This is a summary — always refer to the full guideline for complete clinical guidance."
 
 Use markdown naturally — headers, bold, nested bullet lists — whatever fits the answer. Do not force a rigid numbered template. Short answers are fine. A 3-line answer that nails the specific scenario is better than a 30-line answer that covers everything.
@@ -114,18 +114,37 @@ const ragSearchTool = createTool({
     if (!results || results.results.length === 0) {
       return { found: false, message: "No relevant document content found for this query." };
     }
+    // Look up slugs for each source's guidelineId
+    const sources = await Promise.all(
+      results.entries.map(async (entry) => {
+        const metadata = entry.metadata as Record<string, string>;
+        const guidelineId = metadata?.guidelineId ?? null;
+        let slug: string | null = null;
+        if (guidelineId) {
+          try {
+            const guideline = await ctx.runQuery(
+              internal.guidelines.getByIdInternal,
+              { id: guidelineId as any },
+            );
+            slug = guideline?.slug ?? null;
+          } catch {
+            // guideline may have been deleted
+          }
+        }
+        return {
+          title: entry.title ?? "Untitled",
+          source: metadata?.source ?? "unknown",
+          fileName: metadata?.fileName ?? "unknown",
+          guidelineId,
+          slug,
+          textChunk: entry.text,
+        };
+      }),
+    );
     return {
       found: true,
       count: results.entries.length,
-      sources: results.entries.map((entry) => ({
-        title: entry.title ?? "Untitled",
-        source: (entry.metadata as Record<string, string>)?.source ?? "unknown",
-        fileName:
-          (entry.metadata as Record<string, string>)?.fileName ?? "unknown",
-        guidelineId:
-          (entry.metadata as Record<string, string>)?.guidelineId ?? null,
-        textChunk: entry.text,
-      })),
+      sources,
       combinedText: results.text,
     };
   },
@@ -134,7 +153,7 @@ const ragSearchTool = createTool({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const guidelineAgent: Agent<object, any> = new Agent(components.agent, {
   name: "ED Guidelines Assistant",
-  languageModel: openai.chat("gpt-4o-mini"),
+  languageModel: cerebras.chat("zai-glm-4.7"),
   instructions: ED_GUIDELINES_SYSTEM_PROMPT,
   tools: {
     searchGuidelines: searchGuidelinesTool,

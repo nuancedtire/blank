@@ -273,8 +273,9 @@ function StreamingText({
           // Render source cards for lines matching the citation format
           p: ({ children, ...props }) => {
             const text = extractText(children);
+            // Match: 📄 **Title** — Source: xxx — File: yyy — Slug: zzz
             const sourceMatch = text?.match(
-              /\u{1F4C4}\s*\*?\*?(.+?)\*?\*?\s*[\u2014—-]+\s*Source:\s*(\w+)\s*[\u2014—-]+\s*File:\s*([\w.-]+)/u,
+              /\u{1F4C4}\s*\*?\*?(.+?)\*?\*?\s*[\u2014—-]+\s*Source:\s*(\w+)\s*[\u2014—-]+\s*File:\s*([\w.-]+)(?:\s*[\u2014—-]+\s*Slug:\s*([\w-]+))?/u,
             );
             if (sourceMatch) {
               return (
@@ -282,6 +283,7 @@ function StreamingText({
                   title={sourceMatch[1].trim()}
                   source={sourceMatch[2]}
                   fileName={sourceMatch[3]}
+                  slug={sourceMatch[4] || null}
                 />
               );
             }
@@ -384,14 +386,17 @@ function SourceCard({
   title,
   source,
   fileName,
+  slug,
 }: {
   title: string;
   source: string;
   fileName: string;
+  slug?: string | null;
 }) {
   return (
     <Link
-      to="/browse"
+      to={slug ? "/guideline/$slug" : "/browse"}
+      {...(slug ? { params: { slug } } : {})}
       className="flex items-center gap-3 px-3 py-2.5 my-1.5 rounded-lg border bg-muted/30 hover:bg-muted/60 transition-colors group no-underline"
     >
       <div className="h-9 w-9 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
