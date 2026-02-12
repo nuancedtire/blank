@@ -1,4 +1,3 @@
-import * as React from "react";
 import { Monitor, Moon, Sun, Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -35,26 +34,26 @@ export function ThemeToggle({
   const getCurrentIcon = () => {
     if (theme === "system") {
       return (
-        <Monitor 
+        <Monitor
           className={`h-4 w-4 ${iconVariants.system} rotate-0 scale-100`}
-          aria-hidden="true" 
+          aria-hidden="true"
         />
       );
     }
-    
+
     if (resolvedTheme === "dark") {
       return (
-        <Moon 
+        <Moon
           className={`h-4 w-4 ${iconVariants.moon} rotate-0 scale-100`}
-          aria-hidden="true" 
+          aria-hidden="true"
         />
       );
     }
-    
+
     return (
-      <Sun 
+      <Sun
         className={`h-4 w-4 ${iconVariants.sun} rotate-0 scale-100`}
-        aria-hidden="true" 
+        aria-hidden="true"
       />
     );
   };
@@ -67,7 +66,7 @@ export function ThemeToggle({
       description: "Use light theme",
     },
     {
-      value: "dark", 
+      value: "dark",
       label: "Dark",
       icon: Moon,
       description: "Use dark theme",
@@ -111,16 +110,16 @@ export function ThemeToggle({
           </span>
         </Button>
       </DropdownMenuTrigger>
-      
-      <DropdownMenuContent 
-        align={align} 
+
+      <DropdownMenuContent
+        align={align}
         className="w-56 p-2 bg-popover/95 backdrop-blur-sm border border-border/50 shadow-lg"
       >
         <div className="grid gap-1">
           {themeOptions.map((option) => {
             const Icon = option.icon;
             const isSelected = theme === option.value;
-            
+
             return (
               <DropdownMenuItem
                 key={option.value}
@@ -134,7 +133,7 @@ export function ThemeToggle({
                 `}
               >
                 <div className="flex items-center justify-center w-5 h-5">
-                  <Icon 
+                  <Icon
                     className={`
                       h-4 w-4 transition-all duration-200
                       ${isSelected ? 'text-accent-foreground scale-110' : 'text-muted-foreground'}
@@ -142,7 +141,7 @@ export function ThemeToggle({
                     `}
                   />
                 </div>
-                
+
                 <div className="flex flex-col flex-1 min-w-0">
                   <span className={`
                     text-sm font-medium leading-none
@@ -154,7 +153,7 @@ export function ThemeToggle({
                     {option.description}
                   </span>
                 </div>
-                
+
                 {isSelected && (
                   <Check className="h-4 w-4 text-accent-foreground animate-in fade-in-0 zoom-in-75 duration-150" />
                 )}
@@ -162,7 +161,7 @@ export function ThemeToggle({
             );
           })}
         </div>
-        
+
         {resolvedTheme && (
           <div className="border-t border-border/50 mt-2 pt-2">
             <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground">
@@ -182,7 +181,7 @@ export function ThemeToggle({
 // Simplified version for minimal use cases
 export function ThemeToggleSimple() {
   const { theme, setTheme, resolvedTheme } = useTheme();
-  
+
   const handleToggle = () => {
     if (theme === "light") {
       setTheme("dark");
