@@ -12,6 +12,7 @@ import rag from "./rag";
 import { generateObject } from "ai";
 import { cerebras } from "@ai-sdk/cerebras";
 import { z } from "zod";
+import { slugify } from "./lib/utils";
 
 // Generate upload URL for file storage
 export const generateUploadUrl = mutation({
@@ -81,10 +82,7 @@ export const indexDocument = action({
       }
 
       // Step 2: Create a guideline entry with LLM-enriched metadata
-      const slug = llmResult.title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "");
+      const slug = slugify(llmResult.title);
 
       const guidelineId = await ctx.runMutation(
         internal.documents.createGuidelineFromDocument,
@@ -134,7 +132,7 @@ export const indexDocument = action({
 });
 
 // Valid categories for classification
-const VALID_CATEGORIES = [
+export const VALID_CATEGORIES = [
   "Medical",
   "Trauma",
   "Resuscitation",
@@ -144,7 +142,7 @@ const VALID_CATEGORIES = [
 ] as const;
 
 // Schema for the LLM's structured output
-const DocumentMetadataSchema = z.object({
+export const DocumentMetadataSchema = z.object({
   hasUsableContent: z
     .boolean()
     .describe(
@@ -380,10 +378,7 @@ export const publishGuideline = mutation({
 
     // Update slug if title changed
     if (args.title !== undefined) {
-      updates.slug = args.title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "") + "-" + Date.now();
+      updates.slug = slugify(args.title) + "-" + Date.now();
     }
 
     await ctx.db.patch(args.guidelineId, updates);

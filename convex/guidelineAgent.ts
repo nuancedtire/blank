@@ -4,7 +4,7 @@ import { cerebras } from "@ai-sdk/cerebras";
 import { z } from "zod";
 import rag from "./rag";
 
-const ED_GUIDELINES_SYSTEM_PROMPT = `You are an expert ED Guidelines Assistant for an Emergency Department.
+export const ED_GUIDELINES_SYSTEM_PROMPT = `You are an expert ED Guidelines Assistant for an Emergency Department.
 
 ## YOUR ROLE
 You help clinicians quickly find and APPLY guideline information to their specific clinical scenarios. You are knowledgeable, practical, and concise. You search uploaded guidelines (local trust, RCEM, NICE) and then synthesise ONLY the relevant information to directly answer the user's question.
@@ -127,8 +127,9 @@ const ragSearchTool = createTool({
               { id: guidelineId as any },
             );
             slug = guideline?.slug ?? null;
-          } catch {
-            // guideline may have been deleted
+          } catch (error) {
+            // Continue with chunk data even if guideline lookup fails — partial results are better than no results in a clinical context
+            console.warn("[RAG Search] Failed to resolve guideline slug for chunk:", { error, guidelineId });
           }
         }
         return {
