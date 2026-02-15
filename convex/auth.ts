@@ -1,4 +1,4 @@
-import { betterAuth } from "better-auth/minimal";
+import { betterAuth } from "better-auth";
 import { createClient } from "@convex-dev/better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
 import authConfig from "./auth.config";
@@ -19,6 +19,14 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: false,
+    },
+    socialProviders: {
+      microsoft: {
+        clientId: process.env.MICROSOFT_CLIENT_ID as string,
+        clientSecret: process.env.MICROSOFT_CLIENT_SECRET as string,
+        tenantId: "common",
+        prompt: "select_account",
+      },
     },
     plugins: [convex({ authConfig })],
   });

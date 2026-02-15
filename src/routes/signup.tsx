@@ -17,6 +17,17 @@ export const Route = createFileRoute("/signup")({
   component: SignupPage,
 });
 
+function MicrosoftIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+      <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+      <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+      <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
+    </svg>
+  );
+}
+
 function SignupPage() {
   const router = useRouter();
   const [name, setName] = React.useState("");
@@ -24,6 +35,21 @@ function SignupPage() {
   const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
+  const [isMsLoading, setIsMsLoading] = React.useState(false);
+
+  async function handleMicrosoftSignIn() {
+    setError("");
+    setIsMsLoading(true);
+    try {
+      await authClient.signIn.social({
+        provider: "microsoft",
+        callbackURL: "/",
+      });
+    } catch {
+      setError("Microsoft sign-in failed. Please try again.");
+      setIsMsLoading(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -134,10 +160,28 @@ function SignupPage() {
             <Button
               type="submit"
               className="w-full h-10 sm:h-11 text-sm sm:text-base font-bold tracking-wide"
-              disabled={isLoading}
+              disabled={isLoading || isMsLoading}
             >
               {isLoading ? "Creating account..." : "Sign Up"}
             </Button>
+
+            <div className="relative w-full flex items-center gap-3 py-1">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">or</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-10 sm:h-11 text-sm sm:text-base font-semibold gap-2.5"
+              disabled={isLoading || isMsLoading}
+              onClick={handleMicrosoftSignIn}
+            >
+              <MicrosoftIcon className="w-4 h-4" />
+              {isMsLoading ? "Redirecting..." : "Sign up with Microsoft"}
+            </Button>
+
             <p className="text-center text-xs text-muted-foreground">
               Already have an account?{" "}
               <Link to="/login" className="font-bold text-primary hover:underline">
