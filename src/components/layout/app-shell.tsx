@@ -1,5 +1,8 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { Search, FolderOpen, Settings, LogOut } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { convexQuery } from "@convex-dev/react-query";
+import { api } from "convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme";
 import {
@@ -13,11 +16,12 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
-const navItems = [
+const baseNavItems = [
   { label: "Search", icon: Search, href: "/search" },
   { label: "Browse", icon: FolderOpen, href: "/browse" },
-  { label: "Admin", icon: Settings, href: "/admin" },
 ] as const;
+
+const adminNavItem = { label: "Admin", icon: Settings, href: "/admin" } as const;
 
 function handleSignOut() {
   authClient.signOut().then(() => {
@@ -27,6 +31,9 @@ function handleSignOut() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
+  const { data: user } = useQuery(convexQuery(api.users.me, {}));
+  const isAdmin = user?.role === "admin";
+  const navItems = isAdmin ? [...baseNavItems, adminNavItem] : baseNavItems;
 
   return (
     <div className="min-h-screen bg-background text-foreground relative overflow-x-hidden">
@@ -74,7 +81,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 >
                   <Avatar className="h-9 w-9 shadow-[var(--clay-shadow-sm)] rounded-full">
                     <AvatarFallback className="text-sm font-bold bg-gradient-to-br from-primary to-accent text-primary-foreground">
-                      U
+                      {user?.name?.[0]?.toUpperCase() ?? "U"}
                     </AvatarFallback>
                   </Avatar>
                 </Button>
