@@ -1,4 +1,4 @@
-import { betterAuth } from "better-auth";
+import { betterAuth } from "better-auth/minimal";
 import { createClient } from "@convex-dev/better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
 import authConfig from "./auth.config";
@@ -15,6 +15,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
   return betterAuth({
     appName: "ED Guidelines",
     baseURL: siteUrl,
+    secret: process.env.BETTER_AUTH_SECRET,
     database: authComponent.adapter(ctx),
     emailAndPassword: {
       enabled: true,
