@@ -100,7 +100,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex relative z-10">
         {/* Desktop sidebar */}
-        <aside className="hidden md:flex md:w-64 md:shrink-0 md:flex-col md:border-r md:border-border/50 md:bg-background/30 md:backdrop-blur-sm">
+        <aside className="hidden lg:flex lg:w-64 lg:shrink-0 lg:flex-col lg:border-r lg:border-border/50 lg:bg-background/30 lg:backdrop-blur-sm">
           <nav className="flex flex-col gap-3 p-4">
             {navItems.map((item, idx) => {
               const isActive =
@@ -135,13 +135,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </aside>
 
         {/* Main content */}
-        <main className="min-h-[calc(100vh-4rem)] flex-1 pb-24 md:pb-0">
-          <div className="p-6 md:p-8 max-w-7xl mx-auto">{children}</div>
+        <main className="min-h-[calc(100vh-4rem)] flex-1 pb-24 lg:pb-0">
+          <div className="p-6 lg:p-8 max-w-7xl mx-auto">{children}</div>
         </main>
       </div>
 
       {/* Mobile bottom navigation */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/50 bg-background/80 backdrop-blur-xl pb-[env(safe-area-inset-bottom)] md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/50 bg-background/80 backdrop-blur-xl pb-[env(safe-area-inset-bottom)] lg:hidden">
         <div className="flex h-16 items-center justify-around gap-2 px-3">
           {navItems.map((item) => {
             const isActive =
