@@ -127,8 +127,12 @@ const ragSearchTool = createTool({
               { id: guidelineId as any },
             );
             slug = guideline?.slug ?? null;
-          } catch {
-            // guideline may have been deleted
+          } catch (error: unknown) {
+            console.error(
+              `[ragSearch] Failed to look up guideline slug for guidelineId="${guidelineId}":`,
+              error instanceof Error ? error.message : error,
+            );
+            // Continue with slug = null — the result is still usable without a slug
           }
         }
         return {
