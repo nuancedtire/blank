@@ -7,12 +7,9 @@ function Card({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card"
       className={cn(
-        "bg-card text-card-foreground flex flex-col rounded-xl border py-6 shadow-[var(--clay-shadow-md)] transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
+        "bg-white text-[#134E4A] flex flex-col rounded-xl border border-[#99F6E4] py-6 shadow-sm transition-all duration-200",
         className
       )}
-      style={{
-        background: 'linear-gradient(135deg, var(--card) 0%, color-mix(in oklch, var(--card), var(--accent) 3%) 100%)',
-      }}
       {...props}
     />
   )
@@ -27,12 +24,10 @@ function CardInteractive({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card"
       className={cn(
-        "bg-card text-card-foreground flex flex-col rounded-xl border shadow-[var(--clay-shadow-md)] transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:shadow-[var(--clay-shadow-lg)] hover:-translate-y-0.5 cursor-pointer",
+        "bg-white text-[#134E4A] flex flex-col rounded-xl border border-[#99F6E4] shadow-sm transition-all duration-200 cursor-pointer",
+        "hover:shadow-lg hover:shadow-[#0891B2]/5 hover:border-[#0891B2]/30 hover:-translate-y-0.5",
         className
       )}
-      style={{
-        background: 'linear-gradient(135deg, var(--card) 0%, color-mix(in oklch, var(--card), var(--accent) 3%) 100%)',
-      }}
       {...props}
     />
   )
@@ -55,7 +50,7 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-title"
-      className={cn("leading-none font-semibold", className)}
+      className={cn("leading-none font-semibold text-[#134E4A]", className)}
       {...props}
     />
   )
@@ -65,7 +60,7 @@ function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-description"
-      className={cn("text-muted-foreground text-sm", className)}
+      className={cn("text-[#5E6B6A] text-sm", className)}
       {...props}
     />
   )
