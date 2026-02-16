@@ -21,10 +21,6 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     baseURL: siteUrl,
     secret: process.env.BETTER_AUTH_SECRET,
     database: authComponent.adapter(ctx),
-    emailAndPassword: {
-      enabled: true,
-      requireEmailVerification: false,
-    },
     socialProviders: {
       microsoft: {
         clientId: process.env.MICROSOFT_CLIENT_ID as string,

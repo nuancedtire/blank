@@ -15,7 +15,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -32,9 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import {
   User,
-  Lock,
   Link as LinkIcon,
-  Shield,
   Bell,
   Smartphone,
   LogOut,
@@ -211,8 +208,6 @@ function SettingsPage() {
     });
   }, [fetchSessions, fetchAccounts]);
 
-  const hasPassword = accounts.some((a) => a.providerId === "credential");
-
   return (
     <div className="min-h-[calc(100vh-8rem)] max-w-2xl mx-auto space-y-6 pb-12">
       {/* Header */}
@@ -226,13 +221,11 @@ function SettingsPage() {
           Settings
         </h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Manage your account, security, and preferences
+          Manage your account and preferences
         </p>
       </motion.div>
 
       <ProfileSection accountInfo={accountInfo} onUpdate={refetch} />
-
-      <SecuritySection hasPassword={hasPassword} />
 
       <LinkedAccountsSection accounts={accounts} onUpdate={fetchAccounts} />
 
@@ -377,175 +370,6 @@ function ProfileSection({
           </div>
         </div>
       </div>
-    </Section>
-  );
-}
-
-/* ─── Security ─── */
-function SecuritySection({ hasPassword }: { hasPassword: boolean }) {
-  const { toast } = useToast();
-  const [isOpen, setIsOpen] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const logPasswordChanged = useConvexMutation(api.settings.logPasswordChanged);
-  const logMutation = useMutation({ mutationFn: logPasswordChanged });
-
-  const handleChangePassword = async () => {
-    if (newPassword !== confirmPassword) {
-      toast({
-        title: "Error",
-        description: "Passwords do not match",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (newPassword.length < 8) {
-      toast({
-        title: "Error",
-        description: "Password must be at least 8 characters",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      let result: any;
-      if (hasPassword) {
-        result = await authClient.changePassword({
-          currentPassword,
-          newPassword,
-          revokeOtherSessions: true,
-        });
-      } else {
-        result = await (authClient as any).setPassword({
-          newPassword,
-        });
-      }
-
-      if (result.error) {
-        toast({
-          title: "Error",
-          description: result.error.message,
-          variant: "destructive",
-        });
-      } else {
-        toast({ title: "Password updated" });
-        await logMutation.mutateAsync({});
-        setIsOpen(false);
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmPassword("");
-      }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <Section
-      id="security"
-      icon={Shield}
-      title="Security"
-      description="Password and account security"
-      delay={0.1}
-    >
-      <button
-        onClick={() => setIsOpen(true)}
-        className="w-full flex items-center justify-between gap-3 rounded-xl border border-border/60 p-4 hover:bg-muted/40 transition-colors group"
-      >
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
-            <Lock className="h-4 w-4 text-primary" />
-          </div>
-          <div className="text-left">
-            <p className="text-sm font-semibold text-foreground">Password</p>
-            <p className="text-xs text-muted-foreground">
-              {hasPassword
-                ? "Change your password"
-                : "Set a password for email sign-in"}
-            </p>
-          </div>
-        </div>
-        <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-      </button>
-
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              {hasPassword ? "Change Password" : "Set Password"}
-            </DialogTitle>
-            <DialogDescription>
-              {hasPassword
-                ? "Enter your current password and choose a new one."
-                : "Create a password so you can also sign in with email."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            {hasPassword && (
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">
-                  Current Password
-                </Label>
-                <Input
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="h-10 rounded-lg"
-                />
-              </div>
-            )}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">New Password</Label>
-              <Input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Min. 8 characters"
-                className="h-10 rounded-lg"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Confirm Password</Label>
-              <Input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="h-10 rounded-lg"
-              />
-            </div>
-          </div>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              variant="ghost"
-              onClick={() => setIsOpen(false)}
-              className="rounded-lg"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleChangePassword}
-              disabled={isSubmitting}
-              className="rounded-lg"
-            >
-              {isSubmitting ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : null}
-              {hasPassword ? "Update Password" : "Set Password"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </Section>
   );
 }

@@ -8,7 +8,6 @@ import {
   Loader2,
   ArrowLeft,
   Mail,
-  Lock,
   KeyRound,
   ChevronRight,
 } from "lucide-react";
@@ -17,7 +16,7 @@ export const Route = createFileRoute("/login")({
   component: AuthPage,
 });
 
-type Step = "email" | "password" | "otp";
+type Step = "email" | "otp";
 
 function MicrosoftIcon({ className }: { className?: string }) {
   return (
@@ -143,7 +142,6 @@ function AuthPage() {
 
   const [step, setStep] = React.useState<Step>("email");
   const [email, setEmail] = React.useState("");
-  const [password, setPassword] = React.useState("");
   const [otp, setOtp] = React.useState("");
   const [error, setError] = React.useState("");
 
@@ -168,41 +166,25 @@ function AuthPage() {
     }
   }
 
-  /* ── Step 1: Email → go to password step ── */
+  /* ── Step 1: Email → send OTP and go to OTP step ── */
   async function handleEmailContinue(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    setStep("password");
-  }
-
-  /* ── Step 2a: Password sign-in (default) ── */
-  async function handlePasswordSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
     setIsLoading(true);
-
     try {
-      const { data, error: signInError } = await authClient.signIn.email({
+      await authClient.emailOtp.sendVerificationOtp({
         email,
-        password,
+        type: "sign-in",
       });
-
-      if (signInError) {
-        setError(signInError.message ?? "Invalid email or password.");
-        setIsLoading(false);
-        return;
-      }
-
-      if (data) {
-        router.navigate({ to: "/" });
-      }
+      setStep("otp");
     } catch {
-      setError("Something went wrong. Please try again.");
+      setError("Failed to send verification code. Please try again.");
+    } finally {
       setIsLoading(false);
     }
   }
 
-  /* ── Step 2b: OTP verification (primary flow for all users) ── */
+  /* ── Step 2: OTP verification ── */
   async function handleOtpSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (otp.length < 6) return;
@@ -226,30 +208,6 @@ function AuthPage() {
       }
     } catch {
       setError("Verification failed. Please try again.");
-      setIsLoading(false);
-    }
-  }
-
-  /* ── Switch between OTP and password ── */
-  function switchToPassword() {
-    setError("");
-    setOtp("");
-    setStep("password");
-  }
-
-  async function switchToOtp() {
-    setError("");
-    setPassword("");
-    setIsLoading(true);
-    try {
-      await authClient.emailOtp.sendVerificationOtp({
-        email,
-        type: "sign-in",
-      });
-      setStep("otp");
-    } catch {
-      setError("Failed to send code. Please try again.");
-    } finally {
       setIsLoading(false);
     }
   }
@@ -278,7 +236,6 @@ function AuthPage() {
 
   function goBack() {
     setError("");
-    setPassword("");
     setOtp("");
     setStep("email");
   }
@@ -358,7 +315,6 @@ function AuthPage() {
                 transition={{ duration: 0.2 }}
               >
                 {step === "email" && "Enter your email to get started"}
-                {step === "password" && "Sign in to access protocols"}
                 {step === "otp" && "Check your inbox for a verification code"}
               </motion.p>
             </AnimatePresence>
@@ -428,70 +384,6 @@ function AuthPage() {
                 </motion.form>
               )}
 
-              {/* ─── PASSWORD STEP ─── */}
-              {step === "password" && (
-                <motion.form
-                  key="password"
-                  onSubmit={handlePasswordSubmit}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                  className="space-y-4"
-                >
-                  {/* Show email chip */}
-                  <button
-                    type="button"
-                    onClick={goBack}
-                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors group"
-                  >
-                    <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" />
-                    <span className="font-medium">{email}</span>
-                  </button>
-
-                  <div className="relative">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                    <Input
-                      type="password"
-                      placeholder="Enter your password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      autoComplete="current-password"
-                      autoFocus
-                      disabled={isAnyLoading}
-                      className="h-12 pl-10 text-base rounded-xl border-2 border-border/80 transition-colors focus:border-primary"
-                    />
-                  </div>
-
-                  <Button
-                    type="submit"
-                    className="w-full h-12 text-base font-bold rounded-xl"
-                    disabled={isAnyLoading || !password}
-                  >
-                    {isLoading ? (
-                      <span className="flex items-center gap-2">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Signing in
-                      </span>
-                    ) : (
-                      "Sign In"
-                    )}
-                  </Button>
-
-                  <p className="text-center text-xs text-muted-foreground">
-                    No password?{" "}
-                    <button
-                      type="button"
-                      onClick={switchToOtp}
-                      className="font-semibold text-primary hover:underline transition-colors"
-                    >
-                      Sign in with email code
-                    </button>
-                  </p>
-                </motion.form>
-              )}
-
               {/* ─── OTP STEP ─── */}
               {step === "otp" && (
                 <motion.form
@@ -545,7 +437,7 @@ function AuthPage() {
                     )}
                   </Button>
 
-                  <div className="flex items-center justify-center gap-3 text-xs text-muted-foreground">
+                  <div className="flex items-center justify-center text-xs text-muted-foreground">
                     {resendCooldown > 0 ? (
                       <span className="font-medium text-muted-foreground/70">
                         Resend in {resendCooldown}s
@@ -559,14 +451,6 @@ function AuthPage() {
                         Resend code
                       </button>
                     )}
-                    <span className="text-border">|</span>
-                    <button
-                      type="button"
-                      onClick={switchToPassword}
-                      className="font-semibold text-primary hover:underline transition-colors"
-                    >
-                      Use password instead
-                    </button>
                   </div>
                 </motion.form>
               )}
