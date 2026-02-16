@@ -14,8 +14,8 @@
     },
   ],
   "vars": {
-    "VITE_CONVEX_URL": "https://opulent-duck-589.eu-west-1.convex.cloud",
-    "VITE_CONVEX_SITE_URL": "https://opulent-duck-589.eu-west-1.convex.site",
+    "VITE_CONVEX_URL": "https://kindred-quail-470.convex.cloud",
+    "VITE_CONVEX_SITE_URL": "https://kindred-quail-470.convex.site",
     "VITE_SITE_URL": "https://aide.fazeen.dev",
   },
 }
