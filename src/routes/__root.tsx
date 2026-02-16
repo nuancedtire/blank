@@ -15,6 +15,7 @@ import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
 import { DefaultCatchBoundary } from "@/components/default-catch-boundary";
 import { NotFound } from "@/components/not-found";
 import { ThemeProvider } from "@/components/theme";
+import { Toaster } from "@/components/ui/sonner";
 import { authClient } from "@/lib/auth-client";
 import { getToken } from "@/lib/auth-server";
 import appCss from "@/styles.css?url";
@@ -105,6 +106,7 @@ function RootComponent() {
           disableTransitionOnChange={false}
         >
           <Outlet />
+          <Toaster position="top-right" richColors />
         </ThemeProvider>
       </RootDocument>
     </ConvexBetterAuthProvider>

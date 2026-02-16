@@ -1,10 +1,16 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { Search, FolderOpen, Settings, LogOut } from "lucide-react";
+import {
+  Search,
+  FolderOpen,
+  Settings,
+  LogOut,
+  Activity,
+  Bell,
+} from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "convex/_generated/api";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,6 +19,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
@@ -21,7 +29,11 @@ const baseNavItems = [
   { label: "Browse", icon: FolderOpen, href: "/browse" },
 ] as const;
 
-const adminNavItem = { label: "Admin", icon: Settings, href: "/admin" } as const;
+const adminNavItem = {
+  label: "Admin",
+  icon: Settings,
+  href: "/admin",
+} as const;
 
 function handleSignOut() {
   authClient.signOut().then(() => {
@@ -37,58 +49,125 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background text-foreground relative overflow-x-hidden">
-      {/* Background Orbs */}
+      {/* Background Decorations */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div
-          className="absolute top-0 right-1/4 w-96 h-96 rounded-full opacity-15"
+          className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full opacity-20"
           style={{
-            background: 'radial-gradient(circle, oklch(0.65 0.15 280 / 0.3) 0%, transparent 70%)',
-            filter: 'blur(80px)',
-            animation: 'float 6s ease-in-out infinite',
+            background:
+              "radial-gradient(circle, oklch(0.65 0.15 195 / 0.15) 0%, transparent 70%)",
+            filter: "blur(80px)",
           }}
         />
         <div
-          className="absolute bottom-1/3 left-1/4 w-80 h-80 rounded-full opacity-12"
+          className="absolute bottom-0 left-0 w-[500px] h-[500px] rounded-full opacity-15"
           style={{
-            background: 'radial-gradient(circle, oklch(0.78 0.12 45 / 0.3) 0%, transparent 70%)',
-            filter: 'blur(70px)',
-            animation: 'float 7s ease-in-out infinite',
-            animationDelay: '2s',
+            background:
+              "radial-gradient(circle, oklch(0.7 0.17 155 / 0.15) 0%, transparent 70%)",
+            filter: "blur(80px)",
           }}
         />
       </div>
 
-      {/* Top header bar */}
-      <header className="sticky top-0 z-40 border-b border-border/50 bg-background/80 backdrop-blur-xl">
-        <div className="flex h-16 items-center justify-between px-6">
-          {/* Logo / title */}
-          <Link to="/" className="flex items-center gap-2 group">
-            <span className="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent group-hover:scale-105 transition-transform">
+      {/* Top Navigation Bar */}
+      <header className="sticky top-0 z-50 border-b border-border bg-card/80 backdrop-blur-xl">
+        <div className="flex h-16 items-center justify-between px-4 lg:px-8">
+          {/* Logo */}
+          <Link to="/search" className="flex items-center gap-2.5 group">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg shadow-primary/20 group-hover:scale-105 transition-transform">
+              <Activity className="w-5 h-5 text-primary-foreground" />
+            </div>
+            <span className="text-xl font-bold bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">
               ED Guidelines
             </span>
           </Link>
 
-          {/* Right side actions */}
-          <div className="flex items-center gap-2">
-            <ThemeToggle variant="ghost" size="sm" className="hover:scale-105 transition-transform" />
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex items-center gap-1">
+            {navItems.map((item) => {
+              const isActive =
+                pathname === item.href || pathname.startsWith(item.href + "/");
+              return (
+                <Link
+                  key={item.href}
+                  to={item.href}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                    isActive
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:text-primary hover:bg-primary/5",
+                  )}
+                >
+                  <item.icon className="w-4 h-4" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
 
+          {/* Right Side Actions */}
+          <div className="flex items-center gap-2">
+            {/* AI Status Indicator */}
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent/10 border border-accent/20">
+              <div className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+              <span className="text-xs font-medium text-accent">AI Active</span>
+            </div>
+
+            {/* Theme Toggle */}
+            <ThemeToggle variant="ghost" size="sm" />
+
+            {/* Notifications */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative text-muted-foreground hover:text-primary hover:bg-primary/10"
+            >
+              <Bell className="w-5 h-5" />
+              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-destructive" />
+            </Button>
+
+            {/* User Menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
-                  size="icon"
-                  className="relative rounded-full hover:scale-105 transition-transform"
+                  className="relative h-9 w-9 rounded-full p-0 hover:bg-primary/10"
                 >
-                  <Avatar className="h-9 w-9 shadow-[var(--clay-shadow-sm)] rounded-full">
-                    <AvatarFallback className="text-sm font-bold bg-gradient-to-br from-primary to-accent text-primary-foreground">
+                  <Avatar className="h-9 w-9 border-2 border-primary/20">
+                    <AvatarFallback className="text-sm font-semibold bg-gradient-to-br from-primary to-secondary text-primary-foreground">
                       {user?.name?.[0]?.toUpperCase() ?? "U"}
                     </AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52 shadow-[var(--clay-shadow-md)]">
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer font-semibold">
+              <DropdownMenuContent
+                align="end"
+                className="w-56 bg-popover border-border shadow-xl shadow-primary/10"
+              >
+                <div className="px-3 py-2 border-b border-border">
+                  <p className="text-sm font-semibold text-foreground">
+                    {user?.name || "User"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {user?.email || ""}
+                  </p>
+                  {isAdmin && (
+                    <Badge className="mt-1.5 bg-primary/10 text-primary border-primary/20 text-[10px]">
+                      Admin
+                    </Badge>
+                  )}
+                </div>
+                <DropdownMenuSeparator className="bg-border" />
+                <Link to="/settings">
+                  <DropdownMenuItem className="cursor-pointer">
+                    <Settings className="mr-2 h-4 w-4" />
+                    Settings
+                  </DropdownMenuItem>
+                </Link>
+                <DropdownMenuItem
+                  onClick={handleSignOut}
+                  className="cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10"
+                >
                   <LogOut className="mr-2 h-4 w-4" />
                   Sign out
                 </DropdownMenuItem>
@@ -98,72 +177,35 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <div className="flex relative z-10">
-        {/* Desktop sidebar */}
-        <aside className="hidden lg:flex lg:w-64 lg:shrink-0 lg:flex-col lg:border-r lg:border-border/50 lg:bg-background/30 lg:backdrop-blur-sm">
-          <nav className="flex flex-col gap-3 p-4">
-            {navItems.map((item, idx) => {
-              const isActive =
-                pathname === item.href ||
-                pathname.startsWith(item.href + "/");
-              return (
-                <Link
-                  key={item.href}
-                  to={item.href}
-                  className={cn(
-                    "animate-slide-in-right group",
-                    idx === 0 && "stagger-1",
-                    idx === 1 && "stagger-2",
-                    idx === 2 && "stagger-3"
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "w-full flex items-center justify-start gap-3 h-12 px-4 font-semibold rounded-2xl transition-all cursor-pointer",
-                      isActive &&
-                        "shadow-[var(--clay-shadow-md)] bg-gradient-to-r from-primary/10 to-accent/10 text-primary",
-                      !isActive && "shadow-[var(--clay-shadow-sm)] hover:shadow-[var(--clay-shadow-md)] hover:bg-gradient-to-r hover:from-muted/50 hover:to-muted/30"
-                    )}
-                  >
-                    <item.icon className={cn("h-5 w-5 transition-transform", !isActive && "group-hover:scale-110")} />
-                    {item.label}
-                  </div>
-                </Link>
-              );
-            })}
-          </nav>
-        </aside>
+      {/* Main Content Area */}
+      <main className="relative z-10 min-h-[calc(100vh-4rem)] pb-20 md:pb-8">
+        <div className="max-w-7xl mx-auto p-4 lg:p-8">{children}</div>
+      </main>
 
-        {/* Main content */}
-        <main className="min-h-[calc(100vh-4rem)] flex-1 pb-24 lg:pb-0">
-          <div className="p-6 lg:p-8 max-w-7xl mx-auto">{children}</div>
-        </main>
-      </div>
-
-      {/* Mobile bottom navigation */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/50 bg-background/80 backdrop-blur-xl pb-[env(safe-area-inset-bottom)] lg:hidden">
-        <div className="flex h-16 items-center justify-around gap-2 px-3">
+      {/* Mobile Bottom Navigation */}
+      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)] md:hidden">
+        <div className="flex h-16 items-center justify-around gap-1 px-2">
           {navItems.map((item) => {
             const isActive =
-              pathname === item.href ||
-              pathname.startsWith(item.href + "/");
+              pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link
                 key={item.href}
                 to={item.href}
                 className={cn(
-                  "flex flex-1 flex-col items-center justify-center gap-1 py-2 text-muted-foreground rounded-2xl transition-all group",
-                  isActive && "shadow-[var(--clay-shadow-md)] bg-gradient-to-b from-primary/10 to-accent/10 text-primary scale-105",
-                  !isActive && "shadow-[var(--clay-shadow-sm)] hover:shadow-[var(--clay-shadow-md)] hover:bg-gradient-to-b hover:from-muted/50 hover:to-muted/30"
+                  "flex flex-1 flex-col items-center justify-center gap-1 py-2 rounded-xl transition-all duration-200",
+                  isActive
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-primary/5",
                 )}
               >
                 <item.icon
-                  className={cn("h-6 w-6 transition-transform", isActive && "text-primary", !isActive && "group-hover:scale-110")}
+                  className={cn("w-5 h-5", isActive && "text-primary")}
                 />
                 <span
                   className={cn(
-                    "text-xs leading-tight font-semibold",
-                    isActive && "text-primary"
+                    "text-xs font-medium",
+                    isActive && "text-primary",
                   )}
                 >
                   {item.label}

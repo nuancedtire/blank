@@ -10,3 +10,6 @@ count.txt
 .output
 .vinxi
 todos.json
+.agents/skills/ui-ux-pro-max/scripts/__pycache*
+.vite
+.wrangler

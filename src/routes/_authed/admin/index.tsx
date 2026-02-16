@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Users, Activity, Plus, Upload } from "lucide-react";
+import { FileText, Users, Activity, Plus, Upload, Megaphone } from "lucide-react";
 
 export const Route = createFileRoute("/_authed/admin/")({
   component: AdminDashboard,
@@ -124,6 +124,19 @@ function AdminDashboard() {
                 </CardTitle>
                 <CardDescription className="text-xs">
                   Upload PDFs & text files for RAG search
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+          <Link to="/admin/notifications">
+            <Card className="hover:bg-accent/50 transition-colors cursor-pointer">
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Megaphone className="h-4 w-4" />
+                  Notifications
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Send notifications to users
                 </CardDescription>
               </CardHeader>
             </Card>

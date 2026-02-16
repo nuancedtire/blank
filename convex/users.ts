@@ -6,7 +6,7 @@ import { authComponent } from "./auth";
 export const me = query({
   args: {},
   handler: async (ctx) => {
-    const authUser = await authComponent.getAuthUser(ctx);
+    const authUser = await authComponent.safeGetAuthUser(ctx);
     if (!authUser) return null;
 
     // Look up app user by email

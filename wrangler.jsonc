@@ -1,21 +1,21 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "ed-guidelines",
+  "name": "aide",
   "compatibility_date": "2025-09-02",
   "compatibility_flags": ["nodejs_compat"],
   "main": "./src/server.ts",
-
-  // R2 bucket for document storage (guidelines PDFs)
-  "r2_buckets": [
+  "observability": {
+    "enabled": false,
+  },
+  "routes": [
     {
-      "binding": "DOCUMENTS_BUCKET",
-      "bucket_name": "ed-guidelines-docs"
-    }
+      "pattern": "aide.fazeen.dev",
+      "custom_domain": true,
+    },
   ],
-
   "vars": {
-    "VITE_CONVEX_URL": "https://your-deployment.convex.cloud",
-    "VITE_CONVEX_SITE_URL": "https://your-deployment.convex.site",
-    "VITE_SITE_URL": "https://ed-guidelines.your-domain.com"
-  }
+    "VITE_CONVEX_URL": "https://kindred-quail-470.convex.cloud",
+    "VITE_CONVEX_SITE_URL": "https://kindred-quail-470.convex.site",
+    "VITE_SITE_URL": "https://aide.fazeen.dev",
+  },
 }

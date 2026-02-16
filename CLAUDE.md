@@ -4,69 +4,90 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-### Development
-- `pnpm dev` - Start development server on port 3000
+- `pnpm dev` - Start TanStack Start dev server (port 3000)
+- `npx convex dev` - Start Convex dev server (run in separate terminal)
 - `pnpm build` - Build for production
-- `pnpm serve` - Preview production build
+- `pnpm deploy` - Build and deploy to Cloudflare Workers
 - `pnpm test` - Run tests with Vitest
-
-### Shadcn Components
-- `pnpx shadcn@latest add <component>` - Add new Shadcn components (use latest version)
+- `npx convex deploy` - Deploy Convex functions to production
+- `pnpx shadcn@latest add <component>` - Add Shadcn components
 
 ## Architecture
 
-This is a TanStack Start application - a type-safe, client-first, full-stack React framework built on top of:
+ED Clinical Guidelines — an AI-powered guideline retrieval app for Emergency Department clinicians. TanStack Start frontend deployed on Cloudflare Workers, with Convex as the entire backend (database, server functions, file storage, auth, RAG, AI agent).
 
-### Core Stack
-- **TanStack Router**: File-based routing with type-safe navigation
-- **TanStack Query**: Server state management with SSR integration
-- **React 19**: Latest React with concurrent features
-- **Vite**: Build tool and dev server
-- **TypeScript**: Strict type checking enabled
-- **Tailwind CSS v4**: Utility-first styling with CSS variables
+### Stack
 
-### Project Structure
-- `src/routes/` - File-based routes (auto-generates `routeTree.gen.ts`)
-- `src/components/` - Reusable React components  
-- `src/integrations/tanstack-query/` - Query client setup and providers
-- `src/lib/utils.ts` - Utility functions (includes clsx/tailwind-merge)
-- `src/utils/seo.ts` - SEO helper functions
-- Path aliases: `@/*` maps to `src/*`
+- **Frontend**: React 19, TanStack Start (file-based routing + SSR), TanStack Query, Tailwind CSS v4
+- **Backend**: Convex (real-time database, queries/mutations/actions, file storage)
+- **AI/RAG**: `@convex-dev/rag` (vector embeddings via OpenAI `text-embedding-3-small`), `@convex-dev/agent` (tool-calling agent via Cerebras `zai-glm-4.7`)
+- **Auth**: Better Auth via `@convex-dev/better-auth` (email/password + Microsoft SSO)
+- **Deployment**: Cloudflare Workers (Wrangler), Convex Cloud
+- **Styling**: Shadcn/ui (New York style, Zinc base, CSS variables), Lucide icons
 
-### Key Architecture Patterns
+### Data Flow
 
-**Router Setup**: The router is created via `getRouter()` in `src/router.tsx` which integrates TanStack Query context and SSR. Routes are auto-generated from the file system.
+All server-side logic lives in `convex/`. The frontend never calls external APIs directly — everything goes through Convex functions.
 
-**Query Integration**: TanStack Query is pre-configured with SSR support through `setupRouterSsrQueryIntegration`. The query client is accessible in route contexts.
+**Client → Convex integration** is via `@convex-dev/react-query`:
+- `convexQuery(api.module.fn, args)` for reactive queries (live-updating subscriptions, not polling)
+- `useConvexMutation(api.module.fn)` for mutations
+- `useSuspenseQuery()` for SSR + loaders
+- Native Convex hooks (e.g. `usePaginatedQuery`) also work — they share the same client
 
-**Root Layout**: `src/routes/__root.tsx` defines the HTML document structure, includes devtools, and provides navigation links. It uses `createRootRouteWithContext` for type-safe context passing.
+The `ConvexQueryClient` is wired into TanStack's `QueryClient` in `src/router.tsx`. The router wraps the app in `<ConvexProvider>` and `<ConvexBetterAuthProvider>`.
 
-**Styling**: Uses Tailwind CSS v4 with the Vite plugin. Shadcn components are configured with "new-york" style, Zinc base color, and CSS variables enabled.
+### Auth Flow
 
-**TypeScript**: Strict mode with additional linting rules (`noUnusedLocals`, `noUnusedParameters`, etc.). Uses modern ESNext module resolution.
+1. `__root.tsx` calls a server function `getAuth()` to get the token during SSR
+2. Token is passed to `ConvexBetterAuthProvider` as `initialToken`
+3. `_authed.tsx` layout guard redirects to `/login` if not authenticated
+4. On first authed visit, `users.ensureProfile` mutation creates the user profile in Convex
+5. Auth client configured in `src/lib/auth-client.ts`, server-side in `convex/auth.ts`
 
-### Development Notes
-- Demo files (prefixed with `demo`) can be safely deleted
-- The project uses pnpm as the package manager
-- Devtools are included for both Router and Query in development
-- Routes support loaders, error boundaries, and not-found components
-- File-based routing automatically generates type-safe route definitions
+### AI Search Pipeline
+
+1. User asks a question in the agent chat
+2. `guidelineAgent` (Cerebras LLM) decides which tools to call (up to 8 steps)
+3. `ragSearch` tool — semantic vector search over embedded document chunks, filtered by source
+4. `searchGuidelines` tool — full-text keyword search as fallback
+5. Agent synthesises an answer with guideline citations and slugs for UI linking
+
+Document ingestion: PDF upload → client-side text extraction → LLM cleans/classifies → RAG vector indexing + guideline DB entry.
+
+### Key Convex Modules
+
+- `schema.ts` — all tables: `users`, `guidelines`, `guidelineVersions`, `uploadedDocuments`, `chatThreads`, `chatMessages`, `auditLogs`, `searchFeedback`
+- `convex.config.ts` — registers Better Auth, RAG, and Agent components
+- `guidelineAgent.ts` — AI agent definition with system prompt, tools, and search strategy
+- `guidelines.ts` — guideline CRUD, search, seeding
+- `documents.ts` — file upload (Convex storage), LLM processing, RAG indexing
+- `rag.ts` — RAG component configuration
+
+### Route Structure
+
+Routes are file-based in `src/routes/`. `_authed` is a layout route that requires authentication:
+- `/` — landing page
+- `/login`, `/signup` — auth pages
+- `/_authed/search` — AI agent chat
+- `/_authed/browse/`, `/_authed/browse/$category` — browse guidelines by category
+- `/_authed/guideline/$slug` — single guideline view
+- `/_authed/admin/` — admin dashboard (guidelines, documents management)
+
+### Path Aliases
+
+`@/*` maps to `src/*` (configured in `tsconfig.json` and resolved by `vite-tsconfig-paths`).
+
+### Shadcn Config
+
+New York style, Zinc base color, CSS variables enabled. Components in `@/components/ui`, utils in `@/lib/utils`. Icon library: Lucide. See `components.json`.
 
 ### Frontend Aesthetics
-You tend to converge toward generic, "on distribution" outputs. In frontend design, this creates what users call the "AI slop" aesthetic. Avoid this: make creative, distinctive frontends that surprise and delight. Focus on:
 
-Typography: Choose fonts that are beautiful, unique, and interesting. Avoid generic fonts like Arial and Inter; opt instead for distinctive choices that elevate the frontend's aesthetics.
+Avoid generic "AI slop" design. Make creative, distinctive frontends:
 
-Color & Theme: Commit to a cohesive aesthetic. Use CSS variables for consistency. Dominant colors with sharp accents outperform timid, evenly-distributed palettes. Draw from IDE themes and cultural aesthetics for inspiration.
-
-Motion: Use animations for effects and micro-interactions. Prioritize CSS-only solutions for HTML. Use Motion library for React when available. Focus on high-impact moments: one well-orchestrated page load with staggered reveals (animation-delay) creates more delight than scattered micro-interactions.
-
-Backgrounds: Create atmosphere and depth rather than defaulting to solid colors. Layer CSS gradients, use geometric patterns, or add contextual effects that match the overall aesthetic.
-
-Avoid generic AI-generated aesthetics:
-- Overused font families (Inter, Roboto, Arial, system fonts)
-- Clichéd color schemes (particularly purple gradients on white backgrounds)
-- Predictable layouts and component patterns
-- Cookie-cutter design that lacks context-specific character
-
-Interpret creatively and make unexpected choices that feel genuinely designed for the context. Vary between light and dark themes, different fonts, different aesthetics. You still tend to converge on common choices (Space Grotesk, for example) across generations. Avoid this: it is critical that you think outside the box!
+- **Typography**: Avoid Inter, Roboto, Arial, system fonts, Space Grotesk. Choose distinctive, beautiful fonts.
+- **Color**: Commit to a cohesive aesthetic. Dominant colors with sharp accents. Draw from IDE themes and cultural aesthetics.
+- **Motion**: Use CSS animations and Motion library for React. Focus on high-impact moments (staggered page load reveals) over scattered micro-interactions.
+- **Backgrounds**: Layer gradients, geometric patterns, contextual effects — not solid colors.
+- Vary between light/dark themes, different fonts, different aesthetics across generations.
