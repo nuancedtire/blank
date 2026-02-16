@@ -86,17 +86,10 @@ function LandingPage() {
           <div className="flex items-center gap-3">
             <ThemeToggle variant="ghost" size="sm" />
             <Button
-              variant="ghost"
-              asChild
-              className="hidden sm:flex text-muted-foreground hover:text-primary hover:bg-primary/5"
-            >
-              <Link to="/login">Sign In</Link>
-            </Button>
-            <Button
               asChild
               className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25"
             >
-              <Link to="/signup">Get Started</Link>
+              <Link to="/login">Sign In</Link>
             </Button>
           </div>
         </div>
@@ -347,7 +340,7 @@ function LandingPage() {
                   asChild
                   className="bg-white text-primary hover:bg-white/90 dark:bg-background dark:text-primary h-12 px-8 font-semibold shadow-xl"
                 >
-                  <Link to="/signup">Get Started Free</Link>
+                  <Link to="/login">Get Started Free</Link>
                 </Button>
                 <Button
                   size="lg"

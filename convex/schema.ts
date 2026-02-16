@@ -18,9 +18,9 @@ export default defineSchema({
             pushNotifications: v.boolean(),
             newGuidelineAlerts: v.boolean(),
             systemAnnouncements: v.boolean(),
-          })
+          }),
         ),
-      })
+      }),
     ),
     lastActive: v.optional(v.number()),
   })
@@ -39,13 +39,9 @@ export default defineSchema({
     status: v.union(
       v.literal("draft"),
       v.literal("published"),
-      v.literal("archived")
+      v.literal("archived"),
     ),
-    source: v.union(
-      v.literal("local"),
-      v.literal("rcem"),
-      v.literal("nice")
-    ),
+    source: v.union(v.literal("local"), v.literal("rcem"), v.literal("nice")),
     // Original file in storage (if uploaded as PDF/DOCX)
     fileKey: v.optional(v.string()),
     storageId: v.optional(v.id("_storage")),
@@ -67,6 +63,25 @@ export default defineSchema({
       searchField: "content",
       filterFields: ["category", "status", "source"],
     }),
+
+  // Uploaded documents (PDFs, text files processed into guidelines)
+  uploadedDocuments: defineTable({
+    storageId: v.id("_storage"),
+    fileName: v.string(),
+    fileType: v.string(),
+    source: v.union(v.literal("local"), v.literal("rcem"), v.literal("nice")),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("indexing"),
+      v.literal("indexed"),
+      v.literal("error"),
+    ),
+    uploadedAt: v.number(),
+    guidelineId: v.optional(v.id("guidelines")),
+    errorMessage: v.optional(v.string()),
+  })
+    .index("by_status", ["status"])
+    .index("by_uploadedAt", ["uploadedAt"]),
 
   // Guideline version history
   guidelineVersions: defineTable({
@@ -105,7 +120,7 @@ export default defineSchema({
       v.literal("user"),
       v.literal("search"),
       v.literal("auth"),
-      v.literal("notification")
+      v.literal("notification"),
     ),
     resourceId: v.optional(v.string()),
     details: v.optional(v.string()),
@@ -123,7 +138,7 @@ export default defineSchema({
       v.literal("info"),
       v.literal("warning"),
       v.literal("success"),
-      v.literal("alert")
+      v.literal("alert"),
     ),
     isBroadcast: v.boolean(),
     targetUserIds: v.optional(v.array(v.id("users"))),
