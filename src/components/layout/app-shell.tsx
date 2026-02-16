@@ -1,12 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import {
-  Search,
-  FolderOpen,
-  Settings,
-  LogOut,
-  Activity,
-  Bell,
-} from "lucide-react";
+import { Search, FolderOpen, Settings, LogOut, Bell } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { convexQuery } from "@convex-dev/react-query";
 import { api } from "convex/_generated/api";
@@ -22,6 +15,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { authClient } from "@/lib/auth-client";
+import { AideLogo } from "@/components/ui/aide-logo";
 import { cn } from "@/lib/utils";
 
 const baseNavItems = [
@@ -73,13 +67,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-50 border-b border-border bg-card/80 backdrop-blur-xl">
         <div className="flex h-16 items-center justify-between px-4 lg:px-8">
           {/* Logo */}
-          <Link to="/search" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg shadow-primary/20 group-hover:scale-105 transition-transform">
-              <Activity className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className="text-xl font-bold bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">
-              ED Guidelines
-            </span>
+          <Link to="/search" className="flex items-center">
+            <AideLogo size="md" animate="hover" />
           </Link>
 
           {/* Desktop Navigation */}

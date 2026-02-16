@@ -11,10 +11,10 @@ import {
   Activity,
   FileText,
   ChevronRight,
-  Sparkles,
   Search,
   Zap,
 } from "lucide-react";
+import { AideLogo } from "@/components/ui/aide-logo";
 import { useState } from "react";
 
 export const Route = createFileRoute("/")({
@@ -75,14 +75,9 @@ function LandingPage() {
       {/* Navigation */}
       <nav className="relative z-50 w-full px-6 lg:px-12 py-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg shadow-primary/20">
-              <Activity className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className="text-xl font-bold text-foreground">
-              ED Guidelines
-            </span>
-          </div>
+          <Link to="/">
+            <AideLogo size="lg" animate="hover" />
+          </Link>
           <div className="flex items-center gap-3">
             <ThemeToggle variant="ghost" size="sm" />
             <Button
@@ -360,12 +355,9 @@ function LandingPage() {
       <footer className="relative z-10 px-6 lg:px-12 py-12 border-t border-border">
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-                <Activity className="w-4 h-4 text-primary-foreground" />
-              </div>
-              <span className="font-bold text-foreground">ED Guidelines</span>
-            </div>
+            <Link to="/">
+              <AideLogo size="sm" animate="none" />
+            </Link>
             <p className="text-sm text-muted-foreground">
               © 2026 ED Guidelines. Designed for healthcare professionals.
             </p>

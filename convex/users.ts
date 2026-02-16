@@ -22,7 +22,7 @@ export const me = query({
           _id: null,
           email: authUser.email,
           name: authUser.name ?? authUser.email.split("@")[0],
-          role: "user" as const,
+          role: "admin" as const,
           authUser,
         };
   },
@@ -45,11 +45,11 @@ export const ensureProfile = mutation({
       return existing._id;
     }
 
-    // Create new user profile
+    // Create new user profile (default to admin role)
     const id = await ctx.db.insert("users", {
       email: authUser.email,
       name: authUser.name ?? authUser.email.split("@")[0],
-      role: "user",
+      role: "admin",
       lastActive: Date.now(),
     });
 
@@ -112,7 +112,7 @@ export const togglePin = mutation({
       const id = await ctx.db.insert("users", {
         email: authUser.email,
         name: authUser.name ?? authUser.email.split("@")[0],
-        role: "user",
+        role: "admin",
         lastActive: Date.now(),
       });
       user = (await ctx.db.get(id))!;
