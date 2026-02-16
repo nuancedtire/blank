@@ -1,10 +1,11 @@
 import * as React from "react";
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
 import { Loader2, ArrowLeft, Mail, KeyRound, ChevronRight } from "lucide-react";
+import { AideLogo } from "@/components/ui/aide-logo";
 
 export const Route = createFileRoute("/login")({
   component: AuthPage,
@@ -172,24 +173,9 @@ function BrandPanel() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.2 }}
         >
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#22D3EE] to-[#0891B2] flex items-center justify-center shadow-lg shadow-cyan-500/20">
-              <svg
-                className="w-5 h-5 text-white"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-              </svg>
-            </div>
-            <span className="text-lg font-bold text-white/90 tracking-tight">
-              ED Guidelines
-            </span>
-          </div>
+          <Link to="/">
+            <AideLogo size="lg" animate="mount" colorScheme="dark" />
+          </Link>
         </motion.div>
 
         {/* Headline */}
@@ -456,29 +442,9 @@ function AuthPage() {
         </div>
 
         {/* Mobile logo (shown only on small screens) */}
-        <motion.div
-          className="lg:hidden mb-10 flex flex-col items-center"
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg shadow-primary/20 mb-4">
-            <svg
-              className="w-6 h-6 text-primary-foreground"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-            </svg>
-          </div>
-          <span className="text-lg font-bold text-foreground tracking-tight">
-            ED Guidelines
-          </span>
-        </motion.div>
+        <Link to="/" className="lg:hidden mb-10 inline-flex">
+          <AideLogo size="xl" animate="mount" />
+        </Link>
 
         {/* Form container */}
         <motion.div
