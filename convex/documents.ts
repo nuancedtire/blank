@@ -125,8 +125,7 @@ export const indexDocument = action({
       console.error("Failed to index document:", e);
       await ctx.runMutation(internal.documents.updateStatusWithError, {
         documentId: args.documentId,
-        errorMessage:
-          e instanceof Error ? e.message : "Unknown indexing error",
+        errorMessage: e instanceof Error ? e.message : "Unknown indexing error",
       });
       throw e;
     }
@@ -311,7 +310,7 @@ export const getFileUrl = query({
   },
 });
 
-// Delete document, its guideline entry, and RAG index
+// Delete document, its guideline entry, RAG embeddings, and stored file
 export const deleteDocument = action({
   args: { documentId: v.id("uploadedDocuments") },
   handler: async (ctx, { documentId }) => {
@@ -324,6 +323,17 @@ export const deleteDocument = action({
     if (doc.guidelineId) {
       await ctx.runMutation(internal.documents.deleteGuideline, {
         guidelineId: doc.guidelineId,
+      });
+    }
+
+    // Delete RAG vector embeddings (key matches the documentId used in rag.add)
+    const namespace = await rag.getNamespace(ctx, {
+      namespace: "guidelines",
+    });
+    if (namespace) {
+      await rag.deleteByKey(ctx, {
+        namespaceId: namespace.namespaceId,
+        key: documentId,
       });
     }
 
@@ -380,10 +390,13 @@ export const publishGuideline = mutation({
 
     // Update slug if title changed
     if (args.title !== undefined) {
-      updates.slug = args.title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "") + "-" + Date.now();
+      updates.slug =
+        args.title
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "") +
+        "-" +
+        Date.now();
     }
 
     await ctx.db.patch(args.guidelineId, updates);
