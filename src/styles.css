@@ -562,25 +562,30 @@ pre,
     @apply bg-gray-400;
 }
 
-/* Custom Scrollbar */
+/* Custom Scrollbar — thin, unobtrusive */
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 5px;
+    height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-    background: var(--muted);
-    border-radius: 4px;
+    background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: var(--primary);
-    border-radius: 4px;
+    background: color-mix(in srgb, var(--primary) 35%, transparent);
+    border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--primary);
-    opacity: 0.8;
+    background: color-mix(in srgb, var(--primary) 60%, transparent);
+}
+
+/* Firefox thin scrollbar */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--primary) 35%, transparent)
+        transparent;
 }
 
 /* Selection */

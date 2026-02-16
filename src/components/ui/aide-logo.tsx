@@ -76,11 +76,11 @@ export function AideLogo({
   };
 
   const g = cfg.glow;
+  const revealed = isRevealed && !shouldReduce;
 
   return (
     <motion.div
       className={cn(
-        // Allow glow/blur to extend outside without being clipped (overflow-visible => overflow: visible) [web:77]
         "inline-flex items-baseline relative select-none cursor-default overflow-visible",
         className,
       )}
@@ -140,115 +140,116 @@ export function AideLogo({
         ide
       </motion.span>
 
-      {/* ── Tube light underline + downward cone spill (like reference) ── */}
-      <motion.span
+      {/*
+        ── Performance-first glow system ──
+        Key principle from the reference: NEVER animate box-shadow or filter.
+        Instead, pre-render all glow layers at full intensity but opacity:0,
+        then only animate opacity (GPU-composited, no repaints).
+      */}
+      <span
         className="absolute left-0 right-0 pointer-events-none"
         style={{
           bottom: "-3px",
           height: "2px",
-          transformOrigin: "left center",
+          willChange: "opacity",
         }}
-        initial={{ opacity: 0, scaleX: 0 }}
-        animate={{
-          opacity: isRevealed && !shouldReduce ? 1 : 0,
-          scaleX: isRevealed && !shouldReduce ? 1 : 0,
-        }}
-        transition={{ duration: 0.4, delay: 0.15, ease: "easeOut" }}
       >
-        {/* Tube core line */}
+        {/* === DEFAULT STATE: thin subtle line (always visible) === */}
+        <span
+          className="absolute inset-0 rounded-full"
+          style={{
+            background: `linear-gradient(90deg, ${gradFrom}, ${gradTo})`,
+            opacity: revealed ? 0 : 0.25,
+            transition: "opacity 0.35s ease-out",
+          }}
+        />
+
+        {/* === REVEALED STATE: full glow (pre-rendered, opacity-only transition) === */}
+
+        {/* Core tube line — bright, crisp */}
+        <span
+          className="absolute inset-0 rounded-full"
+          style={{
+            background: `linear-gradient(90deg, ${gradFrom}, ${gradTo})`,
+            opacity: revealed ? 1 : 0,
+            transition: "opacity 0.35s ease-out",
+          }}
+        />
+
+        {/* Inset glow — makes the tube look lit from within (box-shadow, but NOT animated) */}
         <span
           className="absolute inset-0 rounded-full"
           style={{
             background: `linear-gradient(90deg, ${gradFrom}, ${gradTo})`,
             boxShadow: isDark
-              ? `0 0 ${g * 0.9}px rgba(34,211,238,0.55), 0 0 ${g * 1.4}px rgba(74,222,128,0.35)`
-              : `0 0 ${g * 0.7}px rgba(8,145,178,0.25)`,
+              ? `0 0 ${g * 0.5}px rgba(34,211,238,0.8), inset 0 0 ${g * 0.3}px rgba(255,255,255,0.5)`
+              : `0 0 ${g * 0.4}px rgba(8,145,178,0.5), inset 0 0 ${g * 0.2}px rgba(255,255,255,0.4)`,
+            opacity: revealed ? 1 : 0,
+            transition: "opacity 0.35s ease-out",
           }}
         />
 
-        {/* Slight tube hotspot (thicker + blurred) */}
+        {/* White hotspot — bright core highlight */}
         <span
           className="absolute left-0 right-0 rounded-full"
           style={{
             top: "-1px",
             height: "4px",
             background: `linear-gradient(90deg,
-              rgba(255,255,255,0.70),
-              rgba(255,255,255,0.18) 35%,
-              rgba(255,255,255,0.70)
+              rgba(255,255,255,0.65),
+              rgba(255,255,255,0.15) 40%,
+              rgba(255,255,255,0.65)
             )`,
             filter: `blur(${Math.max(2, g * 0.08)}px)`,
-            opacity: isDark ? 0.95 : 0.55,
-            mixBlendMode: isDark ? "screen" : "multiply",
+            opacity: revealed ? (isDark ? 0.9 : 0.5) : 0,
+            transition: "opacity 0.35s ease-out",
           }}
         />
 
-        {/* Hot bloom right under the tube */}
+        {/*
+          ── 3D Ground reflection ──
+          Uses perspective + rotateX to project the glow onto a "floor" plane,
+          exactly like the video's ::before pseudo-element technique.
+          The blur is STATIC (pre-rendered), only opacity animates.
+        */}
         <span
-          className="absolute left-0 right-0 mx-auto"
+          className="absolute left-0 right-0 pointer-events-none"
           style={{
-            top: "1px",
-            width: "170%",
-            transform: "translateX(-20%)",
-            height: `${Math.max(10, g * 1.05)}px`,
-            background: `radial-gradient(closest-side,
-              rgba(255,255,255,0.55),
-              rgba(255,255,255,0.00) 65%
+            top: "2px",
+            height: `${g * 5}px`,
+            transform: `perspective(${g * 8}px) rotateX(40deg)`,
+            transformOrigin: "top center",
+            background: `radial-gradient(ellipse 80% 40% at 50% 0%,
+              ${isDark ? "rgba(34,211,238,0.35)" : "rgba(8,145,178,0.22)"} 0%,
+              ${isDark ? "rgba(74,222,128,0.18)" : "rgba(34,197,94,0.10)"} 30%,
+              transparent 70%
+            )`,
+            filter: `blur(${g * 0.4}px)`,
+            opacity: revealed ? 1 : 0,
+            transition: "opacity 0.4s ease-out 0.08s",
+          }}
+        />
+
+        {/* Inner reflection — tighter, brighter for definition */}
+        <span
+          className="absolute pointer-events-none"
+          style={{
+            left: "10%",
+            right: "10%",
+            top: "2px",
+            height: `${g * 3.5}px`,
+            transform: `perspective(${g * 6}px) rotateX(35deg)`,
+            transformOrigin: "top center",
+            background: `radial-gradient(ellipse 70% 50% at 50% 0%,
+              rgba(255,255,255,${isDark ? "0.18" : "0.10"}) 0%,
+              transparent 60%
             )`,
             filter: `blur(${g * 0.25}px)`,
-            opacity: isDark ? 0.9 : 0.45,
-            mixBlendMode: isDark ? "screen" : "normal",
+            opacity: revealed ? 1 : 0,
+            transition: "opacity 0.4s ease-out 0.08s",
           }}
         />
-
-        {/* Downward cone spill (triangle-ish) */}
-        <motion.span
-          className="absolute pointer-events-none"
-          style={{
-            left: `-${g}px`,
-            right: `-${g}px`, // room for blur at edges
-            top: "2px", // start below the line
-            height: `${g * 6}px`,
-            transformOrigin: "left center",
-            originX: 0, // originX/originY are Motion transform-origin shortcuts [web:16]
-            background: `linear-gradient(180deg,
-              rgba(34,211,238,0.28) 0%,
-              rgba(74,222,128,0.16) 5%,
-              rgba(74,222,128,0.00) 20%
-            )`, // 180deg == "to bottom" [web:31]
-            clipPath: "polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%)",
-            filter: `blur(${g * 0.58}px)`,
-            opacity: isDark ? 1 : 0.55,
-          }}
-          initial={{ scaleX: 0 }}
-          animate={{ scaleX: isRevealed && !shouldReduce ? 1 : 0 }}
-          transition={{ duration: 0.4, delay: 0.15, ease: "easeOut" }}
-        />
-
-        {/* Inner cone for definition */}
-        <motion.span
-          className="absolute pointer-events-none"
-          style={{
-            left: `calc(10% - ${g}px)`,
-            right: `calc(10% - ${g}px)`,
-            top: "2px",
-            height: `${g * 4.8}px`,
-            transformOrigin: "left center",
-            originX: 0,
-            background: `linear-gradient(180deg,
-              rgba(255,255,255,0.16) 0%,
-              rgba(255,255,255,0.06) 5%,
-              rgba(255,255,255,0.00) 30%
-            )`,
-            clipPath: "polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%)",
-            filter: `blur(${g * 0.38}px)`,
-            opacity: isDark ? 0.75 : 0.3,
-          }}
-          initial={{ scaleX: 0 }}
-          animate={{ scaleX: isRevealed && !shouldReduce ? 1 : 0 }}
-          transition={{ duration: 0.4, delay: 0.15, ease: "easeOut" }}
-        />
-      </motion.span>
+      </span>
     </motion.div>
   );
 }
