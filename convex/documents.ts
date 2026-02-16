@@ -304,8 +304,9 @@ export const listDocuments = query({
 
 // Get file URL for viewing/downloading
 export const getFileUrl = query({
-  args: { storageId: v.id("_storage") },
+  args: { storageId: v.optional(v.id("_storage")) },
   handler: async (ctx, { storageId }) => {
+    if (!storageId) return null;
     return await ctx.storage.getUrl(storageId);
   },
 });

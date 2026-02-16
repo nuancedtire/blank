@@ -4,7 +4,7 @@ import { authComponent } from "./auth";
 
 // Helper to get the current authenticated user profile
 async function getCurrentUser(ctx: QueryCtx | MutationCtx) {
-  const authUser = await authComponent.getAuthUser(ctx);
+  const authUser = await authComponent.safeGetAuthUser(ctx);
   if (!authUser) return null;
 
   return await ctx.db
@@ -37,7 +37,7 @@ export const list = query({
     if (!user) return [];
 
     const now = Date.now();
-    
+
     // Fetch all notifications and filter in memory for efficiency/simplicity
     // In a larger app, we might want more complex indexing
     const allNotifications = await ctx.db
@@ -51,7 +51,7 @@ export const list = query({
       if (n.expiresAt && n.expiresAt < now) return false;
 
       // Filter by broadcast OR targetUserIds
-      const isTargeted = n.isBroadcast || (n.targetUserIds?.includes(user._id));
+      const isTargeted = n.isBroadcast || n.targetUserIds?.includes(user._id);
       if (!isTargeted) return false;
 
       // Filter out if dismissed by user
@@ -82,13 +82,11 @@ export const getUnreadCount = query({
     if (!user) return 0;
 
     const now = Date.now();
-    const allNotifications = await ctx.db
-      .query("notifications")
-      .collect();
+    const allNotifications = await ctx.db.query("notifications").collect();
 
     return allNotifications.filter((n) => {
       if (n.expiresAt && n.expiresAt < now) return false;
-      const isTargeted = n.isBroadcast || (n.targetUserIds?.includes(user._id));
+      const isTargeted = n.isBroadcast || n.targetUserIds?.includes(user._id);
       if (!isTargeted) return false;
       if (n.dismissedBy.includes(user._id)) return false;
       return !n.readBy.includes(user._id);
@@ -125,7 +123,7 @@ export const markAllAsRead = mutation({
     const notifications = await ctx.db.query("notifications").collect();
 
     for (const n of notifications) {
-      const isTargeted = n.isBroadcast || (n.targetUserIds?.includes(user._id));
+      const isTargeted = n.isBroadcast || n.targetUserIds?.includes(user._id);
       const isExpired = n.expiresAt && n.expiresAt < now;
       const isRead = n.readBy.includes(user._id);
       const isDismissed = n.dismissedBy.includes(user._id);
@@ -170,7 +168,7 @@ export const create = mutation({
       v.literal("info"),
       v.literal("warning"),
       v.literal("success"),
-      v.literal("alert")
+      v.literal("alert"),
     ),
     isBroadcast: v.boolean(),
     targetUserIds: v.optional(v.array(v.id("users"))),
@@ -239,8 +237,8 @@ export const update = mutation({
         v.literal("info"),
         v.literal("warning"),
         v.literal("success"),
-        v.literal("alert")
-      )
+        v.literal("alert"),
+      ),
     ),
     expiresAt: v.optional(v.number()),
   },

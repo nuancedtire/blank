@@ -35,12 +35,11 @@ function GuidelineDetailPage() {
 
   // Get file URL if this guideline has an associated PDF
   const storageId = (guideline as any)?.storageId;
-  const { data: fileUrl } = useQuery({
-    ...convexQuery(api.documents.getFileUrl, {
-      storageId: storageId ?? ("skip" as any),
+  const { data: fileUrl } = useQuery(
+    convexQuery(api.documents.getFileUrl, {
+      storageId: storageId ?? undefined,
     }),
-    enabled: !!storageId,
-  });
+  );
 
   const hasPdf = !!storageId && !!fileUrl;
 
@@ -151,9 +150,7 @@ function GuidelineDetailPage() {
           >
             <Star
               className={
-                isPinned
-                  ? "h-4 w-4 fill-yellow-400 text-yellow-400"
-                  : "h-4 w-4"
+                isPinned ? "h-4 w-4 fill-yellow-400 text-yellow-400" : "h-4 w-4"
               }
             />
             {isPinned ? "Pinned" : "Pin"}

@@ -4,7 +4,7 @@ import { authComponent } from "./auth";
 
 // Helper to get the current authenticated user profile
 async function getCurrentUser(ctx: any) {
-  const authUser = await authComponent.getAuthUser(ctx);
+  const authUser = await authComponent.safeGetAuthUser(ctx);
   if (!authUser) return null;
 
   return await ctx.db
@@ -20,12 +20,14 @@ async function getCurrentUser(ctx: any) {
 export const getAccountInfo = query({
   args: {},
   handler: async (ctx) => {
-    const user = await getCurrentUser(ctx);
-    if (!user) return null;
-
-    // Get auth user info from Better Auth
-    const authUser = await authComponent.getAuthUser(ctx);
+    const authUser = await authComponent.safeGetAuthUser(ctx);
     if (!authUser) return null;
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q: any) => q.eq("email", authUser.email))
+      .first();
+    if (!user) return null;
 
     return {
       profile: user,
