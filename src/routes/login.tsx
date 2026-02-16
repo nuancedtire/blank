@@ -4,13 +4,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
-import {
-  Loader2,
-  ArrowLeft,
-  Mail,
-  KeyRound,
-  ChevronRight,
-} from "lucide-react";
+import { Loader2, ArrowLeft, Mail, KeyRound, ChevronRight } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
   component: AuthPage,
@@ -57,14 +51,208 @@ function GoogleIcon({ className }: { className?: string }) {
   );
 }
 
-/* ─── Decorative pulse ring behind the logo ─── */
-function PulseRing() {
+/* ─── Animated EKG line ─── */
+function EkgLine() {
   return (
-    <motion.span
-      className="absolute inset-0 rounded-2xl border-2 border-primary/30"
-      animate={{ scale: [1, 1.25, 1], opacity: [0.6, 0, 0.6] }}
-      transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+    <svg
+      viewBox="0 0 600 80"
+      className="w-full h-16 opacity-30"
+      preserveAspectRatio="none"
+    >
+      <motion.path
+        d="M0,40 L120,40 L140,40 L155,10 L170,70 L185,20 L200,50 L215,35 L230,40 L600,40"
+        fill="none"
+        stroke="url(#ekgGrad)"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        initial={{ pathLength: 0, opacity: 0 }}
+        animate={{ pathLength: 1, opacity: 1 }}
+        transition={{
+          duration: 2.5,
+          ease: "easeInOut",
+          repeat: Infinity,
+          repeatDelay: 1.5,
+        }}
+      />
+      <defs>
+        <linearGradient id="ekgGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#22D3EE" stopOpacity="0" />
+          <stop offset="30%" stopColor="#22D3EE" />
+          <stop offset="70%" stopColor="#4ADE80" />
+          <stop offset="100%" stopColor="#4ADE80" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
+/* ─── Floating vitals particle ─── */
+function VitalParticle({
+  delay,
+  x,
+  y,
+  size,
+}: {
+  delay: number;
+  x: string;
+  y: string;
+  size: number;
+}) {
+  return (
+    <motion.div
+      className="absolute rounded-full"
+      style={{
+        left: x,
+        top: y,
+        width: size,
+        height: size,
+        background: `radial-gradient(circle, rgba(34, 211, 238, 0.4) 0%, transparent 70%)`,
+      }}
+      animate={{
+        y: [0, -20, 0],
+        opacity: [0.2, 0.6, 0.2],
+        scale: [1, 1.3, 1],
+      }}
+      transition={{
+        duration: 4 + Math.random() * 2,
+        repeat: Infinity,
+        delay,
+        ease: "easeInOut",
+      }}
     />
+  );
+}
+
+/* ─── Decorative side panel ─── */
+function BrandPanel() {
+  return (
+    <div className="hidden lg:flex relative w-1/2 flex-col justify-between overflow-hidden bg-[#071a2b]">
+      {/* Layered gradient mesh */}
+      <div className="absolute inset-0">
+        <div
+          className="absolute inset-0"
+          style={{
+            background: `
+              radial-gradient(ellipse 80% 50% at 20% 40%, rgba(8, 145, 178, 0.15) 0%, transparent 60%),
+              radial-gradient(ellipse 60% 80% at 80% 70%, rgba(34, 197, 94, 0.1) 0%, transparent 60%),
+              radial-gradient(ellipse 40% 40% at 50% 20%, rgba(34, 211, 238, 0.08) 0%, transparent 50%)
+            `,
+          }}
+        />
+        {/* Subtle grid */}
+        <div
+          className="absolute inset-0 opacity-[0.04]"
+          style={{
+            backgroundImage: `
+              linear-gradient(rgba(34, 211, 238, 1) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(34, 211, 238, 1) 1px, transparent 1px)
+            `,
+            backgroundSize: "60px 60px",
+          }}
+        />
+      </div>
+
+      {/* Floating particles */}
+      <div className="absolute inset-0">
+        <VitalParticle delay={0} x="15%" y="25%" size={60} />
+        <VitalParticle delay={1.2} x="70%" y="15%" size={40} />
+        <VitalParticle delay={0.6} x="45%" y="60%" size={50} />
+        <VitalParticle delay={1.8} x="80%" y="45%" size={35} />
+        <VitalParticle delay={2.4} x="25%" y="75%" size={45} />
+        <VitalParticle delay={0.3} x="60%" y="80%" size={30} />
+      </div>
+
+      {/* Content */}
+      <div className="relative z-10 flex flex-col justify-center flex-1 px-12 xl:px-16">
+        {/* Logo */}
+        <motion.div
+          className="mb-12"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, delay: 0.2 }}
+        >
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#22D3EE] to-[#0891B2] flex items-center justify-center shadow-lg shadow-cyan-500/20">
+              <svg
+                className="w-5 h-5 text-white"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+              </svg>
+            </div>
+            <span className="text-lg font-bold text-white/90 tracking-tight">
+              ED Guidelines
+            </span>
+          </div>
+        </motion.div>
+
+        {/* Headline */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, delay: 0.4 }}
+        >
+          <h2 className="text-3xl xl:text-4xl font-extrabold text-white leading-tight tracking-tight mb-4">
+            Clinical protocols,{" "}
+            <span
+              className="bg-clip-text text-transparent"
+              style={{
+                backgroundImage:
+                  "linear-gradient(135deg, #22D3EE 0%, #4ADE80 100%)",
+              }}
+            >
+              instantly.
+            </span>
+          </h2>
+          <p className="text-base text-white/50 leading-relaxed max-w-md">
+            AI-powered guideline retrieval for Emergency Department clinicians.
+            RCEM, NICE, and local trust protocols — at your fingertips.
+          </p>
+        </motion.div>
+
+        {/* EKG animation */}
+        <motion.div
+          className="mt-12"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 1, delay: 0.8 }}
+        >
+          <EkgLine />
+        </motion.div>
+
+        {/* Stats */}
+        <motion.div
+          className="mt-8 flex gap-10"
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 1 }}
+        >
+          {[
+            { value: "500+", label: "Guidelines" },
+            { value: "<2s", label: "Response" },
+            { value: "24/7", label: "Available" },
+          ].map((stat) => (
+            <div key={stat.label}>
+              <div className="text-xl font-bold text-[#22D3EE]">
+                {stat.value}
+              </div>
+              <div className="text-xs text-white/40 uppercase tracking-wider mt-0.5">
+                {stat.label}
+              </div>
+            </div>
+          ))}
+        </motion.div>
+      </div>
+
+      {/* Bottom accent line */}
+      <div className="relative z-10 h-1 w-full bg-gradient-to-r from-transparent via-[#22D3EE]/30 to-transparent" />
+    </div>
   );
 }
 
@@ -166,7 +354,7 @@ function AuthPage() {
     }
   }
 
-  /* ── Step 1: Email → send OTP and go to OTP step ── */
+  /* ── Step 1: Email → send OTP ── */
   async function handleEmailContinue(e: React.FormEvent) {
     e.preventDefault();
     setError("");
@@ -241,135 +429,187 @@ function AuthPage() {
   }
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
-      {/* ── Ambient background blobs ── */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <motion.div
-          className="absolute -top-24 -left-24 w-[420px] h-[420px] rounded-full opacity-[0.07]"
-          style={{
-            background:
-              "radial-gradient(circle, var(--primary) 0%, transparent 70%)",
-            filter: "blur(60px)",
-          }}
-          animate={{ x: [0, 30, 0], y: [0, -20, 0] }}
-          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <motion.div
-          className="absolute -bottom-32 -right-20 w-[500px] h-[500px] rounded-full opacity-[0.05]"
-          style={{
-            background:
-              "radial-gradient(circle, var(--accent) 0%, transparent 70%)",
-            filter: "blur(80px)",
-          }}
-          animate={{ x: [0, -25, 0], y: [0, 20, 0] }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-        />
-      </div>
+    <div className="flex min-h-screen bg-background">
+      {/* ── Left: Brand panel (desktop) ── */}
+      <BrandPanel />
 
-      {/* ── Card ── */}
-      <motion.div
-        className="relative z-10 w-full max-w-[400px]"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-      >
-        {/* Glass card */}
-        <div className="rounded-2xl border border-border/60 bg-card/95 backdrop-blur-xl shadow-xl overflow-hidden">
-          {/* ── Header ── */}
-          <div className="px-6 pt-8 pb-2 text-center">
-            {/* Logo mark */}
-            <div className="relative mx-auto w-14 h-14 mb-5">
-              <PulseRing />
-              <motion.div
-                className="relative w-full h-full rounded-2xl bg-gradient-to-br from-primary via-primary to-accent flex items-center justify-center shadow-lg"
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ type: "spring", stiffness: 200, damping: 14 }}
-              >
-                <svg
-                  className="w-7 h-7 text-primary-foreground"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                  <path d="M2 17l10 5 10-5" />
-                  <path d="M2 12l10 5 10-5" />
-                </svg>
-              </motion.div>
-            </div>
+      {/* ── Right: Auth form ── */}
+      <div className="relative flex flex-1 flex-col items-center justify-center p-6 sm:p-10 overflow-hidden">
+        {/* Subtle background texture */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div
+            className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full opacity-[0.04]"
+            style={{
+              background:
+                "radial-gradient(circle, var(--primary) 0%, transparent 70%)",
+              filter: "blur(80px)",
+            }}
+          />
+          <div
+            className="absolute -bottom-40 -left-40 w-[400px] h-[400px] rounded-full opacity-[0.03]"
+            style={{
+              background:
+                "radial-gradient(circle, var(--accent) 0%, transparent 70%)",
+              filter: "blur(60px)",
+            }}
+          />
+        </div>
 
-            <h1 className="text-2xl font-extrabold tracking-tight text-foreground">
-              ED Guidelines
-            </h1>
+        {/* Mobile logo (shown only on small screens) */}
+        <motion.div
+          className="lg:hidden mb-10 flex flex-col items-center"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg shadow-primary/20 mb-4">
+            <svg
+              className="w-6 h-6 text-primary-foreground"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+            </svg>
+          </div>
+          <span className="text-lg font-bold text-foreground tracking-tight">
+            ED Guidelines
+          </span>
+        </motion.div>
+
+        {/* Form container */}
+        <motion.div
+          className="relative z-10 w-full max-w-[400px]"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        >
+          {/* Header */}
+          <div className="mb-8">
+            <motion.h1
+              className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+            >
+              Welcome back
+            </motion.h1>
             <AnimatePresence mode="wait">
               <motion.p
                 key={step}
-                className="mt-1 text-sm text-muted-foreground"
+                className="mt-2 text-sm text-muted-foreground"
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4 }}
                 transition={{ duration: 0.2 }}
               >
-                {step === "email" && "Enter your email to get started"}
-                {step === "otp" && "Check your inbox for a verification code"}
+                {step === "email" && "Sign in with your email to continue"}
+                {step === "otp" && "Enter the verification code we sent you"}
               </motion.p>
             </AnimatePresence>
           </div>
 
-          {/* ── Error ── */}
-          <div className="px-6">
-            <AnimatePresence mode="wait">
-              {error && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                  animate={{ opacity: 1, height: "auto", marginTop: 12 }}
-                  exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="rounded-xl bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive font-medium border border-destructive/20">
-                    {error}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          {/* Error */}
+          <AnimatePresence mode="wait">
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                animate={{ opacity: 1, height: "auto", marginBottom: 20 }}
+                exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="rounded-xl bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive font-medium border border-destructive/20">
+                  {error}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-          {/* ── Steps ── */}
-          <div className="px-6 pt-5 pb-6">
-            <AnimatePresence mode="wait" initial={false}>
-              {/* ─── EMAIL STEP ─── */}
-              {step === "email" && (
-                <motion.form
-                  key="email"
-                  onSubmit={handleEmailContinue}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                  className="space-y-4"
-                >
-                  <div className="relative">
-                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                    <Input
-                      type="email"
-                      placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      autoComplete="email"
-                      autoFocus
-                      disabled={isAnyLoading}
-                      className="h-12 pl-10 text-base rounded-xl border-2 border-border/80 transition-colors focus:border-primary"
-                    />
+          {/* Steps */}
+          <AnimatePresence mode="wait" initial={false}>
+            {/* ─── EMAIL STEP ─── */}
+            {step === "email" && (
+              <motion.div
+                key="email"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              >
+                {/* Social buttons first */}
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-12 text-sm font-semibold gap-2.5 rounded-xl group border-2 border-border/80 hover:border-primary/40 hover:bg-primary/5 transition-all duration-200"
+                    disabled={isAnyLoading}
+                    onClick={() => handleSocial("google")}
+                  >
+                    {isSocialLoading === "google" ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <GoogleIcon className="w-4.5 h-4.5 transition-transform group-hover:scale-110" />
+                    )}
+                    Google
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-12 text-sm font-semibold gap-2.5 rounded-xl group border-2 border-border/80 hover:border-primary/40 hover:bg-primary/5 transition-all duration-200"
+                    disabled={isAnyLoading}
+                    onClick={() => handleSocial("microsoft")}
+                  >
+                    {isSocialLoading === "microsoft" ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <MicrosoftIcon className="w-4 h-4 transition-transform group-hover:scale-110" />
+                    )}
+                    Microsoft
+                  </Button>
+                </div>
+
+                {/* Divider */}
+                <div className="relative flex items-center gap-3 mb-6">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground font-semibold select-none">
+                    or continue with email
+                  </span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+
+                {/* Email form */}
+                <form onSubmit={handleEmailContinue} className="space-y-4">
+                  <div>
+                    <label
+                      htmlFor="email-input"
+                      className="block text-sm font-semibold text-foreground mb-2"
+                    >
+                      Email address
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                      <Input
+                        id="email-input"
+                        type="email"
+                        placeholder="you@nhs.net"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                        autoComplete="email"
+                        autoFocus
+                        disabled={isAnyLoading}
+                        className="h-12 pl-10 text-base rounded-xl border-2 border-border/80 transition-all duration-200 focus:border-primary focus:ring-2 focus:ring-primary/15"
+                      />
+                    </div>
                   </div>
 
                   <Button
                     type="submit"
-                    className="w-full h-12 text-base font-bold rounded-xl gap-2 group"
+                    className="w-full h-12 text-base font-bold rounded-xl gap-2 group shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all duration-200"
                     disabled={isAnyLoading || !email}
                   >
                     {isLoading ? (
@@ -381,131 +621,88 @@ function AuthPage() {
                       </>
                     )}
                   </Button>
-                </motion.form>
-              )}
+                </form>
+              </motion.div>
+            )}
 
-              {/* ─── OTP STEP ─── */}
-              {step === "otp" && (
-                <motion.form
-                  key="otp"
-                  onSubmit={handleOtpSubmit}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                  className="space-y-5"
+            {/* ─── OTP STEP ─── */}
+            {step === "otp" && (
+              <motion.form
+                key="otp"
+                onSubmit={handleOtpSubmit}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                className="space-y-5"
+              >
+                <button
+                  type="button"
+                  onClick={goBack}
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors group"
                 >
-                  <button
-                    type="button"
-                    onClick={goBack}
-                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors group"
-                  >
-                    <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" />
-                    <span className="font-medium">{email}</span>
-                  </button>
+                  <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" />
+                  <span className="font-medium">{email}</span>
+                </button>
 
-                  <div className="text-center space-y-1">
-                    <div className="mx-auto w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center mb-3">
-                      <KeyRound className="w-5 h-5 text-primary" />
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      We sent a 6-digit code to{" "}
-                      <span className="font-semibold text-foreground">
-                        {email}
-                      </span>
-                    </p>
+                <div className="text-center space-y-1">
+                  <div className="mx-auto w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3">
+                    <KeyRound className="w-5 h-5 text-primary" />
                   </div>
+                  <p className="text-sm text-muted-foreground">
+                    We sent a 6-digit code to{" "}
+                    <span className="font-semibold text-foreground">
+                      {email}
+                    </span>
+                  </p>
+                </div>
 
-                  <OtpInput
-                    value={otp}
-                    onChange={setOtp}
-                    disabled={isAnyLoading}
-                  />
+                <OtpInput
+                  value={otp}
+                  onChange={setOtp}
+                  disabled={isAnyLoading}
+                />
 
-                  <Button
-                    type="submit"
-                    className="w-full h-12 text-base font-bold rounded-xl"
-                    disabled={isAnyLoading || otp.length < 6}
-                  >
-                    {isLoading ? (
-                      <span className="flex items-center gap-2">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Verifying
-                      </span>
-                    ) : (
-                      "Verify & Sign In"
-                    )}
-                  </Button>
+                <Button
+                  type="submit"
+                  className="w-full h-12 text-base font-bold rounded-xl shadow-lg shadow-primary/20"
+                  disabled={isAnyLoading || otp.length < 6}
+                >
+                  {isLoading ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Verifying
+                    </span>
+                  ) : (
+                    "Verify & Sign In"
+                  )}
+                </Button>
 
-                  <div className="flex items-center justify-center text-xs text-muted-foreground">
-                    {resendCooldown > 0 ? (
-                      <span className="font-medium text-muted-foreground/70">
-                        Resend in {resendCooldown}s
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleResendOtp}
-                        className="font-semibold text-primary hover:underline transition-colors"
-                      >
-                        Resend code
-                      </button>
-                    )}
-                  </div>
-                </motion.form>
-              )}
-            </AnimatePresence>
-          </div>
+                <div className="flex items-center justify-center text-xs text-muted-foreground">
+                  {resendCooldown > 0 ? (
+                    <span className="font-medium text-muted-foreground/70">
+                      Resend in {resendCooldown}s
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleResendOtp}
+                      className="font-semibold text-primary hover:underline transition-colors"
+                    >
+                      Resend code
+                    </button>
+                  )}
+                </div>
+              </motion.form>
+            )}
+          </AnimatePresence>
 
-          {/* ── Divider + Social ── */}
-          <div className="px-6 pb-7">
-            <div className="relative flex items-center gap-3 mb-4">
-              <div className="flex-1 h-px bg-border" />
-              <span className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground font-semibold select-none">
-                or
-              </span>
-              <div className="flex-1 h-px bg-border" />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-11 text-sm font-semibold gap-2 rounded-xl group"
-                disabled={isAnyLoading}
-                onClick={() => handleSocial("google")}
-              >
-                {isSocialLoading === "google" ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <GoogleIcon className="w-4 h-4 transition-transform group-hover:scale-110" />
-                )}
-                Google
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                className="h-11 text-sm font-semibold gap-2 rounded-xl group"
-                disabled={isAnyLoading}
-                onClick={() => handleSocial("microsoft")}
-              >
-                {isSocialLoading === "microsoft" ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <MicrosoftIcon className="w-4 h-4 transition-transform group-hover:scale-110" />
-                )}
-                Microsoft
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Footer ── */}
-        <p className="mt-5 text-center text-xs text-muted-foreground/70">
-          By continuing, you agree to our terms of service.
-        </p>
-      </motion.div>
+          {/* Footer */}
+          <p className="mt-8 text-center text-xs text-muted-foreground/60">
+            By continuing, you agree to our terms of service.
+          </p>
+        </motion.div>
+      </div>
     </div>
   );
 }
