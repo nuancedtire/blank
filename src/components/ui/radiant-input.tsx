@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import { Plus, Mic, ArrowUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +17,7 @@ export function RadiantPromptInput({
   onChange: propOnChange,
   onSubmit,
   className,
-  disabled
+  disabled,
 }: RadiantPromptInputProps) {
   const [internalValue, setInternalValue] = useState("");
   const isControlled = propValue !== undefined;
@@ -38,7 +38,7 @@ export function RadiantPromptInput({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
     }
@@ -52,7 +52,7 @@ export function RadiantPromptInput({
           inherits: false;
           initial-value: 0deg;
         }
-        
+
         @keyframes rotate-gradient {
           to {
             --rotation: 360deg;
@@ -62,14 +62,14 @@ export function RadiantPromptInput({
         .radiant-input-wrapper {
           --border-size: 3px;
           --gradient: conic-gradient(
-            from var(--rotation) 
-            at 50% 50% in oklab, 
-            oklch(0.55 0.18 195) 27%, 
-            oklch(0.68 0.14 160) 33%, 
-            oklch(0.72 0.12 180) 41%, 
-            oklch(0.65 0.16 145) 49%, 
-            oklch(0.55 0.18 195) 65%, 
-            oklch(0.60 0.15 175) 93%, 
+            from var(--rotation)
+            at 50% 50% in oklab,
+            oklch(0.55 0.18 195) 27%,
+            oklch(0.68 0.14 160) 33%,
+            oklch(0.72 0.12 180) 41%,
+            oklch(0.65 0.16 145) 49%,
+            oklch(0.55 0.18 195) 65%,
+            oklch(0.60 0.15 175) 93%,
             oklch(0.55 0.18 195)
           );
           animation: rotate-gradient 5s infinite linear;
@@ -92,8 +92,8 @@ export function RadiantPromptInput({
           border-radius: inherit;
           padding: var(--border-size);
           background: var(--gradient);
-          -webkit-mask: 
-            linear-gradient(#fff 0 0) content-box, 
+          -webkit-mask:
+            linear-gradient(#fff 0 0) content-box,
             linear-gradient(#fff 0 0);
           -webkit-mask-composite: xor;
           mask-composite: exclude;
@@ -101,17 +101,16 @@ export function RadiantPromptInput({
         }
       `}</style>
 
-      <div className="radiant-input-wrapper relative rounded-full bg-white dark:bg-[#1E293B] group transition-all duration-300 hover:shadow-lg hover:shadow-[#0891B2]/10">
+      <div className="radiant-input-wrapper relative rounded-full bg-card group transition-all duration-300 hover:shadow-lg hover:shadow-primary/10">
         {/* Animated Gradient Border */}
         <div className="radiant-input-border rounded-full" />
-        
+
         {/* Inner Content */}
         <div className="relative z-10 flex items-center gap-2 p-1.5 pl-4 pr-1.5 h-14 md:h-16">
-          
           {/* Add Button */}
-          <button 
+          <button
             type="button"
-            className="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full text-[#5E6B6A] hover:bg-[#F0FDFA] hover:text-[#0891B2] transition-colors cursor-pointer"
+            className="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full text-muted-foreground hover:bg-background hover:text-primary transition-colors cursor-pointer"
             aria-label="Add attachment"
           >
             <Plus size={20} strokeWidth={2} />
@@ -125,16 +124,15 @@ export function RadiantPromptInput({
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             disabled={disabled}
-            className="flex-1 bg-transparent border-none outline-none text-[#134E4A] dark:text-[#E2E8F0] placeholder:text-[#5E6B6A]/70 dark:placeholder:text-[#94A3B8]/70 text-base md:text-lg font-light tracking-wide h-full w-full min-w-0"
+            className="flex-1 bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground/70 text-base md:text-lg font-light tracking-wide h-full w-full min-w-0"
           />
 
           {/* Right Actions */}
           <div className="flex items-center gap-1 md:gap-2">
-            
             {/* Mic Button */}
-            <button 
+            <button
               type="button"
-              className="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full text-[#5E6B6A] hover:bg-[#F0FDFA] hover:text-[#0891B2] transition-colors cursor-pointer"
+              className="flex items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full text-muted-foreground hover:bg-background hover:text-primary transition-colors cursor-pointer"
               aria-label="Use microphone"
             >
               <Mic size={20} strokeWidth={2} />
@@ -147,9 +145,9 @@ export function RadiantPromptInput({
               disabled={!value || disabled}
               className={cn(
                 "flex items-center justify-center w-10 h-10 md:w-12 md:h-12 rounded-full transition-all duration-300 cursor-pointer",
-                value 
-                  ? "bg-gradient-to-r from-[#0891B2] to-[#0E7490] text-white hover:scale-105 active:scale-95 shadow-lg shadow-[#0891B2]/30" 
-                  : "bg-[#CCFBF1] text-[#0891B2]/50 cursor-not-allowed"
+                value
+                  ? "bg-gradient-to-r from-primary to-primary/80 text-primary-foreground hover:scale-105 active:scale-95 shadow-lg shadow-primary/30"
+                  : "bg-muted text-primary/50 cursor-not-allowed",
               )}
               aria-label="Send message"
             >

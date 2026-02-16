@@ -49,13 +49,13 @@ const searchGuidelinesTool = createTool({
       .enum(["local", "rcem", "nice"])
       .optional()
       .describe(
-        "Optional: filter by guideline source. Search local first, then RCEM, then NICE."
+        "Optional: filter by guideline source. Search local first, then RCEM, then NICE.",
       ),
     category: z
       .string()
       .optional()
       .describe(
-        "Optional: filter by category like Medical, Trauma, Resuscitation, Paediatrics, Policies"
+        "Optional: filter by category like Medical, Trauma, Resuscitation, Paediatrics, Policies",
       ),
   }),
   handler: async (ctx, args): Promise<Record<string, unknown>> => {
@@ -93,7 +93,9 @@ const ragSearchTool = createTool({
   args: z.object({
     query: z
       .string()
-      .describe("Natural language query — be specific, e.g. 'paediatric limp assessment red flags' rather than just 'limp'"),
+      .describe(
+        "Natural language query — be specific, e.g. 'paediatric limp assessment red flags' rather than just 'limp'",
+      ),
     source: z
       .enum(["local", "rcem", "nice"])
       .optional()
@@ -112,7 +114,10 @@ const ragSearchTool = createTool({
       filters,
     });
     if (!results || results.results.length === 0) {
-      return { found: false, message: "No relevant document content found for this query." };
+      return {
+        found: false,
+        message: "No relevant document content found for this query.",
+      };
     }
     // Look up slugs for each source's guidelineId
     const sources = await Promise.all(
@@ -157,7 +162,7 @@ const ragSearchTool = createTool({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const guidelineAgent: Agent<object, any> = new Agent(components.agent, {
   name: "ED Guidelines Assistant",
-  languageModel: cerebras.chat("zai-glm-4.7"),
+  languageModel: cerebras.chat("qwen-3-32b"),
   instructions: ED_GUIDELINES_SYSTEM_PROMPT,
   tools: {
     searchGuidelines: searchGuidelinesTool,

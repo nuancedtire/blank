@@ -16,6 +16,27 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { TagInput } from "@/components/ui/tag-input";
+import {
   ArrowLeft,
   Upload,
   FileText,
@@ -29,9 +50,12 @@ import {
   Check,
   Pencil,
   X,
+  ChevronsUpDown,
 } from "lucide-react";
 import { extractTextFromPdf } from "@/lib/pdf-extract";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+import { AnimatePresence, motion } from "motion/react";
 
 export const Route = createFileRoute("/_authed/admin/documents")({
   component: ManageDocumentsPage,
@@ -186,7 +210,8 @@ function ManageDocumentsPage() {
           <div>
             <h1 className="text-xl font-bold">Upload Documents</h1>
             <p className="text-sm text-muted-foreground">
-              Upload PDFs & text files — AI extracts metadata, you review before publishing
+              Upload PDFs & text files — AI extracts metadata, you review before
+              publishing
             </p>
           </div>
         </div>
@@ -205,23 +230,51 @@ function ManageDocumentsPage() {
         <CardContent className="p-4 pt-2">
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="source" className="text-xs">
-                Guideline Source
-              </Label>
-              <select
-                id="source"
-                value={selectedSource}
-                onChange={(e) =>
-                  setSelectedSource(
-                    e.target.value as "local" | "rcem" | "nice",
-                  )
-                }
-                className="flex h-9 w-full max-w-xs rounded-xl border border-input bg-transparent px-3 py-1 text-sm transition-shadow focus:outline-none focus:ring-2 focus:ring-primary/20"
-              >
-                <option value="local">Local Trust</option>
-                <option value="rcem">RCEM</option>
-                <option value="nice">NICE</option>
-              </select>
+              <Label className="text-xs">Guideline Source</Label>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="h-9 w-full max-w-xs justify-between rounded-xl font-normal"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          "inline-block h-2 w-2 rounded-full",
+                          selectedSource === "local" && "bg-emerald-500",
+                          selectedSource === "rcem" && "bg-blue-500",
+                          selectedSource === "nice" && "bg-purple-500",
+                        )}
+                      />
+                      {selectedSource === "local"
+                        ? "Local Trust"
+                        : selectedSource.toUpperCase()}
+                    </span>
+                    <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-48">
+                  <DropdownMenuRadioGroup
+                    value={selectedSource}
+                    onValueChange={(v) =>
+                      setSelectedSource(v as "local" | "rcem" | "nice")
+                    }
+                  >
+                    <DropdownMenuRadioItem value="local">
+                      <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 mr-1" />
+                      Local Trust
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="rcem">
+                      <span className="inline-block h-2 w-2 rounded-full bg-blue-500 mr-1" />
+                      RCEM
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="nice">
+                      <span className="inline-block h-2 w-2 rounded-full bg-purple-500 mr-1" />
+                      NICE
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
             <div
@@ -247,7 +300,8 @@ function ManageDocumentsPage() {
                   <Upload className="h-8 w-8 text-muted-foreground" />
                   <p className="text-sm font-medium">Click to upload files</p>
                   <p className="text-xs text-muted-foreground">
-                    Supports .pdf, .txt, .md — category & metadata auto-detected by AI
+                    Supports .pdf, .txt, .md — category & metadata auto-detected
+                    by AI
                   </p>
                 </div>
               )}
@@ -314,7 +368,9 @@ function DocumentRow({
   const isDraft = guideline?.status === "draft";
 
   return (
-    <Card className={isDraft ? "border-amber-500/40 bg-amber-500/5 p-0" : "p-0"}>
+    <Card
+      className={isDraft ? "border-amber-500/40 bg-amber-500/5 p-0" : "p-0"}
+    >
       <div className="flex items-center gap-3 p-3">
         {statusIcon}
         <div className="flex-1 min-w-0">
@@ -380,9 +436,7 @@ function DocumentRow({
       </div>
 
       {/* Review panel for draft guidelines */}
-      {isDraft && guideline && (
-        <ReviewPanel guideline={guideline} />
-      )}
+      {isDraft && guideline && <ReviewPanel guideline={guideline} />}
     </Card>
   );
 }
@@ -397,16 +451,17 @@ function ReviewPanel({ guideline }: { guideline: any }) {
   const [title, setTitle] = React.useState(guideline.title);
   const [summary, setSummary] = React.useState(guideline.summary ?? "");
   const [category, setCategory] = React.useState(guideline.category);
-  const [keywords, setKeywords] = React.useState(
-    (guideline.keywords ?? []).join(", "),
+  const [keywords, setKeywords] = React.useState<string[]>(
+    guideline.keywords ?? [],
   );
+  const [categoryOpen, setCategoryOpen] = React.useState(false);
 
   // Reset when guideline changes
   React.useEffect(() => {
     setTitle(guideline.title);
     setSummary(guideline.summary ?? "");
     setCategory(guideline.category);
-    setKeywords((guideline.keywords ?? []).join(", "));
+    setKeywords(guideline.keywords ?? []);
   }, [guideline]);
 
   const handlePublish = async () => {
@@ -416,12 +471,8 @@ function ReviewPanel({ guideline }: { guideline: any }) {
       if (title !== guideline.title) overrides.title = title;
       if (summary !== (guideline.summary ?? "")) overrides.summary = summary;
       if (category !== guideline.category) overrides.category = category;
-      const parsedKeywords = keywords
-        .split(",")
-        .map((k: string) => k.trim())
-        .filter(Boolean);
-      const originalKeywords = (guideline.keywords ?? []).join(", ");
-      if (keywords !== originalKeywords) overrides.keywords = parsedKeywords;
+      const origKw = (guideline.keywords ?? []).join(",");
+      if (keywords.join(",") !== origKw) overrides.keywords = keywords;
 
       await publishGuideline({
         guidelineId: guideline._id,
@@ -479,25 +530,61 @@ function ReviewPanel({ guideline }: { guideline: any }) {
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label className="text-xs">Category</Label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="flex h-8 w-full rounded-xl border border-input bg-transparent px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-              >
-                {CATEGORIES.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
+              <Popover open={categoryOpen} onOpenChange={setCategoryOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={categoryOpen}
+                    className="h-8 w-full justify-between rounded-xl text-sm font-normal"
+                  >
+                    {category || "Select..."}
+                    <ChevronsUpDown className="h-3 w-3 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 p-0" align="start">
+                  <Command>
+                    <CommandInput
+                      placeholder="Search category..."
+                      className="h-8"
+                    />
+                    <CommandList>
+                      <CommandEmpty>No category found.</CommandEmpty>
+                      <CommandGroup>
+                        {CATEGORIES.map((cat) => (
+                          <CommandItem
+                            key={cat}
+                            value={cat}
+                            onSelect={(val) => {
+                              setCategory(
+                                CATEGORIES.find(
+                                  (c) => c.toLowerCase() === val.toLowerCase(),
+                                ) ?? val,
+                              );
+                              setCategoryOpen(false);
+                            }}
+                          >
+                            {cat}
+                            <Check
+                              className={cn(
+                                "ml-auto h-3.5 w-3.5",
+                                category === cat ? "opacity-100" : "opacity-0",
+                              )}
+                            />
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Tags</Label>
-              <Input
-                value={keywords}
-                onChange={(e) => setKeywords(e.target.value)}
-                className="h-8 text-sm"
-                placeholder="sepsis, infection, ..."
+              <TagInput
+                tags={keywords}
+                onTagsChange={setKeywords}
+                placeholder="sepsis, infection..."
               />
             </div>
           </div>
@@ -505,31 +592,49 @@ function ReviewPanel({ guideline }: { guideline: any }) {
       ) : (
         <div className="space-y-1.5">
           <div className="flex items-baseline gap-2">
-            <span className="text-xs text-muted-foreground w-14 shrink-0">Title</span>
+            <span className="text-xs text-muted-foreground w-14 shrink-0">
+              Title
+            </span>
             <span className="text-sm font-medium">{title}</span>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-xs text-muted-foreground w-14 shrink-0">Summary</span>
+            <span className="text-xs text-muted-foreground w-14 shrink-0">
+              Summary
+            </span>
             <span className="text-xs">{summary}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground w-14 shrink-0">Category</span>
+            <span className="text-xs text-muted-foreground w-14 shrink-0">
+              Category
+            </span>
             <Badge variant="outline" className="text-[10px] px-1.5 py-0">
               {category}
             </Badge>
           </div>
           <div className="flex items-start gap-2">
-            <span className="text-xs text-muted-foreground w-14 shrink-0 pt-0.5">Tags</span>
+            <span className="text-xs text-muted-foreground w-14 shrink-0 pt-0.5">
+              Tags
+            </span>
             <div className="flex flex-wrap gap-1">
-              {(guideline.keywords ?? []).map((tag: string) => (
-                <Badge
-                  key={tag}
-                  variant="secondary"
-                  className="text-[10px] px-1.5 py-0"
-                >
-                  {tag}
-                </Badge>
-              ))}
+              <AnimatePresence mode="popLayout">
+                {(guideline.keywords ?? []).map((tag: string) => (
+                  <motion.span
+                    key={tag}
+                    layout
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                  >
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] px-1.5 py-0"
+                    >
+                      {tag}
+                    </Badge>
+                  </motion.span>
+                ))}
+              </AnimatePresence>
             </div>
           </div>
         </div>
@@ -545,7 +650,7 @@ function ReviewPanel({ guideline }: { guideline: any }) {
               setTitle(guideline.title);
               setSummary(guideline.summary ?? "");
               setCategory(guideline.category);
-              setKeywords((guideline.keywords ?? []).join(", "));
+              setKeywords(guideline.keywords ?? []);
               setIsEditing(false);
             }}
           >

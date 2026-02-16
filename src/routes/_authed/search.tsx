@@ -18,7 +18,6 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import {
-  Sparkles,
   TrendingUp,
   Clock,
   Activity,
@@ -35,12 +34,12 @@ const CATEGORIES = [
   {
     name: "Resuscitation",
     icon: Activity,
-    color: "from-[#0891B2] to-[#22D3EE]",
+    color: "from-primary to-secondary",
   },
-  { name: "Trauma", icon: Shield, color: "from-[#EF4444] to-[#F87171]" },
-  { name: "Medical", icon: Stethoscope, color: "from-[#22C55E] to-[#4ADE80]" },
-  { name: "Paediatrics", icon: Brain, color: "from-[#F59E0B] to-[#FBBF24]" },
-  { name: "Policies", icon: FileText, color: "from-[#0891B2] to-[#0E7490]" },
+  { name: "Trauma", icon: Shield, color: "from-destructive to-destructive/70" },
+  { name: "Medical", icon: Stethoscope, color: "from-accent to-accent/70" },
+  { name: "Paediatrics", icon: Brain, color: "from-warning to-warning/70" },
+  { name: "Policies", icon: FileText, color: "from-primary to-primary/70" },
 ];
 
 function SearchPage() {
@@ -119,7 +118,7 @@ function SearchPage() {
     <div className="max-w-5xl mx-auto space-y-8">
       {/* Hero Search Section */}
       <div className="text-center space-y-6 py-8">
-        <h1 className="text-3xl sm:text-4xl font-bold text-[#134E4A]">
+        <h1 className="text-3xl sm:text-4xl font-bold text-foreground">
           What do you need to know?
         </h1>
 
@@ -136,9 +135,9 @@ function SearchPage() {
           />
         </div>
 
-        <p className="text-sm text-[#5E6B6A]">
+        <p className="text-sm text-muted-foreground">
           Press{" "}
-          <kbd className="px-2 py-1 rounded bg-white border border-[#99F6E4] text-xs font-mono">
+          <kbd className="px-2 py-1 rounded bg-card border border-border text-xs font-mono">
             Enter
           </kbd>{" "}
           to ask AI or type to search
@@ -156,11 +155,11 @@ function SearchPage() {
       {showSearchResults && (
         <div className="animate-fade-in">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-[#134E4A] flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
               Search Results
               <Badge
                 variant="secondary"
-                className="bg-[#0891B2]/10 text-[#0891B2] border-[#0891B2]/20"
+                className="bg-primary/10 text-primary border-primary/20"
               >
                 live
               </Badge>
@@ -169,7 +168,7 @@ function SearchPage() {
               variant="outline"
               size="sm"
               onClick={handleClearSearch}
-              className="border-[#99F6E4] text-[#5E6B6A] hover:bg-[#F0FDFA]"
+              className="border-border text-muted-foreground hover:bg-background"
             >
               Clear
             </Button>
@@ -189,8 +188,8 @@ function SearchPage() {
         <>
           {/* Quick Categories */}
           <div>
-            <h2 className="text-lg font-semibold text-[#134E4A] mb-4 flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-[#0891B2]" />
+            <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-primary" />
               Browse by Category
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -205,16 +204,16 @@ function SearchPage() {
                     params={{ category: cat.name }}
                     className="group"
                   >
-                    <Card className="p-4 hover:shadow-lg hover:shadow-[#0891B2]/5 hover:border-[#0891B2]/30 transition-all duration-200 cursor-pointer h-full">
+                    <Card className="p-4 hover:shadow-lg hover:shadow-primary/5 hover:border-primary/30 transition-all duration-200 cursor-pointer h-full">
                       <div
                         className={`w-10 h-10 rounded-lg bg-gradient-to-br ${cat.color} flex items-center justify-center mb-3 shadow-md group-hover:scale-110 transition-transform`}
                       >
-                        <cat.icon className="w-5 h-5 text-white" />
+                        <cat.icon className="w-5 h-5 text-white dark:text-black" />
                       </div>
-                      <p className="font-semibold text-[#134E4A] text-sm">
+                      <p className="font-semibold text-foreground text-sm">
                         {cat.name}
                       </p>
-                      <p className="text-xs text-[#5E6B6A] mt-1">
+                      <p className="text-xs text-muted-foreground mt-1">
                         {count} guidelines
                       </p>
                     </Card>
@@ -224,14 +223,14 @@ function SearchPage() {
             </div>
           </div>
 
-          <Separator className="bg-[#99F6E4]" />
+          <Separator className="bg-border" />
 
           {/* Pinned Guidelines */}
           {pinnedGuidelines.length > 0 && (
             <>
               <div>
-                <h2 className="text-lg font-semibold text-[#134E4A] mb-4 flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-[#0891B2]" />
+                <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-primary" />
                   Pinned Guidelines
                 </h2>
                 <div className="space-y-3">
@@ -251,14 +250,14 @@ function SearchPage() {
                   ))}
                 </div>
               </div>
-              <Separator className="bg-[#99F6E4]" />
+              <Separator className="bg-border" />
             </>
           )}
 
           {/* Recently Updated */}
           <div>
-            <h2 className="text-lg font-semibold text-[#134E4A] mb-4 flex items-center gap-2">
-              <Clock className="w-5 h-5 text-[#0891B2]" />
+            <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+              <Clock className="w-5 h-5 text-primary" />
               Recently Updated
             </h2>
             <div className="space-y-3">
@@ -279,7 +278,7 @@ function SearchPage() {
               {!allGuidelines && <GuidelineCardSkeleton count={4} />}
               {allGuidelines?.length === 0 && (
                 <Card className="p-8 text-center">
-                  <p className="text-[#5E6B6A]">
+                  <p className="text-muted-foreground">
                     No guidelines yet. Check back soon.
                   </p>
                 </Card>

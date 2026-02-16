@@ -6,7 +6,7 @@
 
 ---
 
-**Project:** AssetMind AI
+**Project:** Aide
 **Generated:** 2026-02-15 23:21:55
 **Category:** Healthcare App
 

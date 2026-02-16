@@ -17,6 +17,27 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { TagInput } from "@/components/ui/tag-input";
+import {
   ArrowLeft,
   Plus,
   Edit,
@@ -24,7 +45,10 @@ import {
   FileText,
   Upload,
   Loader2,
+  ChevronsUpDown,
+  Check,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authed/admin/guidelines")({
   component: ManageGuidelinesPage,
@@ -42,7 +66,7 @@ function ManageGuidelinesPage() {
   const [editingId, setEditingId] = React.useState<string | null>(null);
 
   const { data: guidelines } = useQuery(
-    convexQuery(api.guidelines.listAll, {})
+    convexQuery(api.guidelines.listAll, {}),
   );
 
   const createGuideline = useConvexMutation(api.guidelines.create);
@@ -77,13 +101,23 @@ function ManageGuidelinesPage() {
   const [summary, setSummary] = React.useState("");
   const [category, setCategory] = React.useState("Medical");
   const [source, setSource] = React.useState<"local" | "rcem" | "nice">(
-    "local"
+    "local",
   );
   const [version, setVersion] = React.useState("1.0");
   const [status, setStatus] = React.useState<
     "draft" | "published" | "archived"
   >("published");
-  const [keywords, setKeywords] = React.useState("");
+  const [keywords, setKeywords] = React.useState<string[]>([]);
+  const [categoryOpen, setCategoryOpen] = React.useState(false);
+
+  const CATEGORIES = [
+    "Medical",
+    "Trauma",
+    "Resuscitation",
+    "Paediatrics",
+    "Policies",
+    "Other",
+  ];
 
   const resetForm = () => {
     setTitle("");
@@ -93,7 +127,7 @@ function ManageGuidelinesPage() {
     setSource("local");
     setVersion("1.0");
     setStatus("published");
-    setKeywords("");
+    setKeywords([]);
     setEditingId(null);
   };
 
@@ -105,7 +139,7 @@ function ManageGuidelinesPage() {
     setSource(g.source);
     setVersion(g.version);
     setStatus(g.status);
-    setKeywords((g.keywords ?? []).join(", "));
+    setKeywords(g.keywords ?? []);
     setEditingId(g._id);
     setShowForm(true);
   };
@@ -121,10 +155,7 @@ function ManageGuidelinesPage() {
       source,
       version,
       status,
-      keywords: keywords
-        .split(",")
-        .map((k) => k.trim())
-        .filter(Boolean),
+      keywords,
     };
 
     if (editingId) {
@@ -209,21 +240,58 @@ function ManageGuidelinesPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="category" className="text-xs">
-                    Category
-                  </Label>
-                  <select
-                    id="category"
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="flex h-9 w-full rounded-xl border border-input bg-transparent px-3 py-1 text-sm transition-shadow focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  >
-                    <option value="Medical">Medical</option>
-                    <option value="Trauma">Trauma</option>
-                    <option value="Resuscitation">Resuscitation</option>
-                    <option value="Paediatrics">Paediatrics</option>
-                    <option value="Policies">Policies</option>
-                  </select>
+                  <Label className="text-xs">Category</Label>
+                  <Popover open={categoryOpen} onOpenChange={setCategoryOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={categoryOpen}
+                        className="h-9 w-full justify-between rounded-xl font-normal"
+                      >
+                        {category || "Select..."}
+                        <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-48 p-0" align="start">
+                      <Command>
+                        <CommandInput
+                          placeholder="Search category..."
+                          className="h-8"
+                        />
+                        <CommandList>
+                          <CommandEmpty>No category found.</CommandEmpty>
+                          <CommandGroup>
+                            {CATEGORIES.map((cat) => (
+                              <CommandItem
+                                key={cat}
+                                value={cat}
+                                onSelect={(val) => {
+                                  setCategory(
+                                    CATEGORIES.find(
+                                      (c) =>
+                                        c.toLowerCase() === val.toLowerCase(),
+                                    ) ?? val,
+                                  );
+                                  setCategoryOpen(false);
+                                }}
+                              >
+                                {cat}
+                                <Check
+                                  className={cn(
+                                    "ml-auto h-3.5 w-3.5",
+                                    category === cat
+                                      ? "opacity-100"
+                                      : "opacity-0",
+                                  )}
+                                />
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
 
@@ -256,21 +324,49 @@ function ManageGuidelinesPage() {
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="source" className="text-xs">
-                    Source
-                  </Label>
-                  <select
-                    id="source"
-                    value={source}
-                    onChange={(e) =>
-                      setSource(e.target.value as "local" | "rcem" | "nice")
-                    }
-                    className="flex h-9 w-full rounded-xl border border-input bg-transparent px-3 py-1 text-sm transition-shadow focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  >
-                    <option value="local">Local</option>
-                    <option value="rcem">RCEM</option>
-                    <option value="nice">NICE</option>
-                  </select>
+                  <Label className="text-xs">Source</Label>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="h-9 w-full justify-between rounded-xl font-normal"
+                      >
+                        <span className="flex items-center gap-2">
+                          <span
+                            className={cn(
+                              "inline-block h-2 w-2 rounded-full",
+                              source === "local" && "bg-emerald-500",
+                              source === "rcem" && "bg-blue-500",
+                              source === "nice" && "bg-purple-500",
+                            )}
+                          />
+                          {source === "local" ? "Local" : source.toUpperCase()}
+                        </span>
+                        <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-40">
+                      <DropdownMenuRadioGroup
+                        value={source}
+                        onValueChange={(v) =>
+                          setSource(v as "local" | "rcem" | "nice")
+                        }
+                      >
+                        <DropdownMenuRadioItem value="local">
+                          <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 mr-1" />
+                          Local
+                        </DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="rcem">
+                          <span className="inline-block h-2 w-2 rounded-full bg-blue-500 mr-1" />
+                          RCEM
+                        </DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="nice">
+                          <span className="inline-block h-2 w-2 rounded-full bg-purple-500 mr-1" />
+                          NICE
+                        </DropdownMenuRadioItem>
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="version" className="text-xs">
@@ -285,33 +381,43 @@ function ManageGuidelinesPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="status" className="text-xs">
-                    Status
-                  </Label>
-                  <select
-                    id="status"
-                    value={status}
-                    onChange={(e) =>
-                      setStatus(
-                        e.target.value as "draft" | "published" | "archived"
-                      )
-                    }
-                    className="flex h-9 w-full rounded-xl border border-input bg-transparent px-3 py-1 text-sm transition-shadow focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  >
-                    <option value="draft">Draft</option>
-                    <option value="published">Published</option>
-                    <option value="archived">Archived</option>
-                  </select>
+                  <Label className="text-xs">Status</Label>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="h-9 w-full justify-between rounded-xl font-normal"
+                      >
+                        <span className="capitalize">{status}</span>
+                        <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-40">
+                      <DropdownMenuRadioGroup
+                        value={status}
+                        onValueChange={(v) =>
+                          setStatus(v as "draft" | "published" | "archived")
+                        }
+                      >
+                        <DropdownMenuRadioItem value="draft">
+                          Draft
+                        </DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="published">
+                          Published
+                        </DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="archived">
+                          Archived
+                        </DropdownMenuRadioItem>
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="keywords" className="text-xs">
-                    Keywords
-                  </Label>
-                  <Input
-                    id="keywords"
-                    value={keywords}
-                    onChange={(e) => setKeywords(e.target.value)}
-                    placeholder="sepsis, infection"
+                  <Label className="text-xs">Keywords</Label>
+                  <TagInput
+                    tags={keywords}
+                    onTagsChange={setKeywords}
+                    placeholder="sepsis, infection..."
                   />
                 </div>
               </div>
@@ -343,9 +449,7 @@ function ManageGuidelinesPage() {
       {/* Guidelines List */}
       <Tabs defaultValue="all">
         <TabsList>
-          <TabsTrigger value="all">
-            All ({guidelines?.length ?? 0})
-          </TabsTrigger>
+          <TabsTrigger value="all">All ({guidelines?.length ?? 0})</TabsTrigger>
           <TabsTrigger value="published">
             Published (
             {guidelines?.filter((g: any) => g.status === "published").length ??
@@ -362,14 +466,9 @@ function ManageGuidelinesPage() {
           <TabsContent key={tab} value={tab}>
             <div className="rounded-lg border bg-card divide-y">
               {guidelines
-                ?.filter(
-                  (g: any) => tab === "all" || g.status === tab
-                )
+                ?.filter((g: any) => tab === "all" || g.status === tab)
                 .map((g: any) => (
-                  <div
-                    key={g._id}
-                    className="flex items-center gap-3 p-3"
-                  >
+                  <div key={g._id} className="flex items-center gap-3 p-3">
                     <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{g.title}</p>
@@ -407,7 +506,7 @@ function ManageGuidelinesPage() {
                         onClick={() => {
                           if (
                             confirm(
-                              `Delete "${g.title}"? This cannot be undone.`
+                              `Delete "${g.title}"? This cannot be undone.`,
                             )
                           ) {
                             deleteMutation.mutate(g._id);
