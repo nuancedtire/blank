@@ -13,11 +13,13 @@ import { Route as SignupRouteImport } from './routes/signup'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthedSettingsRouteImport } from './routes/_authed/settings'
 import { Route as AuthedSearchRouteImport } from './routes/_authed/search'
 import { Route as AuthedBrowseIndexRouteImport } from './routes/_authed/browse/index'
 import { Route as AuthedAdminIndexRouteImport } from './routes/_authed/admin/index'
 import { Route as AuthedGuidelineSlugRouteImport } from './routes/_authed/guideline/$slug'
 import { Route as AuthedBrowseCategoryRouteImport } from './routes/_authed/browse/$category'
+import { Route as AuthedAdminNotificationsRouteImport } from './routes/_authed/admin/notifications'
 import { Route as AuthedAdminGuidelinesRouteImport } from './routes/_authed/admin/guidelines'
 import { Route as AuthedAdminDocumentsRouteImport } from './routes/_authed/admin/documents'
 
@@ -39,6 +41,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthedSettingsRoute = AuthedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedSearchRoute = AuthedSearchRouteImport.update({
   id: '/search',
@@ -65,6 +72,12 @@ const AuthedBrowseCategoryRoute = AuthedBrowseCategoryRouteImport.update({
   path: '/browse/$category',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedAdminNotificationsRoute =
+  AuthedAdminNotificationsRouteImport.update({
+    id: '/admin/notifications',
+    path: '/admin/notifications',
+    getParentRoute: () => AuthedRoute,
+  } as any)
 const AuthedAdminGuidelinesRoute = AuthedAdminGuidelinesRouteImport.update({
   id: '/admin/guidelines',
   path: '/admin/guidelines',
@@ -81,8 +94,10 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/search': typeof AuthedSearchRoute
+  '/settings': typeof AuthedSettingsRoute
   '/admin/documents': typeof AuthedAdminDocumentsRoute
   '/admin/guidelines': typeof AuthedAdminGuidelinesRoute
+  '/admin/notifications': typeof AuthedAdminNotificationsRoute
   '/browse/$category': typeof AuthedBrowseCategoryRoute
   '/guideline/$slug': typeof AuthedGuidelineSlugRoute
   '/admin': typeof AuthedAdminIndexRoute
@@ -93,8 +108,10 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/search': typeof AuthedSearchRoute
+  '/settings': typeof AuthedSettingsRoute
   '/admin/documents': typeof AuthedAdminDocumentsRoute
   '/admin/guidelines': typeof AuthedAdminGuidelinesRoute
+  '/admin/notifications': typeof AuthedAdminNotificationsRoute
   '/browse/$category': typeof AuthedBrowseCategoryRoute
   '/guideline/$slug': typeof AuthedGuidelineSlugRoute
   '/admin': typeof AuthedAdminIndexRoute
@@ -107,8 +124,10 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/_authed/search': typeof AuthedSearchRoute
+  '/_authed/settings': typeof AuthedSettingsRoute
   '/_authed/admin/documents': typeof AuthedAdminDocumentsRoute
   '/_authed/admin/guidelines': typeof AuthedAdminGuidelinesRoute
+  '/_authed/admin/notifications': typeof AuthedAdminNotificationsRoute
   '/_authed/browse/$category': typeof AuthedBrowseCategoryRoute
   '/_authed/guideline/$slug': typeof AuthedGuidelineSlugRoute
   '/_authed/admin/': typeof AuthedAdminIndexRoute
@@ -121,8 +140,10 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/search'
+    | '/settings'
     | '/admin/documents'
     | '/admin/guidelines'
+    | '/admin/notifications'
     | '/browse/$category'
     | '/guideline/$slug'
     | '/admin'
@@ -133,8 +154,10 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/search'
+    | '/settings'
     | '/admin/documents'
     | '/admin/guidelines'
+    | '/admin/notifications'
     | '/browse/$category'
     | '/guideline/$slug'
     | '/admin'
@@ -146,8 +169,10 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/_authed/search'
+    | '/_authed/settings'
     | '/_authed/admin/documents'
     | '/_authed/admin/guidelines'
+    | '/_authed/admin/notifications'
     | '/_authed/browse/$category'
     | '/_authed/guideline/$slug'
     | '/_authed/admin/'
@@ -191,6 +216,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authed/settings': {
+      id: '/_authed/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthedSettingsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/search': {
       id: '/_authed/search'
       path: '/search'
@@ -226,6 +258,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedBrowseCategoryRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/admin/notifications': {
+      id: '/_authed/admin/notifications'
+      path: '/admin/notifications'
+      fullPath: '/admin/notifications'
+      preLoaderRoute: typeof AuthedAdminNotificationsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/admin/guidelines': {
       id: '/_authed/admin/guidelines'
       path: '/admin/guidelines'
@@ -245,8 +284,10 @@ declare module '@tanstack/react-router' {
 
 interface AuthedRouteChildren {
   AuthedSearchRoute: typeof AuthedSearchRoute
+  AuthedSettingsRoute: typeof AuthedSettingsRoute
   AuthedAdminDocumentsRoute: typeof AuthedAdminDocumentsRoute
   AuthedAdminGuidelinesRoute: typeof AuthedAdminGuidelinesRoute
+  AuthedAdminNotificationsRoute: typeof AuthedAdminNotificationsRoute
   AuthedBrowseCategoryRoute: typeof AuthedBrowseCategoryRoute
   AuthedGuidelineSlugRoute: typeof AuthedGuidelineSlugRoute
   AuthedAdminIndexRoute: typeof AuthedAdminIndexRoute
@@ -255,8 +296,10 @@ interface AuthedRouteChildren {
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedSearchRoute: AuthedSearchRoute,
+  AuthedSettingsRoute: AuthedSettingsRoute,
   AuthedAdminDocumentsRoute: AuthedAdminDocumentsRoute,
   AuthedAdminGuidelinesRoute: AuthedAdminGuidelinesRoute,
+  AuthedAdminNotificationsRoute: AuthedAdminNotificationsRoute,
   AuthedBrowseCategoryRoute: AuthedBrowseCategoryRoute,
   AuthedGuidelineSlugRoute: AuthedGuidelineSlugRoute,
   AuthedAdminIndexRoute: AuthedAdminIndexRoute,

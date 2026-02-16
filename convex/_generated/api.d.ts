@@ -16,8 +16,10 @@ import type * as documents from "../documents.js";
 import type * as guidelineAgent from "../guidelineAgent.js";
 import type * as guidelines from "../guidelines.js";
 import type * as http from "../http.js";
+import type * as notifications from "../notifications.js";
 import type * as rag from "../rag.js";
 import type * as searchAction from "../searchAction.js";
+import type * as settings from "../settings.js";
 import type * as users from "../users.js";
 
 import type {
@@ -35,8 +37,10 @@ declare const fullApi: ApiFromModules<{
   guidelineAgent: typeof guidelineAgent;
   guidelines: typeof guidelines;
   http: typeof http;
+  notifications: typeof notifications;
   rag: typeof rag;
   searchAction: typeof searchAction;
+  settings: typeof settings;
   users: typeof users;
 }>;
 

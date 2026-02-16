@@ -158,6 +158,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   )}
                 </div>
                 <DropdownMenuSeparator className="bg-border" />
+                <Link to="/settings">
+                  <DropdownMenuItem className="cursor-pointer">
+                    <Settings className="mr-2 h-4 w-4" />
+                    Settings
+                  </DropdownMenuItem>
+                </Link>
                 <DropdownMenuItem
                   onClick={handleSignOut}
                   className="cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10"
