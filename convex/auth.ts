@@ -9,13 +9,11 @@ import { query } from "./_generated/server";
 import type { GenericCtx } from "@convex-dev/better-auth";
 import type { DataModel } from "./_generated/dataModel";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-const siteUrl = process.env.SITE_URL ?? process.env.VITE_SITE_URL!;
-
 export const authComponent = createClient<DataModel>(components.betterAuth);
 
 export const createAuth = (ctx: GenericCtx<DataModel>) => {
+  const siteUrl = process.env.SITE_URL ?? process.env.VITE_SITE_URL!;
+
   return betterAuth({
     appName: "ED Guidelines",
     baseURL: siteUrl,
@@ -37,7 +35,8 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     plugins: [
       emailOTP({
         sendVerificationOTP: async ({ email, otp, type }) => {
-          await resend.emails.send({
+          const resend = new Resend(process.env.RESEND_API_KEY);
+          const { error } = await resend.emails.send({
             from: "ED Guidelines <noreply@fazeen.dev>",
             to: email,
             subject:
@@ -55,6 +54,10 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
               </div>
             `,
           });
+          if (error) {
+            console.error("Failed to send OTP email via Resend:", error);
+            throw new Error(`Failed to send verification email: ${error.message}`);
+          }
         },
         otpLength: 6,
         expiresIn: 300,
