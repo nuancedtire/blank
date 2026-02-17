@@ -53,12 +53,20 @@ export default defineSchema({
     lastUpdated: v.number(),
     // Search metadata
     keywords: v.optional(v.array(v.string())),
+    // Duplicate detection
+    contentHash: v.optional(v.string()), // SHA256 of extracted text content
+    potentialDuplicateOf: v.optional(v.array(v.id("guidelines"))), // Similar guidelines found on upload
+    // Archive metadata
+    archivedAt: v.optional(v.number()),
+    archivedBy: v.optional(v.id("users")),
+    replacedBy: v.optional(v.id("guidelines")), // Newer version that replaced this one
   })
     .index("by_slug", ["slug"])
     .index("by_category", ["category"])
     .index("by_status", ["status"])
     .index("by_source", ["source"])
     .index("by_category_status", ["category", "status"])
+    .index("by_contentHash", ["contentHash"])
     .searchIndex("search_guidelines", {
       searchField: "content",
       filterFields: ["category", "status", "source"],

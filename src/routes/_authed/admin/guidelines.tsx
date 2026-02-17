@@ -2,6 +2,7 @@ import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
+import { useConvex } from "convex/react";
 import { api } from "convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +48,8 @@ import {
   Loader2,
   ChevronsUpDown,
   Check,
+  Archive,
+  RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -62,6 +65,7 @@ function slugify(text: string): string {
 }
 
 function ManageGuidelinesPage() {
+  const convex = useConvex();
   const [showForm, setShowForm] = React.useState(false);
   const [editingId, setEditingId] = React.useState<string | null>(null);
 
@@ -69,10 +73,15 @@ function ManageGuidelinesPage() {
     convexQuery(api.guidelines.listAll, {}),
   );
 
+  const { data: archivedGuidelines } = useQuery(
+    convexQuery(api.documents.listArchived, {}),
+  );
+
   const createGuideline = useConvexMutation(api.guidelines.create);
   const updateGuideline = useConvexMutation(api.guidelines.update);
   const deleteGuideline = useConvexMutation(api.guidelines.remove);
   const seedGuidelines = useConvexMutation(api.guidelines.seed);
+  const archiveGuideline = useConvexMutation(api.documents.archiveGuideline);
 
   const createMutation = useMutation({
     mutationFn: (data: any) => createGuideline(data),
@@ -449,24 +458,31 @@ function ManageGuidelinesPage() {
       {/* Guidelines List */}
       <Tabs defaultValue="all">
         <TabsList>
-          <TabsTrigger value="all">All ({guidelines?.length ?? 0})</TabsTrigger>
+          <TabsTrigger value="all">
+            All ({(guidelines?.filter((g: any) => g.status !== "archived").length) ?? 0})
+          </TabsTrigger>
           <TabsTrigger value="published">
             Published (
-            {guidelines?.filter((g: any) => g.status === "published").length ??
-              0}
-            )
+            {guidelines?.filter((g: any) => g.status === "published").length ?? 0})
           </TabsTrigger>
           <TabsTrigger value="draft">
             Drafts (
             {guidelines?.filter((g: any) => g.status === "draft").length ?? 0})
           </TabsTrigger>
+          <TabsTrigger value="archived">
+            Archived ({archivedGuidelines?.length ?? 0})
+          </TabsTrigger>
         </TabsList>
 
-        {["all", "published", "draft"].map((tab) => (
+        {(["all", "published", "draft"] as const).map((tab) => (
           <TabsContent key={tab} value={tab}>
             <div className="rounded-lg border bg-card divide-y">
               {guidelines
-                ?.filter((g: any) => tab === "all" || g.status === tab)
+                ?.filter((g: any) =>
+                  tab === "all"
+                    ? g.status !== "archived"
+                    : g.status === tab,
+                )
                 .map((g: any) => (
                   <div key={g._id} className="flex items-center gap-3 p-3">
                     <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -499,6 +515,25 @@ function ManageGuidelinesPage() {
                       >
                         <Edit className="h-3.5 w-3.5" />
                       </Button>
+                      {g.status === "published" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                          title="Archive guideline"
+                          onClick={() => {
+                            if (
+                              confirm(
+                                `Archive "${g.title}"? It will be hidden from search and the agent.`,
+                              )
+                            ) {
+                              archiveGuideline({ guidelineId: g._id as any });
+                            }
+                          }}
+                        >
+                          <Archive className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
@@ -518,7 +553,10 @@ function ManageGuidelinesPage() {
                     </div>
                   </div>
                 ))}
-              {(!guidelines || guidelines.length === 0) && (
+              {(!guidelines ||
+                guidelines.filter((g: any) =>
+                  tab === "all" ? g.status !== "archived" : g.status === tab,
+                ).length === 0) && (
                 <div className="p-6 text-center text-sm text-muted-foreground">
                   No guidelines yet. Click "Add" or "Seed Demo Data" to get
                   started.
@@ -527,6 +565,64 @@ function ManageGuidelinesPage() {
             </div>
           </TabsContent>
         ))}
+
+        <TabsContent value="archived">
+          <div className="rounded-lg border bg-card divide-y">
+            {archivedGuidelines?.map((g: any) => (
+              <div key={g._id} className="flex items-center gap-3 p-3">
+                <FileText className="h-4 w-4 text-muted-foreground/50 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate text-muted-foreground">
+                    {g.title}
+                  </p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] px-1.5 py-0"
+                    >
+                      archived
+                    </Badge>
+                    <span className="text-[10px] text-muted-foreground">
+                      {g.source.toUpperCase()} | v{g.version}
+                    </span>
+                    {g.archivedAt && (
+                      <span className="text-[10px] text-muted-foreground">
+                        · {new Date(g.archivedAt).toLocaleDateString("en-GB")}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1 text-xs shrink-0"
+                  title="Restore guideline"
+                  onClick={() => {
+                    if (
+                      confirm(
+                        `Restore "${g.title}"? It will be published and re-added to search.`,
+                      )
+                    ) {
+                      convex
+                        .action(api.documents.restoreGuideline, {
+                          guidelineId: g._id as any,
+                        })
+                        .catch(console.error);
+                    }
+                  }}
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  Restore
+                </Button>
+              </div>
+            ))}
+            {(!archivedGuidelines || archivedGuidelines.length === 0) && (
+              <div className="p-6 text-center text-sm text-muted-foreground">
+                No archived guidelines.
+              </div>
+            )}
+          </div>
+        </TabsContent>
       </Tabs>
     </div>
   );

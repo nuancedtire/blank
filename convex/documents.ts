@@ -1,3 +1,5 @@
+"use node";
+
 import { v } from "convex/values";
 import {
   mutation,
@@ -12,6 +14,7 @@ import rag from "./rag";
 import { generateObject } from "ai";
 import { cerebras } from "@ai-sdk/cerebras";
 import { z } from "zod";
+import { createHash } from "crypto";
 
 // Generate upload URL for file storage
 export const generateUploadUrl = mutation({
@@ -63,6 +66,17 @@ export const indexDocument = action({
       });
       if (!doc) throw new Error("Document not found");
 
+      // Step 0: SHA256 hash check — reject exact duplicates before any LLM cost
+      const contentHash = createHash("sha256").update(args.content).digest("hex");
+      const duplicate = await ctx.runQuery(internal.documents.checkContentHash, {
+        contentHash,
+      });
+      if (duplicate) {
+        throw new Error(
+          `This file has already been uploaded as "${duplicate.title}". If this is a new version, delete the old one first or use the replace flow.`,
+        );
+      }
+
       // Step 1: Run LLM to clean text, extract metadata, and validate content
       const llmResult = await ctx.runAction(
         internal.documents.processDocumentWithLLM,
@@ -80,7 +94,15 @@ export const indexDocument = action({
         throw new Error(reason);
       }
 
-      // Step 2: Create a guideline entry with LLM-enriched metadata
+      // Step 2: RAG similarity search to detect potential new versions
+      const similarGuidelineIds = await ctx.runAction(
+        internal.documents.findSimilarGuidelines,
+        {
+          query: `${llmResult.title} ${llmResult.summary}`,
+        },
+      );
+
+      // Step 3: Create a guideline entry with LLM-enriched metadata
       const slug = llmResult.title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
@@ -98,10 +120,12 @@ export const indexDocument = action({
           keywords: llmResult.tags,
           storageId: doc.storageId,
           uploadedDocumentId: args.documentId,
+          contentHash,
+          potentialDuplicateOf: similarGuidelineIds,
         },
       );
 
-      // Step 3: Add to RAG index with the cleaned content
+      // Step 4: Add to RAG index with the cleaned content
       await rag.add(ctx, {
         namespace: "guidelines",
         key: args.documentId,
@@ -116,7 +140,7 @@ export const indexDocument = action({
         filterValues: [{ name: "source", value: doc.source }],
       });
 
-      // Step 4: Update document status and link to guideline
+      // Step 5: Update document status and link to guideline
       await ctx.runMutation(internal.documents.markIndexed, {
         documentId: args.documentId,
         guidelineId,
@@ -231,6 +255,8 @@ export const createGuidelineFromDocument = internalMutation({
     keywords: v.array(v.string()),
     storageId: v.id("_storage"),
     uploadedDocumentId: v.id("uploadedDocuments"),
+    contentHash: v.string(),
+    potentialDuplicateOf: v.array(v.id("guidelines")),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("guidelines", {
@@ -245,6 +271,8 @@ export const createGuidelineFromDocument = internalMutation({
       source: args.source,
       storageId: args.storageId,
       uploadedDocumentId: args.uploadedDocumentId,
+      contentHash: args.contentHash,
+      potentialDuplicateOf: args.potentialDuplicateOf.length > 0 ? args.potentialDuplicateOf : undefined,
       lastUpdated: Date.now(),
     });
   },
@@ -350,6 +378,243 @@ export const getDocument = internalQuery({
   args: { documentId: v.id("uploadedDocuments") },
   handler: async (ctx, { documentId }) => {
     return await ctx.db.get(documentId);
+  },
+});
+
+// Check if a content hash already exists among non-archived guidelines
+export const checkContentHash = internalQuery({
+  args: { contentHash: v.string() },
+  returns: v.any(),
+  handler: async (ctx, { contentHash }) => {
+    // Use index for lookup, then check status in JS (no filter needed)
+    const guideline = await ctx.db
+      .query("guidelines")
+      .withIndex("by_contentHash", (q) => q.eq("contentHash", contentHash))
+      .first();
+    if (!guideline || guideline.status === "archived") return null;
+    return guideline;
+  },
+});
+
+// Use RAG to find semantically similar published guidelines (for version detection)
+export const findSimilarGuidelines = internalAction({
+  args: { query: v.string() },
+  returns: v.array(v.string()),
+  handler: async (ctx, args) => {
+    try {
+      const results = await rag.search(ctx, {
+        namespace: "guidelines",
+        query: args.query,
+        limit: 3,
+        filters: [],
+      });
+      if (!results || results.entries.length === 0) return [];
+
+      // Filter to published guidelines only and return their IDs
+      const guidelineIds: string[] = [];
+      for (const entry of results.entries) {
+        const metadata = entry.metadata as Record<string, string>;
+        const guidelineId = metadata?.guidelineId;
+        if (!guidelineId) continue;
+        try {
+          const guideline = await ctx.runQuery(
+            internal.guidelines.getByIdInternal,
+            { id: guidelineId as any },
+          );
+          if (guideline && guideline.status === "published") {
+            guidelineIds.push(guidelineId);
+          }
+        } catch {
+          // Skip if lookup fails
+        }
+      }
+      return guidelineIds;
+    } catch {
+      return [];
+    }
+  },
+});
+
+// Internal action: remove RAG embeddings for a guideline (called via scheduler)
+export const removeFromRAG = internalAction({
+  args: { guidelineId: v.id("guidelines") },
+  handler: async (ctx, { guidelineId }) => {
+    const guideline = await ctx.runQuery(internal.documents.getGuidelineForRAG, {
+      guidelineId,
+    });
+    if (!guideline?.uploadedDocumentId) return;
+
+    const namespace = await rag.getNamespace(ctx, { namespace: "guidelines" });
+    if (!namespace) return;
+
+    await rag.deleteByKey(ctx, {
+      namespaceId: namespace.namespaceId,
+      key: guideline.uploadedDocumentId,
+    });
+  },
+});
+
+// Internal query: get guideline fields needed for RAG operations
+export const getGuidelineForRAG = internalQuery({
+  args: { guidelineId: v.id("guidelines") },
+  handler: async (ctx, { guidelineId }) => {
+    return await ctx.db.get(guidelineId);
+  },
+});
+
+// Archive a guideline: soft-delete with async RAG cleanup
+export const archiveGuideline = mutation({
+  args: { guidelineId: v.id("guidelines") },
+  returns: v.null(),
+  handler: async (ctx, { guidelineId }) => {
+    const guideline = await ctx.db.get(guidelineId);
+    if (!guideline) throw new Error("Guideline not found");
+
+    await ctx.db.patch(guidelineId, {
+      status: "archived",
+      archivedAt: Date.now(),
+    });
+
+    // Async RAG cleanup — doesn't block the mutation
+    await ctx.scheduler.runAfter(0, internal.documents.removeFromRAG, {
+      guidelineId,
+    });
+
+    await ctx.db.insert("auditLogs", {
+      action: "guideline.archived",
+      resourceType: "guideline",
+      resourceId: guidelineId,
+      details: `Archived: ${guideline.title}`,
+      timestamp: Date.now(),
+    });
+    return null;
+  },
+});
+
+// Restore an archived guideline back to published
+export const restoreGuideline = action({
+  args: { guidelineId: v.id("guidelines") },
+  returns: v.null(),
+  handler: async (ctx, { guidelineId }) => {
+    const guideline = await ctx.runQuery(internal.documents.getGuidelineForRAG, {
+      guidelineId,
+    });
+    if (!guideline) throw new Error("Guideline not found");
+
+    await ctx.runMutation(internal.documents.setGuidelineStatus, {
+      guidelineId,
+      status: "published",
+    });
+
+    // Re-add to RAG if the document is still available
+    if (guideline.uploadedDocumentId) {
+      try {
+        await rag.add(ctx, {
+          namespace: "guidelines",
+          key: guideline.uploadedDocumentId,
+          text: guideline.content,
+          title: guideline.title,
+          metadata: {
+            source: guideline.source,
+            guidelineId: guidelineId,
+            storageId: guideline.storageId ?? "",
+          },
+          filterValues: [{ name: "source", value: guideline.source }],
+        });
+      } catch (e) {
+        console.error("RAG re-index failed on restore:", e);
+        // Guideline is still restored even if RAG fails
+      }
+    }
+
+    await ctx.runMutation(internal.documents.insertAuditLog, {
+      action: "guideline.restored",
+      resourceId: guidelineId,
+      details: `Restored: ${guideline.title}`,
+    });
+    return null;
+  },
+});
+
+// Replace an old guideline with a new version: archive old, publish new with old slug
+export const replaceGuideline = mutation({
+  args: {
+    oldGuidelineId: v.id("guidelines"),
+    newGuidelineId: v.id("guidelines"),
+  },
+  returns: v.null(),
+  handler: async (ctx, { oldGuidelineId, newGuidelineId }) => {
+    const oldGuideline = await ctx.db.get(oldGuidelineId);
+    const newGuideline = await ctx.db.get(newGuidelineId);
+    if (!oldGuideline || !newGuideline) throw new Error("Guideline not found");
+
+    // Archive the old one, linking to replacement
+    await ctx.db.patch(oldGuidelineId, {
+      status: "archived",
+      archivedAt: Date.now(),
+      replacedBy: newGuidelineId,
+    });
+    await ctx.scheduler.runAfter(0, internal.documents.removeFromRAG, {
+      guidelineId: oldGuidelineId,
+    });
+
+    // Publish the new one, inheriting the old slug for URL continuity
+    await ctx.db.patch(newGuidelineId, {
+      status: "published",
+      slug: oldGuideline.slug,
+      potentialDuplicateOf: undefined,
+      lastUpdated: Date.now(),
+    });
+
+    await ctx.db.insert("auditLogs", {
+      action: "guideline.updated",
+      resourceType: "guideline",
+      resourceId: newGuidelineId,
+      details: `Replaced "${oldGuideline.title}" with new version`,
+      timestamp: Date.now(),
+    });
+    return null;
+  },
+});
+
+// Internal helpers for actions that need to write
+export const setGuidelineStatus = internalMutation({
+  args: {
+    guidelineId: v.id("guidelines"),
+    status: v.union(v.literal("draft"), v.literal("published"), v.literal("archived")),
+  },
+  handler: async (ctx, { guidelineId, status }) => {
+    await ctx.db.patch(guidelineId, { status, lastUpdated: Date.now() });
+  },
+});
+
+export const insertAuditLog = internalMutation({
+  args: {
+    action: v.string(),
+    resourceId: v.id("guidelines"),
+    details: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("auditLogs", {
+      action: args.action,
+      resourceType: "guideline",
+      resourceId: args.resourceId,
+      details: args.details,
+      timestamp: Date.now(),
+    });
+  },
+});
+
+// List archived guidelines (admin view)
+export const listArchived = query({
+  args: {},
+  returns: v.array(v.any()),
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("guidelines")
+      .withIndex("by_status", (q) => q.eq("status", "archived"))
+      .order("desc")
+      .collect();
   },
 });
 

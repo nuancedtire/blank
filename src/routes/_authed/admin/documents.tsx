@@ -51,6 +51,8 @@ import {
   Pencil,
   X,
   ChevronsUpDown,
+  GitBranch,
+  Archive,
 } from "lucide-react";
 import { extractTextFromPdf } from "@/lib/pdf-extract";
 import { Textarea } from "@/components/ui/textarea";
@@ -443,9 +445,23 @@ function DocumentRow({
 
 function ReviewPanel({ guideline }: { guideline: any }) {
   const queryClient = useQueryClient();
+  const convex = useConvex();
   const publishGuideline = useConvexMutation(api.documents.publishGuideline);
+  const replaceGuideline = useConvexMutation(api.documents.replaceGuideline);
   const [isEditing, setIsEditing] = React.useState(false);
   const [isPublishing, setIsPublishing] = React.useState(false);
+  const [isReplacing, setIsReplacing] = React.useState<string | null>(null);
+
+  // Fetch similar guidelines detected during upload (for version detection)
+  const { data: similarGuidelines } = useQuery({
+    ...convexQuery(
+      api.guidelines.getByIds,
+      guideline.potentialDuplicateOf?.length
+        ? { ids: guideline.potentialDuplicateOf }
+        : "skip",
+    ),
+    enabled: (guideline.potentialDuplicateOf?.length ?? 0) > 0,
+  });
 
   // Editable fields
   const [title, setTitle] = React.useState(guideline.title);
@@ -488,6 +504,27 @@ function ReviewPanel({ guideline }: { guideline: any }) {
     }
   };
 
+  const handleReplace = async (oldGuidelineId: string) => {
+    if (
+      !confirm(
+        "Archive the existing guideline and publish this one in its place? The old URL will be preserved.",
+      )
+    )
+      return;
+    setIsReplacing(oldGuidelineId);
+    try {
+      await replaceGuideline({
+        oldGuidelineId: oldGuidelineId as any,
+        newGuidelineId: guideline._id,
+      });
+      queryClient.invalidateQueries();
+    } catch (e) {
+      console.error("Replace error:", e);
+    } finally {
+      setIsReplacing(null);
+    }
+  };
+
   return (
     <div className="border-t px-4 py-3 space-y-3">
       <div className="flex items-center justify-between">
@@ -507,6 +544,52 @@ function ReviewPanel({ guideline }: { guideline: any }) {
           </Button>
         )}
       </div>
+
+      {/* Similar guidelines detected — possible new version */}
+      {similarGuidelines && similarGuidelines.length > 0 && (
+        <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 space-y-2">
+          <p className="text-xs font-medium text-blue-600 dark:text-blue-400 flex items-center gap-1">
+            <GitBranch className="h-3 w-3" />
+            Similar guidelines found — is this a new version?
+          </p>
+          <div className="space-y-1.5">
+            {similarGuidelines.map((similar: any) => (
+              <div
+                key={similar._id}
+                className="flex items-center justify-between gap-2"
+              >
+                <div className="min-w-0">
+                  <p className="text-xs font-medium truncate">{similar.title}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {similar.source.toUpperCase()} · v{similar.version} ·{" "}
+                    {similar.category}
+                  </p>
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 text-[10px] px-2 border-blue-500/40 text-blue-600 hover:bg-blue-500/10"
+                    onClick={() => handleReplace(similar._id)}
+                    disabled={isReplacing === similar._id}
+                  >
+                    {isReplacing === similar._id ? (
+                      <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                    ) : (
+                      <Archive className="h-2.5 w-2.5 mr-0.5" />
+                    )}
+                    Replace old
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            "Replace old" archives the existing guideline and publishes this one
+            at the same URL. Or just publish below to keep both.
+          </p>
+        </div>
+      )}
 
       {isEditing ? (
         <div className="space-y-2.5">

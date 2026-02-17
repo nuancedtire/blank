@@ -700,6 +700,15 @@ If request declined and clinical concern remains:
   },
 });
 
+// Get multiple guidelines by their IDs (for duplicate review UI)
+export const getByIds = query({
+  args: { ids: v.array(v.id("guidelines")) },
+  handler: async (ctx, { ids }) => {
+    const results = await Promise.all(ids.map((id) => ctx.db.get(id)));
+    return results.filter(Boolean);
+  },
+});
+
 // Internal get by ID (for agent tool slug lookup)
 export const getByIdInternal = internalQuery({
   args: { id: v.id("guidelines") },
