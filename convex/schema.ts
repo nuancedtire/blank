@@ -55,7 +55,8 @@ export default defineSchema({
     keywords: v.optional(v.array(v.string())),
     // Duplicate detection
     contentHash: v.optional(v.string()), // SHA256 of extracted text content
-    potentialDuplicateOf: v.optional(v.array(v.id("guidelines"))), // Similar guidelines found on upload
+    likelyVersionOf: v.optional(v.id("guidelines")), // High-confidence (≥0.88) version match
+    potentialDuplicateOf: v.optional(v.array(v.id("guidelines"))), // Medium-confidence (0.72–0.88) matches
     // Archive metadata
     archivedAt: v.optional(v.number()),
     archivedBy: v.optional(v.id("users")),

@@ -94,12 +94,10 @@ export const indexDocument = action({
         throw new Error(reason);
       }
 
-      // Step 2: RAG similarity search to detect potential new versions
-      const similarGuidelineIds = await ctx.runAction(
+      // Step 2: Content-based RAG similarity search — detects new versions
+      const { likelyVersionOf, similar } = await ctx.runAction(
         internal.documents.findSimilarGuidelines,
-        {
-          query: `${llmResult.title} ${llmResult.summary}`,
-        },
+        { content: llmResult.cleanedContent },
       );
 
       // Step 3: Create a guideline entry with LLM-enriched metadata
@@ -121,7 +119,8 @@ export const indexDocument = action({
           storageId: doc.storageId,
           uploadedDocumentId: args.documentId,
           contentHash,
-          potentialDuplicateOf: similarGuidelineIds,
+          likelyVersionOf: likelyVersionOf ?? undefined,
+          potentialDuplicateOf: similar,
         },
       );
 
@@ -256,6 +255,7 @@ export const createGuidelineFromDocument = internalMutation({
     storageId: v.id("_storage"),
     uploadedDocumentId: v.id("uploadedDocuments"),
     contentHash: v.string(),
+    likelyVersionOf: v.optional(v.id("guidelines")),
     potentialDuplicateOf: v.array(v.id("guidelines")),
   },
   handler: async (ctx, args) => {
@@ -272,6 +272,7 @@ export const createGuidelineFromDocument = internalMutation({
       storageId: args.storageId,
       uploadedDocumentId: args.uploadedDocumentId,
       contentHash: args.contentHash,
+      likelyVersionOf: args.likelyVersionOf,
       potentialDuplicateOf: args.potentialDuplicateOf.length > 0 ? args.potentialDuplicateOf : undefined,
       lastUpdated: Date.now(),
     });
@@ -396,41 +397,73 @@ export const checkContentHash = internalQuery({
   },
 });
 
-// Use RAG to find semantically similar published guidelines (for version detection)
+// Score thresholds for version detection
+const LIKELY_VERSION_THRESHOLD = 0.88; // High confidence: same document, new version
+const SIMILAR_DOC_THRESHOLD = 0.72;    // Medium confidence: related content
+
+// Use RAG to find semantically similar published guidelines.
+// Searches by content (not title/summary) for accurate version detection.
+// Returns two tiers based on similarity score.
 export const findSimilarGuidelines = internalAction({
-  args: { query: v.string() },
-  returns: v.array(v.string()),
+  args: { content: v.string() },
+  returns: v.object({
+    likelyVersionOf: v.union(v.string(), v.null()),
+    similar: v.array(v.string()),
+  }),
   handler: async (ctx, args) => {
     try {
+      // Use the first 3000 chars of cleaned content as the search query.
+      // Content-to-content comparison is far more reliable for version detection
+      // than comparing LLM-generated summaries.
+      const searchQuery = args.content.slice(0, 3000);
+
       const results = await rag.search(ctx, {
         namespace: "guidelines",
-        query: args.query,
-        limit: 3,
+        query: searchQuery,
+        limit: 5,
         filters: [],
       });
-      if (!results || results.entries.length === 0) return [];
+      if (!results || results.entries.length === 0) {
+        return { likelyVersionOf: null, similar: [] };
+      }
 
-      // Filter to published guidelines only and return their IDs
-      const guidelineIds: string[] = [];
-      for (const entry of results.entries) {
+      let likelyVersionOf: string | null = null;
+      const similar: string[] = [];
+
+      for (let i = 0; i < results.entries.length; i++) {
+        const entry = results.entries[i];
+        // results.results[i] is the raw vector search result — _score is Convex's field name
+        const raw = (results.results as any[])[i];
+        const score: number = raw?._score ?? raw?.score ?? 0;
+
         const metadata = entry.metadata as Record<string, string>;
         const guidelineId = metadata?.guidelineId;
         if (!guidelineId) continue;
+
         try {
           const guideline = await ctx.runQuery(
             internal.guidelines.getByIdInternal,
             { id: guidelineId as any },
           );
-          if (guideline && guideline.status === "published") {
-            guidelineIds.push(guidelineId);
+          if (!guideline || guideline.status !== "published") continue;
+
+          if (score >= LIKELY_VERSION_THRESHOLD && !likelyVersionOf) {
+            // Best match above high threshold — almost certainly same document
+            likelyVersionOf = guidelineId;
+          } else if (
+            score >= SIMILAR_DOC_THRESHOLD &&
+            guidelineId !== likelyVersionOf
+          ) {
+            if (!similar.includes(guidelineId)) similar.push(guidelineId);
           }
         } catch {
-          // Skip if lookup fails
+          // Skip unresolvable entries
         }
       }
-      return guidelineIds;
+
+      return { likelyVersionOf, similar };
     } catch {
-      return [];
+      return { likelyVersionOf: null, similar: [] };
     }
   },
 });
@@ -562,6 +595,7 @@ export const replaceGuideline = mutation({
     await ctx.db.patch(newGuidelineId, {
       status: "published",
       slug: oldGuideline.slug,
+      likelyVersionOf: undefined,
       potentialDuplicateOf: undefined,
       lastUpdated: Date.now(),
     });
