@@ -27,11 +27,9 @@ const sourceColors: Record<string, string> = {
 export function GuidelineCard({
   slug,
   title,
-  category,
   source,
   summary,
   version,
-  lastUpdated,
   compact = false,
   isPinned,
   onTogglePin,

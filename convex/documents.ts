@@ -1,5 +1,3 @@
-"use node";
-
 import { v } from "convex/values";
 import {
   mutation,
@@ -14,7 +12,15 @@ import rag from "./rag";
 import { generateObject } from "ai";
 import { cerebras } from "@ai-sdk/cerebras";
 import { z } from "zod";
-import { createHash } from "crypto";
+import type { Id } from "./_generated/dataModel";
+
+async function sha256Hex(input: string): Promise<string> {
+  const bytes = new TextEncoder().encode(input);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 // Generate upload URL for file storage
 export const generateUploadUrl = mutation({
@@ -67,10 +73,13 @@ export const indexDocument = action({
       if (!doc) throw new Error("Document not found");
 
       // Step 0: SHA256 hash check — reject exact duplicates before any LLM cost
-      const contentHash = createHash("sha256").update(args.content).digest("hex");
-      const duplicate = await ctx.runQuery(internal.documents.checkContentHash, {
-        contentHash,
-      });
+      const contentHash = await sha256Hex(args.content);
+      const duplicate = await ctx.runQuery(
+        internal.documents.checkContentHash,
+        {
+          contentHash,
+        },
+      );
       if (duplicate) {
         throw new Error(
           `This file has already been uploaded as "${duplicate.title}". If this is a new version, delete the old one first or use the replace flow.`,
@@ -214,7 +223,7 @@ export const processDocumentWithLLM = internalAction({
     const { rawText, fileName } = args;
 
     const result = await generateObject({
-      model: cerebras.chat("zai-glm-4.7"),
+      model: cerebras.chat("gpt-oss-120b"),
       schema: DocumentMetadataSchema,
       system: `You are a medical document processor for an Emergency Department guidelines system.
 
@@ -273,7 +282,10 @@ export const createGuidelineFromDocument = internalMutation({
       uploadedDocumentId: args.uploadedDocumentId,
       contentHash: args.contentHash,
       likelyVersionOf: args.likelyVersionOf,
-      potentialDuplicateOf: args.potentialDuplicateOf.length > 0 ? args.potentialDuplicateOf : undefined,
+      potentialDuplicateOf:
+        args.potentialDuplicateOf.length > 0
+          ? args.potentialDuplicateOf
+          : undefined,
       lastUpdated: Date.now(),
     });
   },
@@ -399,7 +411,7 @@ export const checkContentHash = internalQuery({
 
 // Score thresholds for version detection
 const LIKELY_VERSION_THRESHOLD = 0.88; // High confidence: same document, new version
-const SIMILAR_DOC_THRESHOLD = 0.72;    // Medium confidence: related content
+const SIMILAR_DOC_THRESHOLD = 0.72; // Medium confidence: related content
 
 // Use RAG to find semantically similar published guidelines.
 // Searches by content (not title/summary) for accurate version detection.
@@ -407,8 +419,8 @@ const SIMILAR_DOC_THRESHOLD = 0.72;    // Medium confidence: related content
 export const findSimilarGuidelines = internalAction({
   args: { content: v.string() },
   returns: v.object({
-    likelyVersionOf: v.union(v.string(), v.null()),
-    similar: v.array(v.string()),
+    likelyVersionOf: v.union(v.id("guidelines"), v.null()),
+    similar: v.array(v.id("guidelines")),
   }),
   handler: async (ctx, args) => {
     try {
@@ -427,8 +439,8 @@ export const findSimilarGuidelines = internalAction({
         return { likelyVersionOf: null, similar: [] };
       }
 
-      let likelyVersionOf: string | null = null;
-      const similar: string[] = [];
+      let likelyVersionOf: Id<"guidelines"> | null = null;
+      const similar: Id<"guidelines">[] = [];
 
       for (let i = 0; i < results.entries.length; i++) {
         const entry = results.entries[i];
@@ -437,7 +449,9 @@ export const findSimilarGuidelines = internalAction({
         const score: number = raw?._score ?? raw?.score ?? 0;
 
         const metadata = entry.metadata as Record<string, string>;
-        const guidelineId = metadata?.guidelineId;
+        const guidelineId = metadata?.guidelineId as
+          | Id<"guidelines">
+          | undefined;
         if (!guidelineId) continue;
 
         try {
@@ -472,9 +486,12 @@ export const findSimilarGuidelines = internalAction({
 export const removeFromRAG = internalAction({
   args: { guidelineId: v.id("guidelines") },
   handler: async (ctx, { guidelineId }) => {
-    const guideline = await ctx.runQuery(internal.documents.getGuidelineForRAG, {
-      guidelineId,
-    });
+    const guideline = await ctx.runQuery(
+      internal.documents.getGuidelineForRAG,
+      {
+        guidelineId,
+      },
+    );
     if (!guideline?.uploadedDocumentId) return;
 
     const namespace = await rag.getNamespace(ctx, { namespace: "guidelines" });
@@ -529,9 +546,12 @@ export const restoreGuideline = action({
   args: { guidelineId: v.id("guidelines") },
   returns: v.null(),
   handler: async (ctx, { guidelineId }) => {
-    const guideline = await ctx.runQuery(internal.documents.getGuidelineForRAG, {
-      guidelineId,
-    });
+    const guideline = await ctx.runQuery(
+      internal.documents.getGuidelineForRAG,
+      {
+        guidelineId,
+      },
+    );
     if (!guideline) throw new Error("Guideline not found");
 
     await ctx.runMutation(internal.documents.setGuidelineStatus, {
@@ -615,7 +635,11 @@ export const replaceGuideline = mutation({
 export const setGuidelineStatus = internalMutation({
   args: {
     guidelineId: v.id("guidelines"),
-    status: v.union(v.literal("draft"), v.literal("published"), v.literal("archived")),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("published"),
+      v.literal("archived"),
+    ),
   },
   handler: async (ctx, { guidelineId, status }) => {
     await ctx.db.patch(guidelineId, { status, lastUpdated: Date.now() });

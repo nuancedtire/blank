@@ -85,6 +85,7 @@ function ManageDocumentsPage() {
   const { data: documents } = useQuery(
     convexQuery(api.documents.listDocuments, {}),
   );
+  const { data: allGuidelines } = useQuery(convexQuery(api.guidelines.listAll, {}));
 
   const generateUploadUrl = useConvexMutation(api.documents.generateUploadUrl);
   const saveDocument = useConvexMutation(api.documents.saveDocument);
@@ -325,6 +326,7 @@ function ManageDocumentsPage() {
               <DocumentRow
                 key={doc._id}
                 doc={doc}
+                allGuidelines={allGuidelines}
                 source={source}
                 statusIcon={statusIcon(doc.status)}
                 onDelete={() => handleDelete(doc._id)}
@@ -344,11 +346,13 @@ function ManageDocumentsPage() {
 
 function DocumentRow({
   doc,
+  allGuidelines,
   source,
   statusIcon,
   onDelete,
 }: {
   doc: any;
+  allGuidelines: any[] | undefined;
   source: { label: string; className: string } | undefined;
   statusIcon: React.ReactNode;
   onDelete: () => void;
@@ -368,6 +372,14 @@ function DocumentRow({
   });
 
   const isDraft = guideline?.status === "draft";
+  const [showVersions, setShowVersions] = React.useState(false);
+
+  const versionHistory = React.useMemo(() => {
+    if (!guideline?.slug || !allGuidelines) return [];
+    return allGuidelines
+      .filter((g: any) => g.slug === guideline.slug)
+      .sort((a: any, b: any) => b.lastUpdated - a.lastUpdated);
+  }, [allGuidelines, guideline?.slug]);
 
   return (
     <Card
@@ -412,6 +424,17 @@ function DocumentRow({
           {doc.errorMessage && (
             <p className="text-xs text-destructive mt-1">{doc.errorMessage}</p>
           )}
+          {guideline && versionHistory.length > 0 && (
+            <button
+              type="button"
+              className="mt-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+              onClick={() => setShowVersions((v) => !v)}
+            >
+              <GitBranch className="h-2.5 w-2.5" />
+              {showVersions ? "Hide" : "Show"} version timeline (
+              {versionHistory.length})
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-1">
           {fileUrl && (
@@ -436,6 +459,47 @@ function DocumentRow({
           </Button>
         </div>
       </div>
+
+      {showVersions && guideline && versionHistory.length > 0 && (
+        <div className="border-t px-3 py-2.5 bg-muted/20">
+          <div className="space-y-1.5">
+            {versionHistory.map((g: any, idx: number) => (
+              <div
+                key={g._id}
+                className="flex items-center justify-between gap-2 rounded-md border bg-card px-2.5 py-1.5"
+              >
+                <div className="min-w-0">
+                  <p className="text-xs font-medium truncate">
+                    {g.title}
+                    {String(g._id) === String(guideline._id) ? " (this upload)" : ""}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {g.source.toUpperCase()} · v{g.version} ·{" "}
+                    {new Date(g.lastUpdated).toLocaleDateString("en-GB")}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1">
+                  {idx === 0 && g.status === "published" && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                      Current
+                    </Badge>
+                  )}
+                  <Badge
+                    variant={g.status === "published" ? "default" : "secondary"}
+                    className={
+                      g.status === "archived"
+                        ? "text-[10px] px-1.5 py-0 bg-muted text-muted-foreground"
+                        : "text-[10px] px-1.5 py-0"
+                    }
+                  >
+                    {g.status}
+                  </Badge>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Review panel for draft guidelines */}
       {isDraft && guideline && <ReviewPanel guideline={guideline} />}
@@ -537,11 +601,12 @@ function ReviewPanel({ guideline }: { guideline: any }) {
             </div>
             <div>
               <p className="text-sm font-semibold leading-snug">
-                Likely a new version
+                Possible replacement found
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                The content closely matches an existing guideline. Replace the
-                old one or publish this as a separate entry.
+                This upload looks like an update to an existing published
+                guideline. Choose whether to replace that current guideline or
+                publish this as a separate one.
               </p>
             </div>
           </div>
@@ -580,7 +645,7 @@ function ReviewPanel({ guideline }: { guideline: any }) {
               ) : (
                 <Archive className="h-3.5 w-3.5" />
               )}
-              Replace old version
+              Replace current guideline
             </Button>
             <Button
               variant="outline"
@@ -592,13 +657,13 @@ function ReviewPanel({ guideline }: { guideline: any }) {
               {isPublishing ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : null}
-              Keep both
+              Publish as separate guideline
             </Button>
           </div>
           <p className="text-[10px] text-muted-foreground leading-relaxed">
-            <strong>Replace</strong> archives the old guideline and publishes
-            this one at its URL.{" "}
-            <strong>Keep both</strong> publishes this as a new separate entry.
+            <strong>Replace current guideline</strong> archives the current one
+            and publishes this upload at the same URL.{" "}
+            <strong>Publish as separate guideline</strong> keeps both entries.
           </p>
         </div>
 
@@ -643,7 +708,7 @@ function ReviewPanel({ guideline }: { guideline: any }) {
         <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3 space-y-2">
           <p className="text-xs font-medium text-blue-600 dark:text-blue-400 flex items-center gap-1">
             <GitBranch className="h-3 w-3" />
-            Possibly related — is this a new version?
+            Possibly related existing guidelines
           </p>
           <div className="space-y-1.5">
             {similarGuidelines.map((similar: any) => (
@@ -672,7 +737,8 @@ function ReviewPanel({ guideline }: { guideline: any }) {
             ))}
           </div>
           <p className="text-[10px] text-muted-foreground">
-            Or just publish below to keep both as separate guidelines.
+            Choose Replace to treat this as an update, or publish below to keep
+            it separate.
           </p>
         </div>
       )}

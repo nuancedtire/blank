@@ -8,6 +8,9 @@ export default defineSchema({
     email: v.string(),
     name: v.string(),
     role: v.union(v.literal("user"), v.literal("admin")),
+    isBanned: v.optional(v.boolean()),
+    bannedAt: v.optional(v.number()),
+    bannedReason: v.optional(v.string()),
     pinnedGuidelines: v.optional(v.array(v.id("guidelines"))),
     preferences: v.optional(
       v.object({

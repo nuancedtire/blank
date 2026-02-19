@@ -42,11 +42,12 @@ export const submitFeedback = mutation({
     userId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
-    await ctx.db.insert("searchFeedback", {
-      query: args.query,
-      guidelineId: args.guidelineId,
-      wasHelpful: args.wasHelpful,
+    await ctx.db.insert("auditLogs", {
       userId: args.userId,
+      action: args.wasHelpful ? "search.feedback.positive" : "search.feedback.negative",
+      resourceType: "search",
+      resourceId: args.guidelineId,
+      details: `Feedback on query "${args.query}": ${args.wasHelpful ? "helpful" : "not helpful"}`,
       timestamp: Date.now(),
     });
   },

@@ -56,10 +56,20 @@ export const getByCategory = query({
 export const getBySlug = query({
   args: { slug: v.string() },
   handler: async (ctx, { slug }) => {
-    return await ctx.db
+    const matches = await ctx.db
       .query("guidelines")
       .withIndex("by_slug", (q) => q.eq("slug", slug))
-      .first();
+      .collect();
+
+    if (matches.length === 0) return null;
+
+    const published = matches
+      .filter((g) => g.status === "published")
+      .sort((a, b) => b.lastUpdated - a.lastUpdated);
+
+    if (published.length > 0) return published[0];
+
+    return null;
   },
 });
 
@@ -742,5 +752,4 @@ export const searchInternal = internalQuery({
     return await searchQuery.take(10);
   },
 });
-
 

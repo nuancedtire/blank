@@ -22,7 +22,12 @@ import appCss from "@/styles.css?url";
 import { seo } from "@/utils/seo";
 
 const getAuth = createServerFn({ method: "GET" }).handler(async () => {
-  return await getToken();
+  try {
+    return await getToken();
+  } catch (error) {
+    console.error("Auth token fetch failed in root beforeLoad:", error);
+    return null;
+  }
 });
 
 export const Route = createRootRouteWithContext<{

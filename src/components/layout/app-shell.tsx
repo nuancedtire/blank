@@ -1,7 +1,7 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { Search, FolderOpen, Settings, LogOut, Bell } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { convexQuery } from "@convex-dev/react-query";
+import { Search, FolderOpen, Settings, LogOut, Bell, CheckCircle2, Info, AlertTriangle, Megaphone, X } from "lucide-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +17,15 @@ import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { authClient } from "@/lib/auth-client";
 import { AideLogo } from "@/components/ui/aide-logo";
 import { cn } from "@/lib/utils";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const baseNavItems = [
   { label: "Search", icon: Search, href: "/search" },
@@ -35,6 +44,178 @@ function handleSignOut() {
   });
 }
 
+function notificationIcon(type: "info" | "warning" | "success" | "alert") {
+  switch (type) {
+    case "success":
+      return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />;
+    case "warning":
+      return <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />;
+    case "alert":
+      return <Megaphone className="h-3.5 w-3.5 text-rose-500" />;
+    default:
+      return <Info className="h-3.5 w-3.5 text-sky-500" />;
+  }
+}
+
+function NotificationList({
+  onClose,
+}: {
+  onClose?: () => void;
+}) {
+  const { data: notifications } = useQuery(
+    convexQuery(api.notifications.list, { limit: 20 }),
+  );
+  const markAsRead = useConvexMutation(api.notifications.markAsRead);
+  const markAllAsRead = useConvexMutation(api.notifications.markAllAsRead);
+  const dismiss = useConvexMutation(api.notifications.dismiss);
+
+  const markOneMutation = useMutation({
+    mutationFn: (notificationId: string) =>
+      markAsRead({ notificationId: notificationId as any }),
+  });
+
+  const markAllMutation = useMutation({
+    mutationFn: () => markAllAsRead({}),
+  });
+
+  const dismissMutation = useMutation({
+    mutationFn: (notificationId: string) =>
+      dismiss({ notificationId: notificationId as any }),
+  });
+
+  const handleOpen = async (notification: any) => {
+    if (!notification.isRead) {
+      await markOneMutation.mutateAsync(notification._id);
+    }
+
+    if (notification.link) {
+      window.location.href = notification.link;
+      onClose?.();
+    }
+  };
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between border-b px-4 py-3">
+        <p className="text-sm font-semibold">Notifications</p>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-xs"
+          onClick={() => markAllMutation.mutate()}
+          disabled={markAllMutation.isPending || !notifications?.length}
+        >
+          Mark all read
+        </Button>
+      </div>
+
+      <ScrollArea className="h-[420px] md:h-[420px]">
+        <div className="divide-y">
+          {notifications?.map((n: any) => (
+            <div key={n._id} className="group px-4 py-3 hover:bg-accent/40 transition-colors">
+              <div className="flex items-start gap-2.5">
+                <div className="mt-0.5">{notificationIcon(n.type)}</div>
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 text-left"
+                  onClick={() => handleOpen(n)}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <p className={cn("text-sm font-medium truncate", !n.isRead && "text-foreground")}>
+                      {n.title}
+                    </p>
+                    {!n.isRead && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+                    {n.message}
+                  </p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    {new Date(n.createdAt).toLocaleString("en-GB")}
+                  </p>
+                </button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
+                  onClick={() => dismissMutation.mutate(n._id)}
+                  title="Dismiss"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          ))}
+          {(!notifications || notifications.length === 0) && (
+            <div className="px-4 py-12 text-center text-muted-foreground">
+              <Bell className="mx-auto mb-3 h-7 w-7 opacity-30" />
+              <p className="text-sm font-medium">No notifications yet</p>
+              <p className="text-xs mt-1">Admin alerts and updates appear here.</p>
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
+
+function NotificationCenter() {
+  const { data: unreadCount } = useQuery(convexQuery(api.notifications.getUnreadCount, {}));
+  const count = unreadCount ?? 0;
+  const badgeText = count > 99 ? "99+" : String(count);
+
+  return (
+    <>
+      <div className="hidden md:block">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative text-muted-foreground hover:text-primary hover:bg-primary/10"
+            >
+              <Bell className="w-5 h-5" />
+              {count > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-destructive text-[10px] font-semibold text-destructive-foreground grid place-items-center">
+                  {badgeText}
+                </span>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-[380px] p-0">
+            <NotificationList />
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      <div className="md:hidden">
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative text-muted-foreground hover:text-primary hover:bg-primary/10"
+            >
+              <Bell className="w-5 h-5" />
+              {count > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-destructive text-[10px] font-semibold text-destructive-foreground grid place-items-center">
+                  {badgeText}
+                </span>
+              )}
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="right" className="w-[90vw] sm:max-w-sm p-0">
+            <SheetHeader className="sr-only">
+              <SheetTitle>Notifications</SheetTitle>
+              <SheetDescription>Recent activity and alerts</SheetDescription>
+            </SheetHeader>
+            <NotificationList />
+          </SheetContent>
+        </Sheet>
+      </div>
+    </>
+  );
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
   const { data: user } = useQuery(convexQuery(api.users.me, {}));
@@ -43,7 +224,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background text-foreground relative overflow-x-hidden">
-      {/* Background Decorations */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div
           className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full opacity-20"
@@ -63,15 +243,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         />
       </div>
 
-      {/* Top Navigation Bar */}
       <header className="sticky top-0 z-50 border-b border-border bg-card/80 backdrop-blur-xl">
         <div className="flex h-16 items-center justify-between px-4 lg:px-8">
-          {/* Logo */}
           <Link to="/search" className="flex items-center">
             <AideLogo size="md" animate="hover" />
           </Link>
 
-          {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-1">
             {navItems.map((item) => {
               const isActive =
@@ -94,28 +271,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          {/* Right Side Actions */}
           <div className="flex items-center gap-2">
-            {/* AI Status Indicator */}
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent/10 border border-accent/20">
               <div className="w-2 h-2 rounded-full bg-accent animate-pulse" />
               <span className="text-xs font-medium text-accent">AI Active</span>
             </div>
 
-            {/* Theme Toggle */}
             <ThemeToggle variant="ghost" size="sm" />
+            <NotificationCenter />
 
-            {/* Notifications */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="relative text-muted-foreground hover:text-primary hover:bg-primary/10"
-            >
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-destructive" />
-            </Button>
-
-            {/* User Menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -166,12 +330,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      {/* Main Content Area */}
       <main className="relative z-10 min-h-[calc(100vh-4rem)] pb-20 md:pb-8">
         <div className="max-w-7xl mx-auto p-4 lg:p-8">{children}</div>
       </main>
 
-      {/* Mobile Bottom Navigation */}
       <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)] md:hidden">
         <div className="flex h-16 items-center justify-around gap-1 px-2">
           {navItems.map((item) => {

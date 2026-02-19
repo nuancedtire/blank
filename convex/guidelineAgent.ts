@@ -191,11 +191,9 @@ const searchNICETool = createTool({
         };
       }
       const data = (await response.json()) as Record<string, unknown>;
-      const results = (
-        (data.results as unknown[]) ||
+      const results = ((data.results as unknown[]) ||
         (data.hits as unknown[]) ||
-        []
-      ) as Array<Record<string, unknown>>;
+        []) as Array<Record<string, unknown>>;
       if (!results.length) {
         return {
           found: false,
@@ -310,7 +308,7 @@ const searchRCEMTool = createTool({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const guidelineAgent: Agent<object, any> = new Agent(components.agent, {
   name: "ED Guidelines Assistant",
-  languageModel: cerebras.chat("qwen-3-32b"),
+  languageModel: cerebras.chat("gpt-oss-120b"),
   instructions: ED_GUIDELINES_SYSTEM_PROMPT,
   tools: {
     searchGuidelines: searchGuidelinesTool,
