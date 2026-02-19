@@ -22,6 +22,7 @@ You help clinicians quickly find and APPLY guideline information to their specif
 - **Cite your sources at the end.** Use this EXACT format (one line per source):
   📄 **[Document Title]** — Source: local/RCEM/NICE — File: filename.pdf — Slug: the-slug-value
   The slug comes from the tool results. Always include it so the UI can link to the guideline page.
+  For external RCEM/NICE results: 🔗 **[Guidance Title]** — Source: RCEM/NICE — [URL]
 - **Close with a one-line note:** "This is a summary — always refer to the full guideline for complete clinical guidance."
 
 Use markdown naturally — headers, bold, nested bullet lists — whatever fits the answer. Do not force a rigid numbered template. Short answers are fine. A 3-line answer that nails the specific scenario is better than a 30-line answer that covers everything.
@@ -35,7 +36,7 @@ Use markdown naturally — headers, bold, nested bullet lists — whatever fits 
 ## SEARCH STRATEGY
 1. First use ragSearch to find semantically relevant content (best for specific questions)
 2. Then use searchGuidelines for keyword-based search if RAG doesn't find enough
-3. Search local trust guidelines first, then RCEM, then NICE
+3. If local guidelines are insufficient, search RCEM with searchRCEM, then NICE with searchNICE
 4. If the first search doesn't cover the question well, try additional searches with different terms
 5. Always search — never answer from memory alone`;
 
@@ -159,14 +160,161 @@ const ragSearchTool = createTool({
   },
 });
 
+// Tool: search NICE (National Institute for Health and Care Excellence) public guidance
+const searchNICETool = createTool({
+  description:
+    "Search NICE (National Institute for Health and Care Excellence) public guidance. Use this when local or RCEM guidelines don't fully answer the question. Returns links and titles of relevant NICE guidance documents.",
+  args: z.object({
+    query: z
+      .string()
+      .describe(
+        "Search query, e.g. 'chest pain assessment adults' or 'paediatric fever management'",
+      ),
+  }),
+  handler: async (_ctx, args): Promise<Record<string, unknown>> => {
+    const encoded = encodeURIComponent(args.query);
+    const searchUrl = `https://www.nice.org.uk/guidance/published?q=${encoded}`;
+    try {
+      const response = await fetch(
+        `https://api.nice.org.uk/v1/search?q=${encoded}&types=Guidance&size=5`,
+        {
+          headers: { Accept: "application/json" },
+          signal: AbortSignal.timeout(8000),
+        },
+      );
+      if (!response.ok) {
+        return {
+          found: false,
+          source: "NICE",
+          message: `Search NICE directly at: ${searchUrl}`,
+          searchUrl,
+        };
+      }
+      const data = (await response.json()) as Record<string, unknown>;
+      const results = ((data.results as unknown[]) ||
+        (data.hits as unknown[]) ||
+        []) as Array<Record<string, unknown>>;
+      if (!results.length) {
+        return {
+          found: false,
+          source: "NICE",
+          message: `No results from NICE API. Search directly: ${searchUrl}`,
+          searchUrl,
+        };
+      }
+      return {
+        found: true,
+        source: "NICE",
+        count: results.length,
+        results: results.map((item) => ({
+          title: item.Title ?? item.title ?? item.name ?? "Untitled",
+          type: item.NicePublicationType ?? item.type ?? "Guidance",
+          url: item.Url
+            ? `https://www.nice.org.uk${item.Url}`
+            : `https://www.nice.org.uk/guidance`,
+          id: item.Id ?? item.id ?? "",
+        })),
+        searchUrl,
+      };
+    } catch {
+      return {
+        found: false,
+        source: "NICE",
+        message: `Could not reach NICE API. Search directly at: ${searchUrl}`,
+        searchUrl,
+      };
+    }
+  },
+});
+
+// Tool: search RCEM (Royal College of Emergency Medicine) clinical guidelines
+const searchRCEMTool = createTool({
+  description:
+    "Search RCEM (Royal College of Emergency Medicine) clinical guidelines. Use this for EM-specific guidance when local guidelines are insufficient. Returns links to RCEM guideline pages.",
+  args: z.object({
+    query: z
+      .string()
+      .describe(
+        "Search query for RCEM guidelines, e.g. 'paediatric limp' or 'mental health assessment ED'",
+      ),
+  }),
+  handler: async (_ctx, args): Promise<Record<string, unknown>> => {
+    const encoded = encodeURIComponent(args.query);
+    const guidelinesUrl = "https://rcem.ac.uk/rcem-clinical-guidelines/";
+    const searchUrl = `https://rcem.ac.uk/?s=${encoded}`;
+    try {
+      const response = await fetch(searchUrl, {
+        headers: { "User-Agent": "ED-Guidelines-App/1.0" },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!response.ok) {
+        return {
+          found: false,
+          source: "RCEM",
+          message: `Browse all RCEM guidelines at: ${guidelinesUrl}`,
+          guidelinesUrl,
+          searchUrl,
+        };
+      }
+      const html = await response.text();
+      // Extract guideline links from RCEM search results
+      const linkRegex =
+        /<a[^>]+href="(https?:\/\/rcem\.ac\.uk\/[^"#?]+)"[^>]*>([^<]{5,})<\/a>/gi;
+      const seen = new Set<string>();
+      const matches: Array<{ url: string; title: string }> = [];
+      let match: RegExpExecArray | null;
+      while ((match = linkRegex.exec(html)) !== null && matches.length < 6) {
+        const url = match[1];
+        const title = match[2].trim().replace(/\s+/g, " ");
+        if (
+          !seen.has(url) &&
+          title.length > 5 &&
+          !url.includes("/wp-") &&
+          !url.includes("/tag/")
+        ) {
+          seen.add(url);
+          matches.push({ url, title });
+        }
+      }
+      if (!matches.length) {
+        return {
+          found: false,
+          source: "RCEM",
+          message: `No results parsed. Browse RCEM guidelines: ${guidelinesUrl}`,
+          guidelinesUrl,
+          searchUrl,
+        };
+      }
+      return {
+        found: true,
+        source: "RCEM",
+        count: matches.length,
+        note: "Links to RCEM guideline pages — content must be accessed from the RCEM website directly.",
+        results: matches,
+        guidelinesUrl,
+      };
+    } catch {
+      return {
+        found: false,
+        source: "RCEM",
+        message: `Could not reach RCEM. Browse guidelines at: ${guidelinesUrl}`,
+        guidelinesUrl,
+        searchUrl,
+      };
+    }
+  },
+});
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const guidelineAgent: Agent<object, any> = new Agent(components.agent, {
   name: "ED Guidelines Assistant",
-  languageModel: cerebras.chat("qwen-3-32b"),
+  languageModel: cerebras.chat("gpt-oss-120b"),
   instructions: ED_GUIDELINES_SYSTEM_PROMPT,
   tools: {
     searchGuidelines: searchGuidelinesTool,
     ragSearch: ragSearchTool,
+    searchNICE: searchNICETool,
+    searchRCEM: searchRCEMTool,
   },
   maxSteps: 8,
 });

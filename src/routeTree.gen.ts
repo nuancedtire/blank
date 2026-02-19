@@ -14,10 +14,12 @@ import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthedSettingsRouteImport } from './routes/_authed/settings'
 import { Route as AuthedSearchRouteImport } from './routes/_authed/search'
+import { Route as AuthedAdminRouteImport } from './routes/_authed/admin'
 import { Route as AuthedBrowseIndexRouteImport } from './routes/_authed/browse/index'
 import { Route as AuthedAdminIndexRouteImport } from './routes/_authed/admin/index'
 import { Route as AuthedGuidelineSlugRouteImport } from './routes/_authed/guideline/$slug'
 import { Route as AuthedBrowseCategoryRouteImport } from './routes/_authed/browse/$category'
+import { Route as AuthedAdminUsersRouteImport } from './routes/_authed/admin/users'
 import { Route as AuthedAdminNotificationsRouteImport } from './routes/_authed/admin/notifications'
 import { Route as AuthedAdminGuidelinesRouteImport } from './routes/_authed/admin/guidelines'
 import { Route as AuthedAdminDocumentsRouteImport } from './routes/_authed/admin/documents'
@@ -46,15 +48,20 @@ const AuthedSearchRoute = AuthedSearchRouteImport.update({
   path: '/search',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedAdminRoute = AuthedAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedBrowseIndexRoute = AuthedBrowseIndexRouteImport.update({
   id: '/browse/',
   path: '/browse/',
   getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedAdminIndexRoute = AuthedAdminIndexRouteImport.update({
-  id: '/admin/',
-  path: '/admin/',
-  getParentRoute: () => AuthedRoute,
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthedAdminRoute,
 } as any)
 const AuthedGuidelineSlugRoute = AuthedGuidelineSlugRouteImport.update({
   id: '/guideline/$slug',
@@ -66,34 +73,41 @@ const AuthedBrowseCategoryRoute = AuthedBrowseCategoryRouteImport.update({
   path: '/browse/$category',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedAdminUsersRoute = AuthedAdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AuthedAdminRoute,
+} as any)
 const AuthedAdminNotificationsRoute =
   AuthedAdminNotificationsRouteImport.update({
-    id: '/admin/notifications',
-    path: '/admin/notifications',
-    getParentRoute: () => AuthedRoute,
+    id: '/notifications',
+    path: '/notifications',
+    getParentRoute: () => AuthedAdminRoute,
   } as any)
 const AuthedAdminGuidelinesRoute = AuthedAdminGuidelinesRouteImport.update({
-  id: '/admin/guidelines',
-  path: '/admin/guidelines',
-  getParentRoute: () => AuthedRoute,
+  id: '/guidelines',
+  path: '/guidelines',
+  getParentRoute: () => AuthedAdminRoute,
 } as any)
 const AuthedAdminDocumentsRoute = AuthedAdminDocumentsRouteImport.update({
-  id: '/admin/documents',
-  path: '/admin/documents',
-  getParentRoute: () => AuthedRoute,
+  id: '/documents',
+  path: '/documents',
+  getParentRoute: () => AuthedAdminRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/admin': typeof AuthedAdminRouteWithChildren
   '/search': typeof AuthedSearchRoute
   '/settings': typeof AuthedSettingsRoute
   '/admin/documents': typeof AuthedAdminDocumentsRoute
   '/admin/guidelines': typeof AuthedAdminGuidelinesRoute
   '/admin/notifications': typeof AuthedAdminNotificationsRoute
+  '/admin/users': typeof AuthedAdminUsersRoute
   '/browse/$category': typeof AuthedBrowseCategoryRoute
   '/guideline/$slug': typeof AuthedGuidelineSlugRoute
-  '/admin': typeof AuthedAdminIndexRoute
+  '/admin/': typeof AuthedAdminIndexRoute
   '/browse': typeof AuthedBrowseIndexRoute
 }
 export interface FileRoutesByTo {
@@ -104,6 +118,7 @@ export interface FileRoutesByTo {
   '/admin/documents': typeof AuthedAdminDocumentsRoute
   '/admin/guidelines': typeof AuthedAdminGuidelinesRoute
   '/admin/notifications': typeof AuthedAdminNotificationsRoute
+  '/admin/users': typeof AuthedAdminUsersRoute
   '/browse/$category': typeof AuthedBrowseCategoryRoute
   '/guideline/$slug': typeof AuthedGuidelineSlugRoute
   '/admin': typeof AuthedAdminIndexRoute
@@ -114,11 +129,13 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authed': typeof AuthedRouteWithChildren
   '/login': typeof LoginRoute
+  '/_authed/admin': typeof AuthedAdminRouteWithChildren
   '/_authed/search': typeof AuthedSearchRoute
   '/_authed/settings': typeof AuthedSettingsRoute
   '/_authed/admin/documents': typeof AuthedAdminDocumentsRoute
   '/_authed/admin/guidelines': typeof AuthedAdminGuidelinesRoute
   '/_authed/admin/notifications': typeof AuthedAdminNotificationsRoute
+  '/_authed/admin/users': typeof AuthedAdminUsersRoute
   '/_authed/browse/$category': typeof AuthedBrowseCategoryRoute
   '/_authed/guideline/$slug': typeof AuthedGuidelineSlugRoute
   '/_authed/admin/': typeof AuthedAdminIndexRoute
@@ -129,14 +146,16 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/admin'
     | '/search'
     | '/settings'
     | '/admin/documents'
     | '/admin/guidelines'
     | '/admin/notifications'
+    | '/admin/users'
     | '/browse/$category'
     | '/guideline/$slug'
-    | '/admin'
+    | '/admin/'
     | '/browse'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -147,6 +166,7 @@ export interface FileRouteTypes {
     | '/admin/documents'
     | '/admin/guidelines'
     | '/admin/notifications'
+    | '/admin/users'
     | '/browse/$category'
     | '/guideline/$slug'
     | '/admin'
@@ -156,11 +176,13 @@ export interface FileRouteTypes {
     | '/'
     | '/_authed'
     | '/login'
+    | '/_authed/admin'
     | '/_authed/search'
     | '/_authed/settings'
     | '/_authed/admin/documents'
     | '/_authed/admin/guidelines'
     | '/_authed/admin/notifications'
+    | '/_authed/admin/users'
     | '/_authed/browse/$category'
     | '/_authed/guideline/$slug'
     | '/_authed/admin/'
@@ -210,6 +232,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedSearchRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/admin': {
+      id: '/_authed/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AuthedAdminRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/browse/': {
       id: '/_authed/browse/'
       path: '/browse'
@@ -219,10 +248,10 @@ declare module '@tanstack/react-router' {
     }
     '/_authed/admin/': {
       id: '/_authed/admin/'
-      path: '/admin'
-      fullPath: '/admin'
+      path: '/'
+      fullPath: '/admin/'
       preLoaderRoute: typeof AuthedAdminIndexRouteImport
-      parentRoute: typeof AuthedRoute
+      parentRoute: typeof AuthedAdminRoute
     }
     '/_authed/guideline/$slug': {
       id: '/_authed/guideline/$slug'
@@ -238,51 +267,72 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedBrowseCategoryRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/admin/users': {
+      id: '/_authed/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AuthedAdminUsersRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
     '/_authed/admin/notifications': {
       id: '/_authed/admin/notifications'
-      path: '/admin/notifications'
+      path: '/notifications'
       fullPath: '/admin/notifications'
       preLoaderRoute: typeof AuthedAdminNotificationsRouteImport
-      parentRoute: typeof AuthedRoute
+      parentRoute: typeof AuthedAdminRoute
     }
     '/_authed/admin/guidelines': {
       id: '/_authed/admin/guidelines'
-      path: '/admin/guidelines'
+      path: '/guidelines'
       fullPath: '/admin/guidelines'
       preLoaderRoute: typeof AuthedAdminGuidelinesRouteImport
-      parentRoute: typeof AuthedRoute
+      parentRoute: typeof AuthedAdminRoute
     }
     '/_authed/admin/documents': {
       id: '/_authed/admin/documents'
-      path: '/admin/documents'
+      path: '/documents'
       fullPath: '/admin/documents'
       preLoaderRoute: typeof AuthedAdminDocumentsRouteImport
-      parentRoute: typeof AuthedRoute
+      parentRoute: typeof AuthedAdminRoute
     }
   }
 }
 
-interface AuthedRouteChildren {
-  AuthedSearchRoute: typeof AuthedSearchRoute
-  AuthedSettingsRoute: typeof AuthedSettingsRoute
+interface AuthedAdminRouteChildren {
   AuthedAdminDocumentsRoute: typeof AuthedAdminDocumentsRoute
   AuthedAdminGuidelinesRoute: typeof AuthedAdminGuidelinesRoute
   AuthedAdminNotificationsRoute: typeof AuthedAdminNotificationsRoute
+  AuthedAdminUsersRoute: typeof AuthedAdminUsersRoute
+  AuthedAdminIndexRoute: typeof AuthedAdminIndexRoute
+}
+
+const AuthedAdminRouteChildren: AuthedAdminRouteChildren = {
+  AuthedAdminDocumentsRoute: AuthedAdminDocumentsRoute,
+  AuthedAdminGuidelinesRoute: AuthedAdminGuidelinesRoute,
+  AuthedAdminNotificationsRoute: AuthedAdminNotificationsRoute,
+  AuthedAdminUsersRoute: AuthedAdminUsersRoute,
+  AuthedAdminIndexRoute: AuthedAdminIndexRoute,
+}
+
+const AuthedAdminRouteWithChildren = AuthedAdminRoute._addFileChildren(
+  AuthedAdminRouteChildren,
+)
+
+interface AuthedRouteChildren {
+  AuthedAdminRoute: typeof AuthedAdminRouteWithChildren
+  AuthedSearchRoute: typeof AuthedSearchRoute
+  AuthedSettingsRoute: typeof AuthedSettingsRoute
   AuthedBrowseCategoryRoute: typeof AuthedBrowseCategoryRoute
   AuthedGuidelineSlugRoute: typeof AuthedGuidelineSlugRoute
-  AuthedAdminIndexRoute: typeof AuthedAdminIndexRoute
   AuthedBrowseIndexRoute: typeof AuthedBrowseIndexRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
+  AuthedAdminRoute: AuthedAdminRouteWithChildren,
   AuthedSearchRoute: AuthedSearchRoute,
   AuthedSettingsRoute: AuthedSettingsRoute,
-  AuthedAdminDocumentsRoute: AuthedAdminDocumentsRoute,
-  AuthedAdminGuidelinesRoute: AuthedAdminGuidelinesRoute,
-  AuthedAdminNotificationsRoute: AuthedAdminNotificationsRoute,
   AuthedBrowseCategoryRoute: AuthedBrowseCategoryRoute,
   AuthedGuidelineSlugRoute: AuthedGuidelineSlugRoute,
-  AuthedAdminIndexRoute: AuthedAdminIndexRoute,
   AuthedBrowseIndexRoute: AuthedBrowseIndexRoute,
 }
 

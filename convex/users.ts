@@ -1,6 +1,26 @@
 import { v } from "convex/values";
-import { query, mutation } from "./_generated/server";
+import { query, mutation, type QueryCtx, type MutationCtx } from "./_generated/server";
 import { authComponent } from "./auth";
+import type { Doc } from "./_generated/dataModel";
+
+type UsersCtx = QueryCtx | MutationCtx;
+
+async function getCurrentProfile(ctx: UsersCtx): Promise<Doc<"users"> | null> {
+  const authUser = await authComponent.safeGetAuthUser(ctx);
+  if (!authUser) return null;
+  return await ctx.db
+    .query("users")
+    .withIndex("by_email", (q) => q.eq("email", authUser.email))
+    .first();
+}
+
+async function requireAdmin(ctx: UsersCtx): Promise<Doc<"users">> {
+  const user = await getCurrentProfile(ctx);
+  if (!user || user.role !== "admin") {
+    throw new Error("Unauthorized: Admin access required");
+  }
+  return user;
+}
 
 // Get the current user with their app-specific profile
 export const me = query({
@@ -22,7 +42,8 @@ export const me = query({
           _id: null,
           email: authUser.email,
           name: authUser.name ?? authUser.email.split("@")[0],
-          role: "admin" as const,
+          role: "user" as const,
+          isBanned: false,
           authUser,
         };
   },
@@ -41,15 +62,19 @@ export const ensureProfile = mutation({
       .first();
 
     if (existing) {
+      if (existing.isBanned) {
+        throw new Error("Account is banned");
+      }
       await ctx.db.patch(existing._id, { lastActive: Date.now() });
       return existing._id;
     }
 
-    // Create new user profile (default to admin role)
+    // Create new user profile (default role is user; admins can promote later)
     const id = await ctx.db.insert("users", {
       email: authUser.email,
       name: authUser.name ?? authUser.email.split("@")[0],
-      role: "admin",
+      role: "user",
+      isBanned: false,
       lastActive: Date.now(),
     });
 
@@ -70,6 +95,7 @@ export const ensureProfile = mutation({
 export const listAll = query({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
     return await ctx.db.query("users").collect();
   },
 });
@@ -81,6 +107,10 @@ export const updateRole = mutation({
     role: v.union(v.literal("user"), v.literal("admin")),
   },
   handler: async (ctx, { userId, role }) => {
+    const admin = await requireAdmin(ctx);
+    if (admin._id === userId && role !== "admin") {
+      throw new Error("You cannot remove your own admin role");
+    }
     await ctx.db.patch(userId, { role });
 
     await ctx.db.insert("auditLogs", {
@@ -88,6 +118,38 @@ export const updateRole = mutation({
       resourceType: "user",
       resourceId: userId,
       details: `Role changed to: ${role}`,
+      timestamp: Date.now(),
+    });
+  },
+});
+
+// Ban/unban user access
+export const setBanStatus = mutation({
+  args: {
+    userId: v.id("users"),
+    isBanned: v.boolean(),
+    reason: v.optional(v.string()),
+  },
+  handler: async (ctx, { userId, isBanned, reason }) => {
+    const admin = await requireAdmin(ctx);
+    if (admin._id === userId && isBanned) {
+      throw new Error("You cannot ban your own account");
+    }
+
+    await ctx.db.patch(userId, {
+      isBanned,
+      bannedAt: isBanned ? Date.now() : undefined,
+      bannedReason: isBanned ? reason?.trim() || "No reason provided" : undefined,
+      lastActive: Date.now(),
+    });
+
+    await ctx.db.insert("auditLogs", {
+      action: isBanned ? "user.banned" : "user.unbanned",
+      resourceType: "user",
+      resourceId: userId,
+      details: isBanned
+        ? `Banned user${reason ? `: ${reason.trim()}` : ""}`
+        : "Unbanned user",
       timestamp: Date.now(),
     });
   },
@@ -112,11 +174,13 @@ export const togglePin = mutation({
       const id = await ctx.db.insert("users", {
         email: authUser.email,
         name: authUser.name ?? authUser.email.split("@")[0],
-        role: "admin",
+        role: "user",
+        isBanned: false,
         lastActive: Date.now(),
       });
       user = (await ctx.db.get(id))!;
     }
+    if (user.isBanned) throw new Error("Account is banned");
 
     const pinned = user.pinnedGuidelines ?? [];
     const idx = pinned.indexOf(guidelineId);

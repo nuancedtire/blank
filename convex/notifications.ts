@@ -7,10 +7,12 @@ async function getCurrentUser(ctx: QueryCtx | MutationCtx) {
   const authUser = await authComponent.safeGetAuthUser(ctx);
   if (!authUser) return null;
 
-  return await ctx.db
+  const user = await ctx.db
     .query("users")
     .withIndex("by_email", (q) => q.eq("email", authUser.email))
     .first();
+  if (!user || user.isBanned) return null;
+  return user;
 }
 
 // Helper to check if user is admin

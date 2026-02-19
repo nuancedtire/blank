@@ -14,10 +14,6 @@ export default {
       return authHandler(request);
     }
 
-    return tanstackHandler.fetch(request, {
-      context: {
-        fromFetch: true,
-      },
-    });
+    return tanstackHandler.fetch(request);
   },
 };

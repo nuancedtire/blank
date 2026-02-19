@@ -17,12 +17,10 @@ export const Route = createFileRoute("/_authed/admin/")({
 });
 
 function AdminDashboard() {
-  const { data: guidelines } = useQuery(
-    convexQuery(api.guidelines.listAll, {})
-  );
+  const { data: guidelines } = useQuery(convexQuery(api.guidelines.listAll, {}));
   const { data: users } = useQuery(convexQuery(api.users.listAll, {}));
   const { data: auditLogs } = useQuery(
-    convexQuery(api.auditLog.getRecent, { limit: 10 })
+    convexQuery(api.auditLog.getRecent, { limit: 10 }),
   );
 
   const stats = {
@@ -39,7 +37,7 @@ function AdminDashboard() {
         <div>
           <h1 className="text-xl font-bold">Admin Dashboard</h1>
           <p className="text-sm text-muted-foreground">
-            Manage guidelines, users, and view analytics
+            Manage content, users, notifications, and view activity
           </p>
         </div>
         <Link to="/admin/guidelines">
@@ -50,7 +48,6 @@ function AdminDashboard() {
         </Link>
       </div>
 
-      {/* Stats Cards */}
       <div className="grid grid-cols-2 gap-3">
         <Card className="py-3 gap-2">
           <CardHeader className="px-4 pb-0">
@@ -63,6 +60,7 @@ function AdminDashboard() {
             <p className="text-2xl font-bold">{stats.published}</p>
           </CardContent>
         </Card>
+
         <Card className="py-3 gap-2">
           <CardHeader className="px-4 pb-0">
             <CardDescription className="flex items-center gap-1.5 text-xs">
@@ -74,6 +72,7 @@ function AdminDashboard() {
             <p className="text-2xl font-bold">{stats.drafts}</p>
           </CardContent>
         </Card>
+
         <Card className="py-3 gap-2">
           <CardHeader className="px-4 pb-0">
             <CardDescription className="flex items-center gap-1.5 text-xs">
@@ -85,6 +84,7 @@ function AdminDashboard() {
             <p className="text-2xl font-bold">{stats.totalUsers}</p>
           </CardContent>
         </Card>
+
         <Card className="py-3 gap-2">
           <CardHeader className="px-4 pb-0">
             <CardDescription className="flex items-center gap-1.5 text-xs">
@@ -98,7 +98,6 @@ function AdminDashboard() {
         </Card>
       </div>
 
-      {/* Quick Actions */}
       <div>
         <h2 className="text-sm font-medium mb-2">Quick Actions</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -115,6 +114,7 @@ function AdminDashboard() {
               </CardHeader>
             </Card>
           </Link>
+
           <Link to="/admin/documents">
             <Card className="hover:bg-accent/50 transition-colors cursor-pointer">
               <CardHeader>
@@ -123,11 +123,12 @@ function AdminDashboard() {
                   Upload Documents
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  Upload PDFs & text files for RAG search
+                  Upload PDFs and text files for RAG search
                 </CardDescription>
               </CardHeader>
             </Card>
           </Link>
+
           <Link to="/admin/notifications">
             <Card className="hover:bg-accent/50 transition-colors cursor-pointer">
               <CardHeader>
@@ -141,10 +142,23 @@ function AdminDashboard() {
               </CardHeader>
             </Card>
           </Link>
+
+          <Link to="/admin/users">
+            <Card className="hover:bg-accent/50 transition-colors cursor-pointer">
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  User Management
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Ban/unban users and manage admin access
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
         </div>
       </div>
 
-      {/* Recent Activity */}
       <div>
         <h2 className="text-sm font-medium mb-2">Recent Activity</h2>
         <div className="rounded-lg border bg-card divide-y">

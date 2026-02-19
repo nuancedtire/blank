@@ -51,6 +51,8 @@ import {
   Pencil,
   X,
   ChevronsUpDown,
+  GitBranch,
+  Archive,
 } from "lucide-react";
 import { extractTextFromPdf } from "@/lib/pdf-extract";
 import { Textarea } from "@/components/ui/textarea";
@@ -83,6 +85,7 @@ function ManageDocumentsPage() {
   const { data: documents } = useQuery(
     convexQuery(api.documents.listDocuments, {}),
   );
+  const { data: allGuidelines } = useQuery(convexQuery(api.guidelines.listAll, {}));
 
   const generateUploadUrl = useConvexMutation(api.documents.generateUploadUrl);
   const saveDocument = useConvexMutation(api.documents.saveDocument);
@@ -323,6 +326,7 @@ function ManageDocumentsPage() {
               <DocumentRow
                 key={doc._id}
                 doc={doc}
+                allGuidelines={allGuidelines}
                 source={source}
                 statusIcon={statusIcon(doc.status)}
                 onDelete={() => handleDelete(doc._id)}
@@ -342,11 +346,13 @@ function ManageDocumentsPage() {
 
 function DocumentRow({
   doc,
+  allGuidelines,
   source,
   statusIcon,
   onDelete,
 }: {
   doc: any;
+  allGuidelines: any[] | undefined;
   source: { label: string; className: string } | undefined;
   statusIcon: React.ReactNode;
   onDelete: () => void;
@@ -366,6 +372,14 @@ function DocumentRow({
   });
 
   const isDraft = guideline?.status === "draft";
+  const [showVersions, setShowVersions] = React.useState(false);
+
+  const versionHistory = React.useMemo(() => {
+    if (!guideline?.slug || !allGuidelines) return [];
+    return allGuidelines
+      .filter((g: any) => g.slug === guideline.slug)
+      .sort((a: any, b: any) => b.lastUpdated - a.lastUpdated);
+  }, [allGuidelines, guideline?.slug]);
 
   return (
     <Card
@@ -410,6 +424,17 @@ function DocumentRow({
           {doc.errorMessage && (
             <p className="text-xs text-destructive mt-1">{doc.errorMessage}</p>
           )}
+          {guideline && versionHistory.length > 0 && (
+            <button
+              type="button"
+              className="mt-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+              onClick={() => setShowVersions((v) => !v)}
+            >
+              <GitBranch className="h-2.5 w-2.5" />
+              {showVersions ? "Hide" : "Show"} version timeline (
+              {versionHistory.length})
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-1">
           {fileUrl && (
@@ -435,6 +460,47 @@ function DocumentRow({
         </div>
       </div>
 
+      {showVersions && guideline && versionHistory.length > 0 && (
+        <div className="border-t px-3 py-2.5 bg-muted/20">
+          <div className="space-y-1.5">
+            {versionHistory.map((g: any, idx: number) => (
+              <div
+                key={g._id}
+                className="flex items-center justify-between gap-2 rounded-md border bg-card px-2.5 py-1.5"
+              >
+                <div className="min-w-0">
+                  <p className="text-xs font-medium truncate">
+                    {g.title}
+                    {String(g._id) === String(guideline._id) ? " (this upload)" : ""}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {g.source.toUpperCase()} · v{g.version} ·{" "}
+                    {new Date(g.lastUpdated).toLocaleDateString("en-GB")}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1">
+                  {idx === 0 && g.status === "published" && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                      Current
+                    </Badge>
+                  )}
+                  <Badge
+                    variant={g.status === "published" ? "default" : "secondary"}
+                    className={
+                      g.status === "archived"
+                        ? "text-[10px] px-1.5 py-0 bg-muted text-muted-foreground"
+                        : "text-[10px] px-1.5 py-0"
+                    }
+                  >
+                    {g.status}
+                  </Badge>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Review panel for draft guidelines */}
       {isDraft && guideline && <ReviewPanel guideline={guideline} />}
     </Card>
@@ -444,10 +510,36 @@ function DocumentRow({
 function ReviewPanel({ guideline }: { guideline: any }) {
   const queryClient = useQueryClient();
   const publishGuideline = useConvexMutation(api.documents.publishGuideline);
+  const replaceGuideline = useConvexMutation(api.documents.replaceGuideline);
   const [isEditing, setIsEditing] = React.useState(false);
   const [isPublishing, setIsPublishing] = React.useState(false);
+  const [isReplacing, setIsReplacing] = React.useState(false);
+  // In version-detection mode, metadata is hidden by default — admin can expand it
+  const [showMetadata, setShowMetadata] = React.useState(false);
 
-  // Editable fields
+  // HIGH confidence: single best match (≥0.88) — "likely a new version"
+  const { data: likelyVersion } = useQuery({
+    ...convexQuery(
+      api.guidelines.getById,
+      guideline.likelyVersionOf
+        ? { id: guideline.likelyVersionOf }
+        : "skip",
+    ),
+    enabled: !!guideline.likelyVersionOf,
+  });
+
+  // MEDIUM confidence: related matches (0.72–0.88) — "similar guidelines found"
+  const { data: similarGuidelines } = useQuery({
+    ...convexQuery(
+      api.guidelines.getByIds,
+      guideline.potentialDuplicateOf?.length
+        ? { ids: guideline.potentialDuplicateOf }
+        : "skip",
+    ),
+    enabled: (guideline.potentialDuplicateOf?.length ?? 0) > 0,
+  });
+
+  // Editable metadata fields
   const [title, setTitle] = React.useState(guideline.title);
   const [summary, setSummary] = React.useState(guideline.summary ?? "");
   const [category, setCategory] = React.useState(guideline.category);
@@ -456,7 +548,6 @@ function ReviewPanel({ guideline }: { guideline: any }) {
   );
   const [categoryOpen, setCategoryOpen] = React.useState(false);
 
-  // Reset when guideline changes
   React.useEffect(() => {
     setTitle(guideline.title);
     setSummary(guideline.summary ?? "");
@@ -473,12 +564,7 @@ function ReviewPanel({ guideline }: { guideline: any }) {
       if (category !== guideline.category) overrides.category = category;
       const origKw = (guideline.keywords ?? []).join(",");
       if (keywords.join(",") !== origKw) overrides.keywords = keywords;
-
-      await publishGuideline({
-        guidelineId: guideline._id,
-        ...overrides,
-      });
-
+      await publishGuideline({ guidelineId: guideline._id, ...overrides });
       setIsEditing(false);
       queryClient.invalidateQueries();
     } catch (e) {
@@ -488,42 +574,226 @@ function ReviewPanel({ guideline }: { guideline: any }) {
     }
   };
 
-  return (
-    <div className="border-t px-4 py-3 space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1">
+  const handleReplace = async (oldGuidelineId: string) => {
+    setIsReplacing(true);
+    try {
+      await replaceGuideline({
+        oldGuidelineId: oldGuidelineId as any,
+        newGuidelineId: guideline._id,
+      });
+      queryClient.invalidateQueries();
+    } catch (e) {
+      console.error("Replace error:", e);
+    } finally {
+      setIsReplacing(false);
+    }
+  };
+
+  // ── Version detection mode (high confidence) ────────────────────────────────
+  if (likelyVersion) {
+    return (
+      <div className="border-t px-4 py-4 space-y-4">
+        {/* Version detection banner */}
+        <div className="rounded-xl border-2 border-blue-500/30 bg-blue-500/5 p-4 space-y-3">
+          <div className="flex items-start gap-2.5">
+            <div className="rounded-lg bg-blue-500/15 p-1.5 mt-0.5 shrink-0">
+              <GitBranch className="h-3.5 w-3.5 text-blue-500" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold leading-snug">
+                Possible replacement found
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                This upload looks like an update to an existing published
+                guideline. Choose whether to replace that current guideline or
+                publish this as a separate one.
+              </p>
+            </div>
+          </div>
+
+          {/* Matched guideline */}
+          <div className="rounded-lg border bg-card px-3 py-2.5">
+            <p className="text-sm font-medium leading-snug">
+              {likelyVersion.title}
+            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                v{likelyVersion.version}
+              </Badge>
+              <span className="text-[10px] text-muted-foreground">
+                {likelyVersion.source.toUpperCase()} · {likelyVersion.category}
+              </span>
+              <span className="text-[10px] text-muted-foreground">
+                · updated{" "}
+                {new Date(likelyVersion.lastUpdated).toLocaleDateString(
+                  "en-GB",
+                )}
+              </span>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              className="flex-1 gap-1.5 h-8"
+              onClick={() => handleReplace(likelyVersion._id)}
+              disabled={isReplacing}
+            >
+              {isReplacing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Archive className="h-3.5 w-3.5" />
+              )}
+              Replace current guideline
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 h-8"
+              onClick={handlePublish}
+              disabled={isPublishing}
+            >
+              {isPublishing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : null}
+              Publish as separate guideline
+            </Button>
+          </div>
+          <p className="text-[10px] text-muted-foreground leading-relaxed">
+            <strong>Replace current guideline</strong> archives the current one
+            and publishes this upload at the same URL.{" "}
+            <strong>Publish as separate guideline</strong> keeps both entries.
+          </p>
+        </div>
+
+        {/* Collapsible metadata editor */}
+        <button
+          type="button"
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+          onClick={() => setShowMetadata((v) => !v)}
+        >
           <Sparkles className="h-3 w-3" />
-          AI-suggested metadata — review before publishing
-        </p>
-        {!isEditing && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 text-xs gap-1"
-            onClick={() => setIsEditing(true)}
-          >
-            <Pencil className="h-3 w-3" />
-            Edit
-          </Button>
+          {showMetadata ? "Hide" : "Review"} AI-suggested metadata
+          <ChevronsUpDown className="h-3 w-3 ml-auto opacity-50" />
+        </button>
+
+        {showMetadata && (
+          <MetadataEditor
+            guideline={guideline}
+            title={title} setTitle={setTitle}
+            summary={summary} setSummary={setSummary}
+            category={category} setCategory={setCategory}
+            keywords={keywords} setKeywords={setKeywords}
+            categoryOpen={categoryOpen} setCategoryOpen={setCategoryOpen}
+            isEditing={isEditing} setIsEditing={setIsEditing}
+            isPublishing={isPublishing}
+            onPublish={handlePublish}
+          />
         )}
       </div>
+    );
+  }
 
+  // ── Normal review mode ───────────────────────────────────────────────────────
+  return (
+    <div className="border-t px-4 py-3 space-y-3">
+      <p className="text-xs font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1">
+        <Sparkles className="h-3 w-3" />
+        AI-suggested metadata — review before publishing
+      </p>
+
+      {/* Medium-confidence similar docs panel */}
+      {similarGuidelines && similarGuidelines.length > 0 && (
+        <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3 space-y-2">
+          <p className="text-xs font-medium text-blue-600 dark:text-blue-400 flex items-center gap-1">
+            <GitBranch className="h-3 w-3" />
+            Possibly related existing guidelines
+          </p>
+          <div className="space-y-1.5">
+            {similarGuidelines.map((similar: any) => (
+              <div key={similar._id} className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium truncate">{similar.title}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {similar.source.toUpperCase()} · v{similar.version} · {similar.category}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 text-[10px] px-2 shrink-0 border-blue-500/30 text-blue-600 hover:bg-blue-500/10"
+                  onClick={() => handleReplace(similar._id)}
+                  disabled={isReplacing}
+                >
+                  {isReplacing ? (
+                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                  ) : (
+                    <Archive className="h-2.5 w-2.5 mr-0.5" />
+                  )}
+                  Replace
+                </Button>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            Choose Replace to treat this as an update, or publish below to keep
+            it separate.
+          </p>
+        </div>
+      )}
+
+      <MetadataEditor
+        guideline={guideline}
+        title={title} setTitle={setTitle}
+        summary={summary} setSummary={setSummary}
+        category={category} setCategory={setCategory}
+        keywords={keywords} setKeywords={setKeywords}
+        categoryOpen={categoryOpen} setCategoryOpen={setCategoryOpen}
+        isEditing={isEditing} setIsEditing={setIsEditing}
+        isPublishing={isPublishing}
+        onPublish={handlePublish}
+      />
+    </div>
+  );
+}
+
+// Shared metadata view/edit + publish button, used in both panel modes
+function MetadataEditor({
+  guideline,
+  title, setTitle,
+  summary, setSummary,
+  category, setCategory,
+  keywords, setKeywords,
+  categoryOpen, setCategoryOpen,
+  isEditing, setIsEditing,
+  isPublishing,
+  onPublish,
+}: {
+  guideline: any;
+  title: string; setTitle: (v: string) => void;
+  summary: string; setSummary: (v: string) => void;
+  category: string; setCategory: (v: string) => void;
+  keywords: string[]; setKeywords: (v: string[]) => void;
+  categoryOpen: boolean; setCategoryOpen: (v: boolean) => void;
+  isEditing: boolean; setIsEditing: (v: boolean) => void;
+  isPublishing: boolean;
+  onPublish: () => void;
+}) {
+  return (
+    <>
       {isEditing ? (
         <div className="space-y-2.5">
           <div className="space-y-1">
             <Label className="text-xs">Title</Label>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="h-8 text-sm"
-            />
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} className="h-8 text-sm" />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Summary</Label>
             <Textarea
               value={summary}
               onChange={(e) => setSummary(e.target.value)}
-              className="h-8 text-sm"
+              className="text-sm"
               rows={4}
             />
           </div>
@@ -544,10 +814,7 @@ function ReviewPanel({ guideline }: { guideline: any }) {
                 </PopoverTrigger>
                 <PopoverContent className="w-48 p-0" align="start">
                   <Command>
-                    <CommandInput
-                      placeholder="Search category..."
-                      className="h-8"
-                    />
+                    <CommandInput placeholder="Search category..." className="h-8" />
                     <CommandList>
                       <CommandEmpty>No category found.</CommandEmpty>
                       <CommandGroup>
@@ -565,12 +832,7 @@ function ReviewPanel({ guideline }: { guideline: any }) {
                             }}
                           >
                             {cat}
-                            <Check
-                              className={cn(
-                                "ml-auto h-3.5 w-3.5",
-                                category === cat ? "opacity-100" : "opacity-0",
-                              )}
-                            />
+                            <Check className={cn("ml-auto h-3.5 w-3.5", category === cat ? "opacity-100" : "opacity-0")} />
                           </CommandItem>
                         ))}
                       </CommandGroup>
@@ -581,40 +843,26 @@ function ReviewPanel({ guideline }: { guideline: any }) {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Tags</Label>
-              <TagInput
-                tags={keywords}
-                onTagsChange={setKeywords}
-                placeholder="sepsis, infection..."
-              />
+              <TagInput tags={keywords} onTagsChange={setKeywords} placeholder="sepsis, infection..." />
             </div>
           </div>
         </div>
       ) : (
         <div className="space-y-1.5">
           <div className="flex items-baseline gap-2">
-            <span className="text-xs text-muted-foreground w-14 shrink-0">
-              Title
-            </span>
+            <span className="text-xs text-muted-foreground w-14 shrink-0">Title</span>
             <span className="text-sm font-medium">{title}</span>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-xs text-muted-foreground w-14 shrink-0">
-              Summary
-            </span>
+            <span className="text-xs text-muted-foreground w-14 shrink-0">Summary</span>
             <span className="text-xs">{summary}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground w-14 shrink-0">
-              Category
-            </span>
-            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-              {category}
-            </Badge>
+            <span className="text-xs text-muted-foreground w-14 shrink-0">Category</span>
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0">{category}</Badge>
           </div>
           <div className="flex items-start gap-2">
-            <span className="text-xs text-muted-foreground w-14 shrink-0 pt-0.5">
-              Tags
-            </span>
+            <span className="text-xs text-muted-foreground w-14 shrink-0 pt-0.5">Tags</span>
             <div className="flex flex-wrap gap-1">
               <AnimatePresence mode="popLayout">
                 {(guideline.keywords ?? []).map((tag: string) => (
@@ -626,12 +874,7 @@ function ReviewPanel({ guideline }: { guideline: any }) {
                     exit={{ opacity: 0, scale: 0.8 }}
                     transition={{ type: "spring", stiffness: 500, damping: 30 }}
                   >
-                    <Badge
-                      variant="secondary"
-                      className="text-[10px] px-1.5 py-0"
-                    >
-                      {tag}
-                    </Badge>
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{tag}</Badge>
                   </motion.span>
                 ))}
               </AnimatePresence>
@@ -646,22 +889,27 @@ function ReviewPanel({ guideline }: { guideline: any }) {
             variant="ghost"
             size="sm"
             className="h-7 text-xs gap-1"
-            onClick={() => {
-              setTitle(guideline.title);
-              setSummary(guideline.summary ?? "");
-              setCategory(guideline.category);
-              setKeywords(guideline.keywords ?? []);
-              setIsEditing(false);
-            }}
+            onClick={() => setIsEditing(false)}
           >
             <X className="h-3 w-3" />
             Cancel
           </Button>
         )}
+        {!isEditing && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs gap-1"
+            onClick={() => setIsEditing(true)}
+          >
+            <Pencil className="h-3 w-3" />
+            Edit
+          </Button>
+        )}
         <Button
           size="sm"
           className="h-7 text-xs gap-1"
-          onClick={handlePublish}
+          onClick={onPublish}
           disabled={isPublishing}
         >
           {isPublishing ? (
@@ -672,7 +920,7 @@ function ReviewPanel({ guideline }: { guideline: any }) {
           {isEditing ? "Save & Publish" : "Approve & Publish"}
         </Button>
       </div>
-    </div>
+    </>
   );
 }
 

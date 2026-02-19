@@ -8,6 +8,9 @@ export default defineSchema({
     email: v.string(),
     name: v.string(),
     role: v.union(v.literal("user"), v.literal("admin")),
+    isBanned: v.optional(v.boolean()),
+    bannedAt: v.optional(v.number()),
+    bannedReason: v.optional(v.string()),
     pinnedGuidelines: v.optional(v.array(v.id("guidelines"))),
     preferences: v.optional(
       v.object({
@@ -53,12 +56,21 @@ export default defineSchema({
     lastUpdated: v.number(),
     // Search metadata
     keywords: v.optional(v.array(v.string())),
+    // Duplicate detection
+    contentHash: v.optional(v.string()), // SHA256 of extracted text content
+    likelyVersionOf: v.optional(v.id("guidelines")), // High-confidence (≥0.88) version match
+    potentialDuplicateOf: v.optional(v.array(v.id("guidelines"))), // Medium-confidence (0.72–0.88) matches
+    // Archive metadata
+    archivedAt: v.optional(v.number()),
+    archivedBy: v.optional(v.id("users")),
+    replacedBy: v.optional(v.id("guidelines")), // Newer version that replaced this one
   })
     .index("by_slug", ["slug"])
     .index("by_category", ["category"])
     .index("by_status", ["status"])
     .index("by_source", ["source"])
     .index("by_category_status", ["category", "status"])
+    .index("by_contentHash", ["contentHash"])
     .searchIndex("search_guidelines", {
       searchField: "content",
       filterFields: ["category", "status", "source"],
