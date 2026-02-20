@@ -36,9 +36,10 @@ Use markdown naturally — headers, bold, nested bullet lists — whatever fits 
 ## SEARCH STRATEGY
 1. First use ragSearch to find semantically relevant content (best for specific questions)
 2. Then use searchGuidelines for keyword-based search if RAG doesn't find enough
-3. If local guidelines are insufficient, search RCEM with searchRCEM, then NICE with searchNICE
+3. If local guidelines are insufficient, use searchExternalWeb with site filters (NICE/RCEM as requested)
 4. If the first search doesn't cover the question well, try additional searches with different terms
-5. Always search — never answer from memory alone`;
+5. Always obey any explicit "Search scope preference" in the latest user message
+6. Always search — never answer from memory alone`;
 
 // Tool: search guidelines via full-text search on the guidelines table
 const searchGuidelinesTool = createTool({
@@ -305,6 +306,145 @@ const searchRCEMTool = createTool({
   },
 });
 
+// Tool: search external guidance using SearXNG with strict site filters
+const searchExternalWebTool = createTool({
+  description:
+    "Search external guidance via SearXNG, constrained to NICE and/or RCEM websites. Use this when local guidelines are insufficient or when the user requests external-only search.",
+  args: z.object({
+    query: z
+      .string()
+      .describe("Clinical query to search, e.g. 'head injury CT criteria adults'"),
+    site: z
+      .enum(["nice", "rcem", "both"])
+      .optional()
+      .describe("Restrict search to NICE, RCEM, or both sites."),
+  }),
+  handler: async (_ctx, args): Promise<Record<string, unknown>> => {
+    const searxBaseUrl = "https://pdfize.exe.xyz";
+
+    const fetchSearx = async (q: string) => {
+      const apiUrl = `${searxBaseUrl}/search?format=json&q=${encodeURIComponent(q)}`;
+      const response = await fetch(apiUrl, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!response.ok) {
+        throw new Error("SearXNG request failed");
+      }
+      return (await response.json()) as {
+        results?: Array<{
+          title?: string;
+          url?: string;
+          content?: string;
+          engine?: string;
+        }>;
+      };
+    };
+
+    try {
+      const isNiceOnly = args.site === "nice";
+      const isRcemOnly = args.site === "rcem";
+      const isBoth = !isNiceOnly && !isRcemOnly;
+
+      const dataList = isBoth
+        ? await Promise.all([
+            fetchSearx(`${args.query} site:nice.org.uk filetype:pdf`),
+            fetchSearx(`${args.query} site:rcem.ac.uk filetype:pdf`),
+          ])
+        : isNiceOnly
+          ? [await fetchSearx(`${args.query} site:nice.org.uk filetype:pdf`)]
+          : [await fetchSearx(`${args.query} site:rcem.ac.uk filetype:pdf`)];
+
+      const perSource = dataList.map((data) =>
+        (data.results ?? []).filter((item) => {
+          const url = item.url ?? "";
+          return url.includes("nice.org.uk") || url.includes("rcem.ac.uk");
+        }),
+      );
+
+      let merged: Array<{
+        title?: string;
+        url?: string;
+        content?: string;
+        engine?: string;
+      }> = [];
+      if (isBoth) {
+        const [nice, rcem] = perSource;
+        const maxLen = Math.max(nice.length, rcem.length);
+        for (let i = 0; i < maxLen; i++) {
+          if (nice[i]) merged.push(nice[i]);
+          if (rcem[i]) merged.push(rcem[i]);
+        }
+      } else {
+        merged = perSource[0] ?? [];
+      }
+
+      const seen = new Set<string>();
+      const filteredResults = merged
+        .filter((item) => {
+          const url = item.url ?? "";
+          if (!url || seen.has(url)) return false;
+          seen.add(url);
+          return true;
+        })
+        .slice(0, 8)
+        .map((item) => {
+          const url = item.url ?? "";
+          return {
+            title: item.title ?? "Untitled",
+            url,
+            snippet: item.content ?? "",
+            source: url.includes("nice.org.uk")
+              ? "NICE"
+              : url.includes("rcem.ac.uk")
+                ? "RCEM"
+                : "External",
+            engine: item.engine ?? "unknown",
+          };
+        });
+
+      if (filteredResults.length === 0) {
+        return {
+          found: false,
+          source: "SearXNG",
+          siteFilter: isBoth
+            ? "(site:nice.org.uk OR site:rcem.ac.uk) filetype:pdf"
+            : isNiceOnly
+              ? "site:nice.org.uk filetype:pdf"
+              : "site:rcem.ac.uk filetype:pdf",
+          message: "No external NICE/RCEM results found.",
+          searchUrl: `${searxBaseUrl}/search?q=${encodeURIComponent(args.query)}`,
+        };
+      }
+
+      return {
+        found: true,
+        source: "SearXNG",
+        siteFilter: isBoth
+          ? "(site:nice.org.uk OR site:rcem.ac.uk) filetype:pdf"
+          : isNiceOnly
+            ? "site:nice.org.uk filetype:pdf"
+            : "site:rcem.ac.uk filetype:pdf",
+        count: filteredResults.length,
+        results: filteredResults,
+      };
+    } catch {
+      return {
+        found: false,
+        source: "SearXNG",
+        siteFilter:
+          args.site === "nice"
+            ? "site:nice.org.uk filetype:pdf"
+            : args.site === "rcem"
+              ? "site:rcem.ac.uk filetype:pdf"
+              : "(site:nice.org.uk OR site:rcem.ac.uk) filetype:pdf",
+        message: "Could not reach SearXNG endpoint.",
+        searchUrl: `${searxBaseUrl}/search?q=${encodeURIComponent(args.query)}`,
+      };
+    }
+  },
+});
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const guidelineAgent: Agent<object, any> = new Agent(components.agent, {
   name: "ED Guidelines Assistant",
@@ -313,6 +453,7 @@ export const guidelineAgent: Agent<object, any> = new Agent(components.agent, {
   tools: {
     searchGuidelines: searchGuidelinesTool,
     ragSearch: ragSearchTool,
+    searchExternalWeb: searchExternalWebTool,
     searchNICE: searchNICETool,
     searchRCEM: searchRCEMTool,
   },

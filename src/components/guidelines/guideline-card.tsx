@@ -1,4 +1,8 @@
 import { Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { convexQuery } from "@convex-dev/react-query";
+import { api } from "convex/_generated/api";
+import type { Id } from "convex/_generated/dataModel";
 import { FileText, ChevronRight, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +17,8 @@ interface GuidelineCardProps {
   summary?: string;
   version: string;
   lastUpdated: number;
+  thumbnailUrl?: string | null;
+  thumbnailStorageId?: Id<"_storage">;
   compact?: boolean;
   isPinned?: boolean;
   onTogglePin?: () => void;
@@ -30,10 +36,22 @@ export function GuidelineCard({
   source,
   summary,
   version,
+  thumbnailUrl,
+  thumbnailStorageId,
   compact = false,
   isPinned,
   onTogglePin,
 }: GuidelineCardProps) {
+  const { data: storedThumbnailUrl } = useQuery({
+    ...convexQuery(api.documents.getFileUrl, {
+      storageId: (thumbnailStorageId as any) ?? undefined,
+    }),
+    enabled: !!thumbnailStorageId && !thumbnailUrl,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const resolvedThumbnailUrl = thumbnailUrl ?? storedThumbnailUrl ?? null;
+
   return (
     <CardInteractive className="p-0 group">
       <Link
@@ -41,9 +59,7 @@ export function GuidelineCard({
         params={{ slug }}
         className="flex items-center gap-4 p-4"
       >
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/10 to-accent/10 group-hover:from-primary/20 group-hover:to-accent/20 transition-all">
-          <FileText className="h-6 w-6 text-primary group-hover:scale-110 transition-transform" />
-        </div>
+        <GuidelineThumb thumbnailUrl={resolvedThumbnailUrl} />
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-base leading-tight truncate group-hover:text-primary transition-colors">{title}</h3>
           {!compact && summary && (
@@ -89,5 +105,28 @@ export function GuidelineCard({
         </div>
       </Link>
     </CardInteractive>
+  );
+}
+
+function GuidelineThumb({
+  thumbnailUrl,
+}: {
+  thumbnailUrl?: string | null;
+}) {
+  if (thumbnailUrl) {
+    return (
+      <img
+        src={thumbnailUrl}
+        alt="Guideline cover"
+        className="h-12 w-12 shrink-0 rounded-2xl border border-border/70 object-cover bg-muted/30"
+        loading="lazy"
+      />
+    );
+  }
+
+  return (
+    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/10 to-accent/10 group-hover:from-primary/20 group-hover:to-accent/20 transition-all">
+      <FileText className="h-6 w-6 text-primary group-hover:scale-110 transition-transform" />
+    </div>
   );
 }

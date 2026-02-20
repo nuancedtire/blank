@@ -133,6 +133,51 @@ export const search = query({
   },
 });
 
+// Paginated full-text search on guideline content with total count
+export const searchPaginated = query({
+  args: {
+    query: v.string(),
+    page: v.number(),
+    pageSize: v.number(),
+    source: v.optional(
+      v.union(v.literal("local"), v.literal("rcem"), v.literal("nice"))
+    ),
+    category: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const page = Math.max(1, Math.floor(args.page));
+    const pageSize = Math.min(50, Math.max(1, Math.floor(args.pageSize)));
+    const start = (page - 1) * pageSize;
+
+    const allResults = await ctx.db
+      .query("guidelines")
+      .withSearchIndex("search_guidelines", (q) => {
+        let sq = q.search("content", args.query).eq("status", "published");
+        if (args.source) {
+          sq = sq.eq("source", args.source);
+        }
+        if (args.category) {
+          sq = sq.eq("category", args.category);
+        }
+        return sq;
+      })
+      .collect();
+
+    const total = allResults.length;
+    const items = allResults.slice(start, start + pageSize).map(
+      ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest
+    );
+
+    return {
+      items,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    };
+  },
+});
+
 // Create a new guideline (admin only)
 export const create = mutation({
   args: {
@@ -752,4 +797,3 @@ export const searchInternal = internalQuery({
     return await searchQuery.take(10);
   },
 });
-

@@ -43,6 +43,7 @@ function CategoryPage() {
             summary={g.summary}
             version={g.version}
             lastUpdated={g.lastUpdated}
+            thumbnailStorageId={g.thumbnailStorageId}
           />
         ))}
 
