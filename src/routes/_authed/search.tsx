@@ -9,14 +9,13 @@ import {
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "convex/_generated/api";
 import { RadiantPromptInput } from "@/components/ui/radiant-input";
-import { SearchResults } from "@/components/search/search-results";
+import type { SearchScopeOption } from "@/components/ui/radiant-input";
 import { AgentChat } from "@/components/search/agent-chat";
 import { GuidelineCard } from "@/components/guidelines/guideline-card";
 import { GuidelineCardSkeleton } from "@/components/guidelines/guideline-card-skeleton";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
 import {
   TrendingUp,
   Clock,
@@ -25,6 +24,9 @@ import {
   Shield,
   Brain,
   FileText,
+  Globe,
+  Database,
+  ExternalLink,
 } from "lucide-react";
 export const Route = createFileRoute("/_authed/search")({
   component: SearchPage,
@@ -46,6 +48,12 @@ function SearchPage() {
   const [query, setQuery] = React.useState("");
   const [searchQuery, setSearchQuery] = React.useState("");
   const [agentQuery, setAgentQuery] = React.useState<string | null>(null);
+  const [searchScope, setSearchScope] = React.useState<SearchScopeOption>("all");
+  const [searchMode, setSearchMode] = React.useState<"local" | "web">("local");
+  const [webResults, setWebResults] = React.useState<
+    Array<{ title: string; url: string; snippet: string; source: "NICE" | "RCEM" }>
+  >([]);
+  const [isWebSearching, setIsWebSearching] = React.useState(false);
   const queryClient = useQueryClient();
 
   // Debounced search
@@ -71,9 +79,66 @@ function SearchPage() {
     ...convexQuery(api.guidelines.search, {
       query: searchQuery,
     }),
-    enabled: !!searchQuery,
+    enabled: !!searchQuery && searchMode === "local",
     placeholderData: keepPreviousData,
   });
+
+  React.useEffect(() => {
+    const trimmedQuery = searchQuery.trim();
+    if (!trimmedQuery || searchMode !== "web") {
+      setWebResults([]);
+      setIsWebSearching(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const run = async () => {
+      setIsWebSearching(true);
+      try {
+        const scopedQuery = `${trimmedQuery} site:nice.org.uk OR site:rcem.ac.uk`;
+        const response = await fetch(
+          `https://pdfize.exe.xyz/search?format=json&q=${encodeURIComponent(scopedQuery)}`,
+          {
+            signal: controller.signal,
+          },
+        );
+        if (!response.ok) {
+          setWebResults([]);
+          return;
+        }
+        const data = (await response.json()) as {
+          results?: Array<{ title?: string; url?: string; content?: string }>;
+        };
+        const items = (data.results ?? [])
+          .filter((item) => {
+            const url = item.url ?? "";
+            return url.includes("nice.org.uk") || url.includes("rcem.ac.uk");
+          })
+          .slice(0, 8)
+          .map((item) => {
+            const url = item.url ?? "";
+            const source = url.includes("nice.org.uk") ? "NICE" : "RCEM";
+            return {
+              title: item.title ?? "Untitled",
+              url,
+              snippet: item.content ?? "",
+              source: source as "NICE" | "RCEM",
+            };
+          });
+        setWebResults(items);
+      } catch {
+        if (!controller.signal.aborted) {
+          setWebResults([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsWebSearching(false);
+        }
+      }
+    };
+    void run();
+    return () => controller.abort();
+  }, [searchMode, searchQuery]);
 
   // Get user
   const { data: currentUser } = useQuery(convexQuery(api.users.me, {}));
@@ -99,12 +164,6 @@ function SearchPage() {
     setAgentQuery(null);
   };
 
-  const handleClearSearch = () => {
-    setQuery("");
-    setSearchQuery("");
-    setAgentQuery(null);
-  };
-
   const pinnedIds = (currentUser as any)?.pinnedGuidelines ?? [];
 
   const pinnedGuidelines = React.useMemo(() => {
@@ -113,6 +172,13 @@ function SearchPage() {
   }, [allGuidelines, pinnedIds]);
 
   const showSearchResults = !!searchQuery && !agentQuery;
+  const localResults = (searchResults ?? []) as Array<{
+    _id: string;
+    title: string;
+    slug: string;
+    category: string;
+    source: "local" | "rcem" | "nice";
+  }>;
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
@@ -123,7 +189,36 @@ function SearchPage() {
         </h1>
 
         {/* Radiant Search Input */}
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-3xl mx-auto relative">
+          <div className="mb-3 inline-flex items-center rounded-lg border border-border bg-card p-1">
+            <Button
+              type="button"
+              size="sm"
+              variant={searchMode === "local" ? "default" : "ghost"}
+              className="rounded-md h-8 px-4 text-xs"
+              onClick={() => {
+                setSearchMode("local");
+                setSearchScope("local");
+              }}
+            >
+              <Database className="w-3.5 h-3.5 mr-1.5" />
+              Local
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={searchMode === "web" ? "default" : "ghost"}
+              className="rounded-md h-8 px-4 text-xs"
+              onClick={() => {
+                setSearchMode("web");
+                setSearchScope("external_all");
+              }}
+            >
+              <Globe className="w-3.5 h-3.5 mr-1.5" />
+              Web
+            </Button>
+          </div>
+
           <RadiantPromptInput
             placeholder="Ask about any protocol, symptom, or treatment..."
             value={query}
@@ -131,8 +226,80 @@ function SearchPage() {
               setQuery(val);
               if (agentQuery) setAgentQuery(null);
             }}
+            searchScope={searchScope}
+            onSearchScopeChange={setSearchScope}
             onSubmit={handleSubmit}
           />
+
+          {showSearchResults && (
+            <Card className="absolute left-0 right-0 top-full mt-2 z-30 border-border/70 shadow-lg">
+              <div className="max-h-[360px] overflow-y-auto p-2">
+                {searchMode === "local" && (
+                  <>
+                    {isSearching && (
+                      <p className="px-3 py-2 text-sm text-muted-foreground">
+                        Searching local guidelines...
+                      </p>
+                    )}
+                    {!isSearching && localResults.length === 0 && (
+                      <p className="px-3 py-2 text-sm text-muted-foreground">
+                        No local results for &ldquo;{searchQuery}&rdquo;.
+                      </p>
+                    )}
+                    {!isSearching &&
+                      localResults.map((result) => (
+                        <Link
+                          key={result._id}
+                          to="/guideline/$slug"
+                          params={{ slug: result.slug }}
+                          className="block rounded-md px-3 py-2 hover:bg-muted/60 text-left"
+                        >
+                          <p className="text-sm font-medium text-foreground line-clamp-1">
+                            {result.title}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {result.category} · {result.source.toUpperCase()}
+                          </p>
+                        </Link>
+                      ))}
+                  </>
+                )}
+
+                {searchMode === "web" && (
+                  <>
+                    {isWebSearching && (
+                      <p className="px-3 py-2 text-sm text-muted-foreground">
+                        Searching NICE/RCEM on web...
+                      </p>
+                    )}
+                    {!isWebSearching && webResults.length === 0 && (
+                      <p className="px-3 py-2 text-sm text-muted-foreground">
+                        No web results for &ldquo;{searchQuery}&rdquo;.
+                      </p>
+                    )}
+                    {!isWebSearching &&
+                      webResults.map((result) => (
+                        <a
+                          key={result.url}
+                          href={result.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block rounded-md px-3 py-2 hover:bg-muted/60 text-left"
+                        >
+                          <p className="text-sm font-medium text-foreground line-clamp-1">
+                            {result.title}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
+                            <span>{result.source}</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </p>
+                        </a>
+                      ))}
+                  </>
+                )}
+              </div>
+            </Card>
+          )}
         </div>
 
         <p className="text-sm text-muted-foreground">
@@ -147,38 +314,10 @@ function SearchPage() {
       {/* Agent Chat */}
       {agentQuery && (
         <div className="animate-scale-in">
-          <AgentChat initialQuery={agentQuery} onClose={handleCloseAgent} />
-        </div>
-      )}
-
-      {/* Live Search Results */}
-      {showSearchResults && (
-        <div className="animate-fade-in">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              Search Results
-              <Badge
-                variant="secondary"
-                className="bg-primary/10 text-primary border-primary/20"
-              >
-                live
-              </Badge>
-            </h2>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleClearSearch}
-              className="border-border text-muted-foreground hover:bg-background"
-            >
-              Clear
-            </Button>
-          </div>
-          <SearchResults
-            results={(searchResults ?? []) as any}
-            query={searchQuery}
-            isLoading={isSearching}
-            onPin={(id) => pinMutation.mutate(id)}
-            pinnedIds={pinnedIds.map(String)}
+          <AgentChat
+            initialQuery={agentQuery}
+            initialSearchScope={searchScope}
+            onClose={handleCloseAgent}
           />
         </div>
       )}

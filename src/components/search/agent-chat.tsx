@@ -23,13 +23,34 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type { SearchScopeOption } from "@/components/ui/radiant-input";
 
 interface AgentChatProps {
   initialQuery: string;
+  initialSearchScope?: SearchScopeOption;
   onClose: () => void;
 }
 
-export function AgentChat({ initialQuery, onClose }: AgentChatProps) {
+function searchScopeLabel(scope: SearchScopeOption): string {
+  switch (scope) {
+    case "local":
+      return "Local only";
+    case "external_all":
+      return "NICE + RCEM";
+    case "external_nice":
+      return "NICE only";
+    case "external_rcem":
+      return "RCEM only";
+    default:
+      return "All sources";
+  }
+}
+
+export function AgentChat({
+  initialQuery,
+  initialSearchScope = "all",
+  onClose,
+}: AgentChatProps) {
   const [threadId, setThreadId] = React.useState<string | null>(null);
   const [isCreating, setIsCreating] = React.useState(false);
   const [inputValue, setInputValue] = React.useState("");
@@ -67,6 +88,7 @@ export function AgentChat({ initialQuery, onClose }: AgentChatProps) {
         await sendMessage({
           threadId: newThreadId,
           prompt: initialQuery.trim(),
+          searchScope: initialSearchScope,
         });
       } catch (e) {
         console.error("Failed to create thread:", e);
@@ -74,7 +96,7 @@ export function AgentChat({ initialQuery, onClose }: AgentChatProps) {
         setIsCreating(false);
       }
     })();
-  }, [initialQuery, createThread, sendMessage]);
+  }, [initialQuery, initialSearchScope, createThread, sendMessage]);
 
   // Auto-scroll on new messages
   React.useEffect(() => {
@@ -88,7 +110,11 @@ export function AgentChat({ initialQuery, onClose }: AgentChatProps) {
     const prompt = inputValue.trim();
     setInputValue("");
     try {
-      await sendMessage({ threadId, prompt });
+      await sendMessage({
+        threadId,
+        prompt,
+        searchScope: initialSearchScope,
+      });
     } catch (e) {
       console.error("Failed to send:", e);
     }
@@ -122,7 +148,7 @@ export function AgentChat({ initialQuery, onClose }: AgentChatProps) {
             <p className="text-[10px] text-muted-foreground">
               {isAgentThinking
                 ? "Searching & analysing guidelines..."
-                : "Ask about any clinical guideline"}
+                : `Ask about any clinical guideline · ${searchScopeLabel(initialSearchScope)}`}
             </p>
           </div>
         </div>
@@ -197,6 +223,7 @@ function MessageBubble({ message }: { message: UIMessage }) {
   );
 
   const fullText = textParts?.map((t) => t.text).join("") ?? "";
+  const displayText = isUser ? sanitizeUserPrompt(fullText) : fullText;
   const isStreaming = message.status === "streaming";
 
   return (
@@ -226,8 +253,8 @@ function MessageBubble({ message }: { message: UIMessage }) {
         ))}
 
         {/* Text content with smooth streaming */}
-        {fullText ? (
-          <StreamingText text={fullText} isStreaming={isStreaming} isUser={isUser} />
+        {displayText ? (
+          <StreamingText text={displayText} isStreaming={isStreaming} isUser={isUser} />
         ) : (
           /* Streaming but no text yet — pulsing dots */
           isStreaming &&
@@ -244,6 +271,18 @@ function MessageBubble({ message }: { message: UIMessage }) {
       )}
     </div>
   );
+}
+
+function sanitizeUserPrompt(text: string): string {
+  if (!text.startsWith("Search scope preference:")) {
+    return text;
+  }
+  const marker = "\n\nUser question:";
+  const markerIndex = text.indexOf(marker);
+  if (markerIndex === -1) {
+    return text;
+  }
+  return text.slice(markerIndex + marker.length).trim();
 }
 
 // ─── Streaming text with smooth reveal ─────────────────────────────────────
@@ -344,6 +383,13 @@ function ToolCallChip({
       <Search className="h-3 w-3" />
     );
     label = `Search: "${query}"`;
+  } else if (invocation.toolName === "searchExternalWeb") {
+    icon = isRunning ? (
+      <Loader2 className="h-3 w-3 animate-spin" />
+    ) : (
+      <Search className="h-3 w-3" />
+    );
+    label = `External: "${query}"`;
   }
 
   return (

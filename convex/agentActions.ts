@@ -12,6 +12,29 @@ import {
 import { components } from "./_generated/api";
 import guidelineAgent from "./guidelineAgent";
 
+const searchScopeValidator = v.union(
+  v.literal("all"),
+  v.literal("local"),
+  v.literal("external_all"),
+  v.literal("external_nice"),
+  v.literal("external_rcem"),
+);
+
+function searchScopeInstruction(scope?: string): string {
+  switch (scope) {
+    case "local":
+      return "Search scope preference: local documents only. Do not use external web tools unless explicitly asked.";
+    case "external_all":
+      return "Search scope preference: external web only using SearXNG with this filter: site:nice.org.uk OR site:rcem.ac.uk. Prioritize these sources.";
+    case "external_nice":
+      return "Search scope preference: external web only using SearXNG with this filter: site:nice.org.uk.";
+    case "external_rcem":
+      return "Search scope preference: external web only using SearXNG with this filter: site:rcem.ac.uk.";
+    default:
+      return "Search scope preference: all sources. Start with local documents, then external web if needed.";
+  }
+}
+
 // Create a new agent thread
 export const createAgentThread = mutation({
   args: {},
@@ -26,12 +49,14 @@ export const sendMessage = mutation({
   args: {
     threadId: v.string(),
     prompt: v.string(),
+    searchScope: v.optional(searchScopeValidator),
   },
-  handler: async (ctx, { threadId, prompt }) => {
+  handler: async (ctx, { threadId, prompt, searchScope }) => {
+    const enrichedPrompt = `${searchScopeInstruction(searchScope)}\n\nUser question: ${prompt}`;
     // Save the user message transactionally
     const { messageId } = await saveMessage(ctx, components.agent, {
       threadId,
-      prompt,
+      prompt: enrichedPrompt,
     });
     // Schedule the async generation
     await ctx.scheduler.runAfter(

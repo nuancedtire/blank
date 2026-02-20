@@ -36,9 +36,10 @@ Use markdown naturally — headers, bold, nested bullet lists — whatever fits 
 ## SEARCH STRATEGY
 1. First use ragSearch to find semantically relevant content (best for specific questions)
 2. Then use searchGuidelines for keyword-based search if RAG doesn't find enough
-3. If local guidelines are insufficient, search RCEM with searchRCEM, then NICE with searchNICE
+3. If local guidelines are insufficient, use searchExternalWeb with site filters (NICE/RCEM as requested)
 4. If the first search doesn't cover the question well, try additional searches with different terms
-5. Always search — never answer from memory alone`;
+5. Always obey any explicit "Search scope preference" in the latest user message
+6. Always search — never answer from memory alone`;
 
 // Tool: search guidelines via full-text search on the guidelines table
 const searchGuidelinesTool = createTool({
@@ -305,6 +306,102 @@ const searchRCEMTool = createTool({
   },
 });
 
+// Tool: search external guidance using SearXNG with strict site filters
+const searchExternalWebTool = createTool({
+  description:
+    "Search external guidance via SearXNG, constrained to NICE and/or RCEM websites. Use this when local guidelines are insufficient or when the user requests external-only search.",
+  args: z.object({
+    query: z
+      .string()
+      .describe("Clinical query to search, e.g. 'head injury CT criteria adults'"),
+    site: z
+      .enum(["nice", "rcem", "both"])
+      .optional()
+      .describe("Restrict search to NICE, RCEM, or both sites."),
+  }),
+  handler: async (_ctx, args): Promise<Record<string, unknown>> => {
+    const siteFilter =
+      args.site === "nice"
+        ? "site:nice.org.uk"
+        : args.site === "rcem"
+          ? "site:rcem.ac.uk"
+          : "site:nice.org.uk OR site:rcem.ac.uk";
+
+    const scopedQuery = `${args.query} ${siteFilter}`.trim();
+    const searxBaseUrl = "https://pdfize.exe.xyz";
+    const apiUrl = `${searxBaseUrl}/search?format=json&q=${encodeURIComponent(scopedQuery)}`;
+
+    try {
+      const response = await fetch(apiUrl, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!response.ok) {
+        return {
+          found: false,
+          source: "SearXNG",
+          message: "SearXNG request failed.",
+          siteFilter,
+          searchUrl: `${searxBaseUrl}/search?q=${encodeURIComponent(scopedQuery)}`,
+        };
+      }
+
+      const data = (await response.json()) as {
+        results?: Array<{
+          title?: string;
+          url?: string;
+          content?: string;
+          engine?: string;
+        }>;
+      };
+
+      const filteredResults = (data.results ?? [])
+        .filter((item) => {
+          const url = item.url ?? "";
+          return url.includes("nice.org.uk") || url.includes("rcem.ac.uk");
+        })
+        .slice(0, 8)
+        .map((item) => ({
+          title: item.title ?? "Untitled",
+          url: item.url ?? "",
+          snippet: item.content ?? "",
+          source: item.url?.includes("nice.org.uk")
+            ? "NICE"
+            : item.url?.includes("rcem.ac.uk")
+              ? "RCEM"
+              : "External",
+          engine: item.engine ?? "unknown",
+        }));
+
+      if (filteredResults.length === 0) {
+        return {
+          found: false,
+          source: "SearXNG",
+          siteFilter,
+          message: "No external NICE/RCEM results found.",
+          searchUrl: `${searxBaseUrl}/search?q=${encodeURIComponent(scopedQuery)}`,
+        };
+      }
+
+      return {
+        found: true,
+        source: "SearXNG",
+        siteFilter,
+        count: filteredResults.length,
+        results: filteredResults,
+      };
+    } catch {
+      return {
+        found: false,
+        source: "SearXNG",
+        siteFilter,
+        message: "Could not reach SearXNG endpoint.",
+        searchUrl: `${searxBaseUrl}/search?q=${encodeURIComponent(scopedQuery)}`,
+      };
+    }
+  },
+});
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const guidelineAgent: Agent<object, any> = new Agent(components.agent, {
   name: "ED Guidelines Assistant",
@@ -313,6 +410,7 @@ export const guidelineAgent: Agent<object, any> = new Agent(components.agent, {
   tools: {
     searchGuidelines: searchGuidelinesTool,
     ragSearch: ragSearchTool,
+    searchExternalWeb: searchExternalWebTool,
     searchNICE: searchNICETool,
     searchRCEM: searchRCEMTool,
   },
