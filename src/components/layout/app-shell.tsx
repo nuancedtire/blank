@@ -1,5 +1,16 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { Search, FolderOpen, Settings, LogOut, Bell, CheckCircle2, Info, AlertTriangle, Megaphone, X } from "lucide-react";
+import {
+  Search,
+  FolderOpen,
+  Settings,
+  LogOut,
+  Bell,
+  CheckCircle2,
+  Info,
+  AlertTriangle,
+  Megaphone,
+  X,
+} from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { api } from "convex/_generated/api";
@@ -57,11 +68,7 @@ function notificationIcon(type: "info" | "warning" | "success" | "alert") {
   }
 }
 
-function NotificationList({
-  onClose,
-}: {
-  onClose?: () => void;
-}) {
+function NotificationList({ onClose }: { onClose?: () => void }) {
   const { data: notifications } = useQuery(
     convexQuery(api.notifications.list, { limit: 20 }),
   );
@@ -112,7 +119,10 @@ function NotificationList({
       <ScrollArea className="h-[420px] md:h-[420px]">
         <div className="divide-y">
           {notifications?.map((n: any) => (
-            <div key={n._id} className="group px-4 py-3 hover:bg-accent/40 transition-colors">
+            <div
+              key={n._id}
+              className="group px-4 py-3 hover:bg-accent/40 transition-colors"
+            >
               <div className="flex items-start gap-2.5">
                 <div className="mt-0.5">{notificationIcon(n.type)}</div>
                 <button
@@ -121,10 +131,17 @@ function NotificationList({
                   onClick={() => handleOpen(n)}
                 >
                   <div className="flex items-center gap-1.5">
-                    <p className={cn("text-sm font-medium truncate", !n.isRead && "text-foreground")}>
+                    <p
+                      className={cn(
+                        "text-sm font-medium truncate",
+                        !n.isRead && "text-foreground",
+                      )}
+                    >
                       {n.title}
                     </p>
-                    {!n.isRead && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                    {!n.isRead && (
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                    )}
                   </div>
                   <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
                     {n.message}
@@ -149,7 +166,9 @@ function NotificationList({
             <div className="px-4 py-12 text-center text-muted-foreground">
               <Bell className="mx-auto mb-3 h-7 w-7 opacity-30" />
               <p className="text-sm font-medium">No notifications yet</p>
-              <p className="text-xs mt-1">Admin alerts and updates appear here.</p>
+              <p className="text-xs mt-1">
+                Admin alerts and updates appear here.
+              </p>
             </div>
           )}
         </div>
@@ -159,7 +178,9 @@ function NotificationList({
 }
 
 function NotificationCenter() {
-  const { data: unreadCount } = useQuery(convexQuery(api.notifications.getUnreadCount, {}));
+  const { data: unreadCount } = useQuery(
+    convexQuery(api.notifications.getUnreadCount, {}),
+  );
   const count = unreadCount ?? 0;
   const badgeText = count > 99 ? "99+" : String(count);
 
@@ -331,7 +352,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       <main className="relative z-10 min-h-[calc(100vh-4rem)] pb-20 md:pb-8">
-        <div className="max-w-7xl mx-auto p-4 lg:p-8">{children}</div>
+        <div className="max-w-8xl mx-auto p-4 lg:p-8">{children}</div>
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)] md:hidden">
