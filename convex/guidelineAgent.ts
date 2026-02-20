@@ -320,33 +320,18 @@ const searchExternalWebTool = createTool({
       .describe("Restrict search to NICE, RCEM, or both sites."),
   }),
   handler: async (_ctx, args): Promise<Record<string, unknown>> => {
-    const siteFilter =
-      args.site === "nice"
-        ? "site:nice.org.uk"
-        : args.site === "rcem"
-          ? "site:rcem.ac.uk"
-          : "site:nice.org.uk OR site:rcem.ac.uk";
-
-    const scopedQuery = `${args.query} ${siteFilter}`.trim();
     const searxBaseUrl = "https://pdfize.exe.xyz";
-    const apiUrl = `${searxBaseUrl}/search?format=json&q=${encodeURIComponent(scopedQuery)}`;
 
-    try {
+    const fetchSearx = async (q: string) => {
+      const apiUrl = `${searxBaseUrl}/search?format=json&q=${encodeURIComponent(q)}`;
       const response = await fetch(apiUrl, {
         headers: { Accept: "application/json" },
         signal: AbortSignal.timeout(10000),
       });
       if (!response.ok) {
-        return {
-          found: false,
-          source: "SearXNG",
-          message: "SearXNG request failed.",
-          siteFilter,
-          searchUrl: `${searxBaseUrl}/search?q=${encodeURIComponent(scopedQuery)}`,
-        };
+        throw new Error("SearXNG request failed");
       }
-
-      const data = (await response.json()) as {
+      return (await response.json()) as {
         results?: Array<{
           title?: string;
           url?: string;
@@ -354,39 +339,92 @@ const searchExternalWebTool = createTool({
           engine?: string;
         }>;
       };
+    };
 
-      const filteredResults = (data.results ?? [])
-        .filter((item) => {
+    try {
+      const isNiceOnly = args.site === "nice";
+      const isRcemOnly = args.site === "rcem";
+      const isBoth = !isNiceOnly && !isRcemOnly;
+
+      const dataList = isBoth
+        ? await Promise.all([
+            fetchSearx(`${args.query} site:nice.org.uk filetype:pdf`),
+            fetchSearx(`${args.query} site:rcem.ac.uk filetype:pdf`),
+          ])
+        : isNiceOnly
+          ? [await fetchSearx(`${args.query} site:nice.org.uk filetype:pdf`)]
+          : [await fetchSearx(`${args.query} site:rcem.ac.uk filetype:pdf`)];
+
+      const perSource = dataList.map((data) =>
+        (data.results ?? []).filter((item) => {
           const url = item.url ?? "";
           return url.includes("nice.org.uk") || url.includes("rcem.ac.uk");
+        }),
+      );
+
+      let merged: Array<{
+        title?: string;
+        url?: string;
+        content?: string;
+        engine?: string;
+      }> = [];
+      if (isBoth) {
+        const [nice, rcem] = perSource;
+        const maxLen = Math.max(nice.length, rcem.length);
+        for (let i = 0; i < maxLen; i++) {
+          if (nice[i]) merged.push(nice[i]);
+          if (rcem[i]) merged.push(rcem[i]);
+        }
+      } else {
+        merged = perSource[0] ?? [];
+      }
+
+      const seen = new Set<string>();
+      const filteredResults = merged
+        .filter((item) => {
+          const url = item.url ?? "";
+          if (!url || seen.has(url)) return false;
+          seen.add(url);
+          return true;
         })
         .slice(0, 8)
-        .map((item) => ({
-          title: item.title ?? "Untitled",
-          url: item.url ?? "",
-          snippet: item.content ?? "",
-          source: item.url?.includes("nice.org.uk")
-            ? "NICE"
-            : item.url?.includes("rcem.ac.uk")
-              ? "RCEM"
-              : "External",
-          engine: item.engine ?? "unknown",
-        }));
+        .map((item) => {
+          const url = item.url ?? "";
+          return {
+            title: item.title ?? "Untitled",
+            url,
+            snippet: item.content ?? "",
+            source: url.includes("nice.org.uk")
+              ? "NICE"
+              : url.includes("rcem.ac.uk")
+                ? "RCEM"
+                : "External",
+            engine: item.engine ?? "unknown",
+          };
+        });
 
       if (filteredResults.length === 0) {
         return {
           found: false,
           source: "SearXNG",
-          siteFilter,
+          siteFilter: isBoth
+            ? "(site:nice.org.uk OR site:rcem.ac.uk) filetype:pdf"
+            : isNiceOnly
+              ? "site:nice.org.uk filetype:pdf"
+              : "site:rcem.ac.uk filetype:pdf",
           message: "No external NICE/RCEM results found.",
-          searchUrl: `${searxBaseUrl}/search?q=${encodeURIComponent(scopedQuery)}`,
+          searchUrl: `${searxBaseUrl}/search?q=${encodeURIComponent(args.query)}`,
         };
       }
 
       return {
         found: true,
         source: "SearXNG",
-        siteFilter,
+        siteFilter: isBoth
+          ? "(site:nice.org.uk OR site:rcem.ac.uk) filetype:pdf"
+          : isNiceOnly
+            ? "site:nice.org.uk filetype:pdf"
+            : "site:rcem.ac.uk filetype:pdf",
         count: filteredResults.length,
         results: filteredResults,
       };
@@ -394,9 +432,14 @@ const searchExternalWebTool = createTool({
       return {
         found: false,
         source: "SearXNG",
-        siteFilter,
+        siteFilter:
+          args.site === "nice"
+            ? "site:nice.org.uk filetype:pdf"
+            : args.site === "rcem"
+              ? "site:rcem.ac.uk filetype:pdf"
+              : "(site:nice.org.uk OR site:rcem.ac.uk) filetype:pdf",
         message: "Could not reach SearXNG endpoint.",
-        searchUrl: `${searxBaseUrl}/search?q=${encodeURIComponent(scopedQuery)}`,
+        searchUrl: `${searxBaseUrl}/search?q=${encodeURIComponent(args.query)}`,
       };
     }
   },

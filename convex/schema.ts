@@ -48,6 +48,7 @@ export default defineSchema({
     // Original file in storage (if uploaded as PDF/DOCX)
     fileKey: v.optional(v.string()),
     storageId: v.optional(v.id("_storage")),
+    thumbnailStorageId: v.optional(v.id("_storage")),
     // Link back to uploaded document
     uploadedDocumentId: v.optional(v.id("uploadedDocuments")),
     // Metadata
@@ -79,6 +80,7 @@ export default defineSchema({
   // Uploaded documents (PDFs, text files processed into guidelines)
   uploadedDocuments: defineTable({
     storageId: v.id("_storage"),
+    thumbnailStorageId: v.optional(v.id("_storage")),
     fileName: v.string(),
     fileType: v.string(),
     source: v.union(v.literal("local"), v.literal("rcem"), v.literal("nice")),

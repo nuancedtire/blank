@@ -55,6 +55,7 @@ import {
   Archive,
 } from "lucide-react";
 import { extractTextFromPdf } from "@/lib/pdf-extract";
+import { generatePdfThumbnailBlob } from "@/lib/pdf-thumbnail";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "motion/react";
@@ -113,14 +114,35 @@ function ManageDocumentsPage() {
         });
         const json = await result.json();
         const storageId = (json as any).storageId;
+        let thumbnailStorageId: string | undefined;
+
+        // Optional: generate and upload page-1 thumbnail for PDFs.
+        if (
+          file.type === "application/pdf" ||
+          file.name.toLowerCase().endsWith(".pdf")
+        ) {
+          setUploadProgress(`Generating thumbnail for ${file.name}...`);
+          const thumbnailBlob = await generatePdfThumbnailBlob(file);
+          if (thumbnailBlob) {
+            const thumbnailUploadUrl = await generateUploadUrl({});
+            const thumbnailUploadResult = await fetch(thumbnailUploadUrl, {
+              method: "POST",
+              headers: { "Content-Type": "image/jpeg" },
+              body: thumbnailBlob,
+            });
+            const thumbnailJson = await thumbnailUploadResult.json();
+            thumbnailStorageId = (thumbnailJson as any).storageId;
+          }
+        }
 
         // Step 3: Save document metadata (no category — LLM will infer)
         const documentId = await saveDocument({
           storageId,
+          thumbnailStorageId: thumbnailStorageId as any,
           fileName: file.name,
           fileType: file.type,
           source: selectedSource,
-        });
+        } as any);
 
         // Step 4: Extract text
         setUploadProgress(`Extracting text from ${file.name}...`);

@@ -34,6 +34,7 @@ export const generateUploadUrl = mutation({
 export const saveDocument = mutation({
   args: {
     storageId: v.id("_storage"),
+    thumbnailStorageId: v.optional(v.id("_storage")),
     fileName: v.string(),
     fileType: v.string(),
     source: v.union(v.literal("local"), v.literal("rcem"), v.literal("nice")),
@@ -41,6 +42,7 @@ export const saveDocument = mutation({
   handler: async (ctx, args) => {
     const id = await ctx.db.insert("uploadedDocuments", {
       storageId: args.storageId,
+      thumbnailStorageId: args.thumbnailStorageId,
       fileName: args.fileName,
       fileType: args.fileType,
       source: args.source,
@@ -126,6 +128,7 @@ export const indexDocument = action({
           category: llmResult.category,
           keywords: llmResult.tags,
           storageId: doc.storageId,
+          thumbnailStorageId: doc.thumbnailStorageId,
           uploadedDocumentId: args.documentId,
           contentHash,
           likelyVersionOf: likelyVersionOf ?? undefined,
@@ -262,6 +265,7 @@ export const createGuidelineFromDocument = internalMutation({
     category: v.string(),
     keywords: v.array(v.string()),
     storageId: v.id("_storage"),
+    thumbnailStorageId: v.optional(v.id("_storage")),
     uploadedDocumentId: v.id("uploadedDocuments"),
     contentHash: v.string(),
     likelyVersionOf: v.optional(v.id("guidelines")),
@@ -279,6 +283,7 @@ export const createGuidelineFromDocument = internalMutation({
       status: "draft",
       source: args.source,
       storageId: args.storageId,
+      thumbnailStorageId: args.thumbnailStorageId,
       uploadedDocumentId: args.uploadedDocumentId,
       contentHash: args.contentHash,
       likelyVersionOf: args.likelyVersionOf,
@@ -352,6 +357,30 @@ export const getFileUrl = query({
   },
 });
 
+export const setGuidelineThumbnail = mutation({
+  args: {
+    guidelineId: v.id("guidelines"),
+    thumbnailStorageId: v.id("_storage"),
+  },
+  returns: v.null(),
+  handler: async (ctx, { guidelineId, thumbnailStorageId }) => {
+    const guideline = await ctx.db.get(guidelineId);
+    if (!guideline) return null;
+
+    await ctx.db.patch(guidelineId, {
+      thumbnailStorageId,
+      lastUpdated: Date.now(),
+    });
+
+    if (guideline.uploadedDocumentId) {
+      await ctx.db.patch(guideline.uploadedDocumentId, {
+        thumbnailStorageId,
+      });
+    }
+    return null;
+  },
+});
+
 // Delete document, its guideline entry, RAG embeddings, and stored file
 export const deleteDocument = action({
   args: { documentId: v.id("uploadedDocuments") },
@@ -381,6 +410,9 @@ export const deleteDocument = action({
 
     // Delete file from storage
     await ctx.storage.delete(doc.storageId);
+    if (doc.thumbnailStorageId) {
+      await ctx.storage.delete(doc.thumbnailStorageId);
+    }
 
     // Delete document record
     await ctx.runMutation(internal.documents.removeDocument, { documentId });
