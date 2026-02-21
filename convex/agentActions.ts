@@ -50,6 +50,32 @@ function searchScopeInstruction(scope?: string): string {
   }
 }
 
+type AiRuntimeState =
+  | "active"
+  | "out_of_credits"
+  | "degraded"
+  | "not_configured"
+  | "unknown";
+
+function classifyAiFailure(error?: string): AiRuntimeState {
+  const value = (error ?? "").toLowerCase();
+  if (!value) return "degraded";
+  if (
+    /insufficient|quota|credit|billing|payment required|out of credits|exceeded your current quota|account balance/.test(
+      value,
+    )
+  ) {
+    return "out_of_credits";
+  }
+  if (/api key|unauthorized|authentication|invalid key|forbidden|401|403/.test(value)) {
+    return "not_configured";
+  }
+  if (/rate limit|too many requests|429/.test(value)) {
+    return "degraded";
+  }
+  return "degraded";
+}
+
 function messageContentToText(content: unknown): string {
   if (typeof content === "string") return content.trim();
   if (!Array.isArray(content)) return "";
@@ -413,6 +439,99 @@ export const listMyThreads = query({
     return includeArchived
       ? result.page
       : result.page.filter((thread) => thread.status === "active");
+  },
+});
+
+// Runtime AI status for header badge
+export const getAiRuntimeStatus = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireCurrentUser(ctx);
+    const hasCerebrasKey = Boolean(process.env.CEREBRAS_API_KEY?.trim());
+
+    if (!hasCerebrasKey) {
+      return {
+        state: "not_configured" as AiRuntimeState,
+        label: "AI not configured",
+        detail: "CEREBRAS_API_KEY is missing.",
+        checkedAt: Date.now(),
+      };
+    }
+
+    const threadPage = await ctx.runQuery(components.agent.threads.listThreadsByUserId, {
+      userId: user._id,
+      order: "desc",
+      paginationOpts: { numItems: 8, cursor: null },
+    });
+
+    if (!threadPage.page.length) {
+      return {
+        state: "unknown" as AiRuntimeState,
+        label: "AI unverified",
+        detail: "No assistant responses yet for this account.",
+        checkedAt: Date.now(),
+      };
+    }
+
+    const messagePages = await Promise.all(
+      threadPage.page.map((thread) =>
+        ctx.runQuery(components.agent.messages.listMessagesByThreadId, {
+          threadId: thread._id,
+          order: "desc",
+          excludeToolMessages: true,
+          statuses: ["success", "failed"],
+          paginationOpts: { numItems: 12, cursor: null },
+        }),
+      ),
+    );
+
+    let latestSuccessAt = 0;
+    let latestFailure:
+      | {
+          at: number;
+          error?: string;
+        }
+      | null = null;
+
+    for (const page of messagePages) {
+      for (const row of page.page) {
+        if (row.message?.role !== "assistant") continue;
+        if (row.status === "success" && row._creationTime > latestSuccessAt) {
+          latestSuccessAt = row._creationTime;
+        }
+        if (row.status === "failed") {
+          if (!latestFailure || row._creationTime > latestFailure.at) {
+            latestFailure = {
+              at: row._creationTime,
+              error: row.error,
+            };
+          }
+        }
+      }
+    }
+
+    if (latestFailure && latestFailure.at > latestSuccessAt) {
+      const state = classifyAiFailure(latestFailure.error);
+      return {
+        state,
+        label:
+          state === "out_of_credits"
+            ? "AI out of credits"
+            : state === "not_configured"
+              ? "AI auth error"
+              : "AI degraded",
+        detail: latestFailure.error ?? "Most recent assistant response failed.",
+        checkedAt: Date.now(),
+        lastFailureAt: latestFailure.at,
+      };
+    }
+
+    return {
+      state: "active" as AiRuntimeState,
+      label: "AI active",
+      detail: "Recent assistant responses are succeeding.",
+      checkedAt: Date.now(),
+    };
   },
 });
 

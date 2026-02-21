@@ -70,6 +70,41 @@ function notificationIcon(type: "info" | "warning" | "success" | "alert") {
   }
 }
 
+function aiBadgeClasses(state?: string) {
+  switch (state) {
+    case "active":
+      return {
+        wrap: "bg-emerald-500/10 border-emerald-500/25",
+        dot: "bg-emerald-500 animate-pulse",
+        text: "text-emerald-600 dark:text-emerald-400",
+      };
+    case "out_of_credits":
+      return {
+        wrap: "bg-rose-500/10 border-rose-500/25",
+        dot: "bg-rose-500",
+        text: "text-rose-600 dark:text-rose-400",
+      };
+    case "not_configured":
+      return {
+        wrap: "bg-amber-500/10 border-amber-500/25",
+        dot: "bg-amber-500",
+        text: "text-amber-600 dark:text-amber-400",
+      };
+    case "degraded":
+      return {
+        wrap: "bg-orange-500/10 border-orange-500/25",
+        dot: "bg-orange-500",
+        text: "text-orange-600 dark:text-orange-400",
+      };
+    default:
+      return {
+        wrap: "bg-muted border-border",
+        dot: "bg-muted-foreground/60 animate-pulse",
+        text: "text-muted-foreground",
+      };
+  }
+}
+
 function NotificationList({ onClose }: { onClose?: () => void }) {
   const { data: notifications } = useQuery(
     convexQuery(api.notifications.list, { limit: 20 }),
@@ -242,8 +277,14 @@ function NotificationCenter() {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
   const { data: user } = useQuery(convexQuery(api.users.me, {}));
+  const { data: aiStatus } = useQuery(
+    convexQuery((api as any).agentActions.getAiRuntimeStatus, {}),
+  );
   const isAdmin = user?.role === "admin";
   const navItems = isAdmin ? [...baseNavItems, adminNavItem] : baseNavItems;
+  const badgeStyles = aiBadgeClasses(aiStatus?.state);
+  const badgeLabel = aiStatus?.label ?? "Checking AI";
+  const badgeTitle = aiStatus?.detail ?? "Checking assistant runtime health.";
 
   return (
     <div className="min-h-screen bg-background text-foreground relative overflow-x-hidden">
@@ -299,9 +340,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="flex items-center gap-2">
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent/10 border border-accent/20">
-              <div className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-              <span className="text-xs font-medium text-accent">AI Active</span>
+            <div
+              title={badgeTitle}
+              className={cn(
+                "hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border",
+                badgeStyles.wrap,
+              )}
+            >
+              <div className={cn("w-2 h-2 rounded-full", badgeStyles.dot)} />
+              <span className={cn("text-xs font-medium", badgeStyles.text)}>
+                {badgeLabel}
+              </span>
             </div>
 
             <ThemeToggle variant="ghost" size="sm" />

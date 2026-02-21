@@ -101,7 +101,7 @@ export function GuidelineCard({
                   "h-4 w-4",
                   isPinned
                     ? "fill-yellow-400 text-yellow-400"
-                    : "text-muted-foreground"
+                    : "text-muted-foreground",
                 )}
               />
             </Button>
@@ -113,17 +113,13 @@ export function GuidelineCard({
   );
 }
 
-function GuidelineThumb({
-  thumbnailUrl,
-}: {
-  thumbnailUrl?: string | null;
-}) {
+function GuidelineThumb({ thumbnailUrl }: { thumbnailUrl?: string | null }) {
   if (thumbnailUrl) {
     return (
       <img
         src={thumbnailUrl}
         alt="Guideline cover"
-        className="h-12 w-12 shrink-0 rounded-2xl border border-border/70 object-cover bg-muted/30"
+        className="h-20 w-20 shrink-0 rounded-2xl border border-border/70 object-cover bg-muted/30"
         loading="lazy"
       />
     );

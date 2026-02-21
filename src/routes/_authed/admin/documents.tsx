@@ -46,6 +46,7 @@ import {
   ChevronsUpDown,
   GitBranch,
   Archive,
+  ExternalLink,
 } from "lucide-react";
 import { extractTextFromPdf } from "@/lib/pdf-extract";
 import { generatePdfThumbnailBlob } from "@/lib/pdf-thumbnail";
@@ -557,78 +558,34 @@ function ReviewPanel({ guideline }: { guideline: any }) {
   // ── Version detection mode (high confidence) ────────────────────────────────
   if (likelyVersion) {
     return (
-      <div className="border-t px-4 py-4 space-y-4">
-        {/* Version detection banner */}
-        <div className="rounded-xl border-2 border-blue-500/30 bg-blue-500/5 p-4 space-y-3">
-          <div className="flex items-start gap-2.5">
-            <div className="rounded-lg bg-blue-500/15 p-1.5 mt-0.5 shrink-0">
-              <GitBranch className="h-3.5 w-3.5 text-blue-500" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold leading-snug">
-                Possible replacement found
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                This upload looks like an update to an existing published
-                guideline. Choose whether to replace that current guideline or
-                publish this as a separate one.
-              </p>
-            </div>
-          </div>
-
-          {/* Matched guideline */}
-          <div className="rounded-lg border bg-card px-3 py-2.5">
-            <p className="text-sm font-medium leading-snug">
-              {likelyVersion.title}
-            </p>
-            <div className="flex items-center gap-2 mt-1">
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                v{likelyVersion.version}
-              </Badge>
-              <span className="text-[10px] text-muted-foreground">
-                {likelyVersion.source.toUpperCase()} · {likelyVersion.category}
-              </span>
-              <span className="text-[10px] text-muted-foreground">
-                · updated{" "}
-                {new Date(likelyVersion.lastUpdated).toLocaleDateString(
-                  "en-GB",
-                )}
-              </span>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              className="flex-1 gap-1.5 h-8"
-              onClick={() => handleReplace(likelyVersion._id)}
-              disabled={isReplacing}
-            >
-              {isReplacing ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Archive className="h-3.5 w-3.5" />
-              )}
-              Replace current guideline
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-1 h-8"
-              onClick={handlePublish}
-              disabled={isPublishing}
-            >
-              {isPublishing ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : null}
-              Publish as separate guideline
-            </Button>
-          </div>
-          <p className="text-[10px] text-muted-foreground leading-relaxed">
-            <strong>Replace current guideline</strong> archives the current one
-            and publishes this upload at the same URL.{" "}
-            <strong>Publish as separate guideline</strong> keeps both entries.
+      <div className="border-t px-4 py-4 space-y-3.5">
+        <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-3.5 space-y-2.5">
+          <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+            <GitBranch className="h-3.5 w-3.5" />
+            High-confidence match found
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Review the matched guideline first, then choose whether to replace
+            it or publish this upload as a separate entry.
+          </p>
+          <ExistingGuidelineCandidate
+            guideline={likelyVersion}
+            isReplacing={isReplacing}
+            onReplace={() => handleReplace(likelyVersion._id)}
+            replaceLabel="Replace this guideline"
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full h-8"
+            onClick={handlePublish}
+            disabled={isPublishing}
+          >
+            {isPublishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            Publish as separate guideline
+          </Button>
+          <p className="text-[10px] text-muted-foreground">
+            Replace keeps the old URL and archives the old record.
           </p>
         </div>
 
@@ -673,37 +630,22 @@ function ReviewPanel({ guideline }: { guideline: any }) {
         <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3 space-y-2">
           <p className="text-xs font-medium text-blue-600 dark:text-blue-400 flex items-center gap-1">
             <GitBranch className="h-3 w-3" />
-            Possibly related existing guidelines
+            Possible existing guideline matches
           </p>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {similarGuidelines.map((similar: any) => (
-              <div key={similar._id} className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-xs font-medium truncate">{similar.title}</p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {similar.source.toUpperCase()} · v{similar.version} · {similar.category}
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-6 text-[10px] px-2 shrink-0 border-blue-500/30 text-blue-600 hover:bg-blue-500/10"
-                  onClick={() => handleReplace(similar._id)}
-                  disabled={isReplacing}
-                >
-                  {isReplacing ? (
-                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                  ) : (
-                    <Archive className="h-2.5 w-2.5 mr-0.5" />
-                  )}
-                  Replace
-                </Button>
-              </div>
+              <ExistingGuidelineCandidate
+                key={similar._id}
+                guideline={similar}
+                isReplacing={isReplacing}
+                onReplace={() => handleReplace(similar._id)}
+                replaceLabel="Replace with this"
+              />
             ))}
           </div>
           <p className="text-[10px] text-muted-foreground">
-            Choose Replace to treat this as an update, or publish below to keep
-            it separate.
+            Open the matched guideline or source document first, then replace if
+            this upload is a true update.
           </p>
         </div>
       )}
@@ -719,6 +661,95 @@ function ReviewPanel({ guideline }: { guideline: any }) {
         isPublishing={isPublishing}
         onPublish={handlePublish}
       />
+    </div>
+  );
+}
+
+function ExistingGuidelineCandidate({
+  guideline,
+  isReplacing,
+  onReplace,
+  replaceLabel,
+}: {
+  guideline: any;
+  isReplacing: boolean;
+  onReplace: () => void;
+  replaceLabel: string;
+}) {
+  const { data: sourceFileUrl } = useQuery({
+    ...convexQuery(api.documents.getFileUrl, {
+      storageId: guideline.storageId ?? undefined,
+    }),
+    enabled: !!guideline.storageId,
+  });
+
+  const guidelineHref = guideline.slug
+    ? `/guideline/${encodeURIComponent(guideline.slug)}`
+    : null;
+
+  return (
+    <div className="rounded-lg border bg-card px-3 py-2.5 space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-medium leading-snug truncate">{guideline.title}</p>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1">
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+              v{guideline.version}
+            </Badge>
+            <span className="text-[10px] text-muted-foreground">
+              {guideline.source.toUpperCase()} · {guideline.category}
+            </span>
+            <span className="text-[10px] text-muted-foreground">
+              updated {new Date(guideline.lastUpdated).toLocaleDateString("en-GB")}
+            </span>
+          </div>
+        </div>
+        <Badge
+          variant={guideline.status === "published" ? "default" : "secondary"}
+          className="text-[10px] px-1.5 py-0 capitalize shrink-0"
+        >
+          {guideline.status}
+        </Badge>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        {guidelineHref && (
+          <a href={guidelineHref} target="_blank" rel="noopener noreferrer">
+            <Button variant="ghost" size="sm" className="h-7 text-[11px] gap-1.5">
+              <ExternalLink className="h-3 w-3" />
+              Open guideline
+            </Button>
+          </a>
+        )}
+        {sourceFileUrl && (
+          <a href={sourceFileUrl} target="_blank" rel="noopener noreferrer">
+            <Button variant="ghost" size="sm" className="h-7 text-[11px] gap-1.5">
+              <Eye className="h-3 w-3" />
+              Open source doc
+            </Button>
+          </a>
+        )}
+        {!sourceFileUrl && (
+          <span className="text-[10px] text-muted-foreground self-center">
+            Source file unavailable
+          </span>
+        )}
+      </div>
+
+      <Button
+        variant="outline"
+        size="sm"
+        className="w-full h-7 text-[11px] gap-1.5 border-blue-500/25 bg-blue-500/[0.03] text-blue-700 dark:text-blue-300 hover:bg-blue-500/12 hover:border-blue-500/45 hover:text-blue-800 dark:hover:text-blue-200 transition-colors"
+        onClick={onReplace}
+        disabled={isReplacing}
+      >
+        {isReplacing ? (
+          <Loader2 className="h-3 w-3 animate-spin" />
+        ) : (
+          <Archive className="h-3 w-3" />
+        )}
+        {replaceLabel}
+      </Button>
     </div>
   );
 }

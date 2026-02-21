@@ -76,6 +76,8 @@ export const indexDocument = action({
       status: "indexing",
     });
 
+    let createdGuidelineId: Id<"guidelines"> | null = null;
+
     try {
       // Get the document metadata
       const doc = await ctx.runQuery(internal.documents.getDocument, {
@@ -144,6 +146,7 @@ export const indexDocument = action({
           potentialDuplicateOf: similar,
         },
       );
+      createdGuidelineId = guidelineId;
 
       // Step 4: Add to RAG index with the cleaned content
       await rag.add(ctx, {
@@ -167,6 +170,30 @@ export const indexDocument = action({
       });
     } catch (e) {
       console.error("Failed to index document:", e);
+
+      // Best-effort rollback: avoid leaving orphaned guideline/RAG entries on partial failure.
+      if (createdGuidelineId) {
+        try {
+          await ctx.runMutation(internal.documents.deleteGuidelineCascade, {
+            guidelineId: createdGuidelineId,
+          });
+        } catch (cleanupError) {
+          console.error("Guideline rollback failed:", cleanupError);
+        }
+
+        try {
+          const namespace = await rag.getNamespace(ctx, { namespace: "guidelines" });
+          if (namespace) {
+            await rag.deleteByKey(ctx, {
+              namespaceId: namespace.namespaceId,
+              key: args.documentId,
+            });
+          }
+        } catch (cleanupError) {
+          console.error("RAG rollback failed:", cleanupError);
+        }
+      }
+
       await ctx.runMutation(internal.documents.updateStatusWithError, {
         documentId: args.documentId,
         errorMessage: e instanceof Error ? e.message : "Unknown indexing error",
@@ -280,6 +307,18 @@ export const createGuidelineFromDocument = internalMutation({
     potentialDuplicateOf: v.array(v.id("guidelines")),
   },
   handler: async (ctx, args) => {
+    const existingForHash = await ctx.db
+      .query("guidelines")
+      .withIndex("by_contentHash", (q) => q.eq("contentHash", args.contentHash))
+      .collect();
+    const activeDuplicate = existingForHash.find((g) => g.status !== "archived");
+    if (activeDuplicate) {
+      throw new ConvexError({
+        code: "DUPLICATE_CONTENT_HASH",
+        message: `This file has already been uploaded as "${activeDuplicate.title}". If this is a new version, delete the old one first or use the replace flow.`,
+      });
+    }
+
     return await ctx.db.insert("guidelines", {
       title: args.title,
       slug: args.slug,
@@ -684,13 +723,14 @@ export const checkContentHash = internalQuery({
   args: { contentHash: v.string() },
   returns: v.any(),
   handler: async (ctx, { contentHash }) => {
-    // Use index for lookup, then check status in JS (no filter needed)
-    const guideline = await ctx.db
+    const matches = await ctx.db
       .query("guidelines")
       .withIndex("by_contentHash", (q) => q.eq("contentHash", contentHash))
-      .first();
-    if (!guideline || guideline.status === "archived") return null;
-    return guideline;
+      .collect();
+    const activeMatch = matches
+      .filter((g) => g.status !== "archived")
+      .sort((a, b) => b.lastUpdated - a.lastUpdated)[0];
+    return activeMatch ?? null;
   },
 });
 
