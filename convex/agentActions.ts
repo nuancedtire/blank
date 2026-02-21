@@ -7,6 +7,7 @@ import {
   internalQuery,
   mutation,
   query,
+  type ActionCtx,
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
@@ -83,13 +84,20 @@ function looksAutoTitle(
 }
 
 async function maybeGenerateThreadMetadata(
-  ctx: Parameters<typeof generateResponseAsync.handler>[0],
+  ctx: ActionCtx,
   threadId: string,
 ) {
   const thread = await ctx.runQuery(components.agent.threads.getThread, { threadId });
   if (!thread) return;
 
-  const messagesPage = await ctx.runQuery(components.agent.messages.listMessagesByThreadId, {
+  const messagesPage: {
+    page: Array<{
+      message?: {
+        role?: string;
+        content?: unknown;
+      } | null;
+    }>;
+  } = await ctx.runQuery(components.agent.messages.listMessagesByThreadId, {
     threadId,
     order: "asc",
     excludeToolMessages: true,
@@ -97,9 +105,11 @@ async function maybeGenerateThreadMetadata(
     paginationOpts: { cursor: null, numItems: 12 },
   });
 
-  const userMessage = messagesPage.page.find((m) => m.message?.role === "user");
+  const userMessage = messagesPage.page.find(
+    (m: { message?: { role?: string } | null }) => m.message?.role === "user",
+  );
   const assistantMessage = messagesPage.page.find(
-    (m) => m.message?.role === "assistant",
+    (m: { message?: { role?: string } | null }) => m.message?.role === "assistant",
   );
 
   const rawUserText = userMessage ? messageContentToText(userMessage.message?.content) : "";
