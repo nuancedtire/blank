@@ -13,7 +13,7 @@ interface GuidelineCardProps {
   slug: string;
   title: string;
   category: string;
-  source: "local" | "rcem" | "nice";
+  source: string;
   summary?: string;
   version: string;
   lastUpdated: number;
@@ -25,9 +25,9 @@ interface GuidelineCardProps {
 }
 
 const sourceColors: Record<string, string> = {
-  local: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
-  rcem: "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30",
-  nice: "bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30",
+  local:
+    "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
+  legacy: "bg-muted text-muted-foreground border-border",
 };
 
 export function GuidelineCard({
@@ -61,7 +61,9 @@ export function GuidelineCard({
       >
         <GuidelineThumb thumbnailUrl={resolvedThumbnailUrl} />
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-base leading-tight truncate group-hover:text-primary transition-colors">{title}</h3>
+          <h3 className="font-semibold text-base leading-tight truncate group-hover:text-primary transition-colors">
+            {title}
+          </h3>
           {!compact && summary && (
             <p className="text-sm text-muted-foreground mt-1.5 line-clamp-1 font-light">
               {summary}
@@ -70,9 +72,12 @@ export function GuidelineCard({
           <div className="flex items-center gap-2 mt-2">
             <Badge
               variant="outline"
-              className={cn("text-xs px-2.5 py-0.5 rounded-full font-semibold border", sourceColors[source])}
+              className={cn(
+                "text-xs px-2.5 py-0.5 rounded-full font-semibold border",
+                sourceColors[source] ?? sourceColors.legacy,
+              )}
             >
-              {source.toUpperCase()}
+              {source === "local" ? "LOCAL" : "LEGACY"}
             </Badge>
             <span className="text-xs text-muted-foreground font-light">
               v{version}

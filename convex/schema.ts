@@ -44,7 +44,7 @@ export default defineSchema({
       v.literal("published"),
       v.literal("archived"),
     ),
-    source: v.union(v.literal("local"), v.literal("rcem"), v.literal("nice")),
+    source: v.literal("local"),
     // Original file in storage (if uploaded as PDF/DOCX)
     fileKey: v.optional(v.string()),
     storageId: v.optional(v.id("_storage")),
@@ -69,12 +69,11 @@ export default defineSchema({
     .index("by_slug", ["slug"])
     .index("by_category", ["category"])
     .index("by_status", ["status"])
-    .index("by_source", ["source"])
     .index("by_category_status", ["category", "status"])
     .index("by_contentHash", ["contentHash"])
     .searchIndex("search_guidelines", {
       searchField: "content",
-      filterFields: ["category", "status", "source"],
+      filterFields: ["category", "status"],
     }),
 
   // Uploaded documents (PDFs, text files processed into guidelines)
@@ -83,7 +82,7 @@ export default defineSchema({
     thumbnailStorageId: v.optional(v.id("_storage")),
     fileName: v.string(),
     fileType: v.string(),
-    source: v.union(v.literal("local"), v.literal("rcem"), v.literal("nice")),
+    source: v.literal("local"),
     status: v.union(
       v.literal("pending"),
       v.literal("indexing"),

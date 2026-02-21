@@ -103,8 +103,8 @@ function LandingPage() {
 
           <p className="text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto mb-10 animate-slide-up stagger-1">
             Instant access to Emergency Department guidelines. Ask naturally,
-            get accurate answers backed by RCEM, NICE, and your local trust
-            protocols.
+            get accurate answers backed by your uploaded local protocols, with
+            optional NICE/RCEM web lookup.
           </p>
 
           {/* Radiant Search Input */}
@@ -160,7 +160,7 @@ function LandingPage() {
             Trusted by Emergency Departments across the UK
           </p>
           <div className="flex flex-wrap items-center justify-center gap-8 opacity-60">
-            {["NHS Trusts", "RCEM", "NICE", "Local Protocols"].map((org) => (
+            {["NHS Trusts", "Local Protocols", "NICE Web", "RCEM Web"].map((org) => (
               <div key={org} className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-primary" />
                 <span className="text-sm font-medium text-foreground">
@@ -204,7 +204,7 @@ function LandingPage() {
                 icon: Clock,
                 title: "Always Current",
                 description:
-                  "Guidelines automatically updated from RCEM, NICE, and your local trust protocols.",
+                  "Upload and maintain your local protocols while still searching NICE/RCEM web guidance when needed.",
                 color: "from-primary to-primary/70",
               },
               {
@@ -275,7 +275,7 @@ function LandingPage() {
                 step: "2",
                 title: "AI Searches Guidelines",
                 description:
-                  "Our AI searches through RCEM, NICE, and local protocols instantly.",
+                  "Our AI searches uploaded local guidelines first, then NICE/RCEM web sources when needed.",
                 icon: Brain,
               },
               {

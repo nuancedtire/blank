@@ -12,7 +12,7 @@ interface GuidelineResult {
   slug: string;
   category: string;
   summary?: string;
-  source: "local" | "rcem" | "nice";
+  source: string;
   version: string;
   lastUpdated: number;
 }
@@ -30,13 +30,9 @@ const sourceLabels: Record<string, { label: string; className: string }> = {
     label: "Local",
     className: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
   },
-  rcem: {
-    label: "RCEM",
-    className: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  },
-  nice: {
-    label: "NICE",
-    className: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
+  legacy: {
+    label: "Legacy",
+    className: "bg-muted text-muted-foreground",
   },
 };
 
@@ -92,7 +88,7 @@ export function SearchResults({
         </p>
       )}
       {results.map((result) => {
-        const source = sourceLabels[result.source];
+        const source = sourceLabels[result.source] ?? sourceLabels.legacy;
         const isPinned = pinnedIds.includes(result._id);
 
         return (

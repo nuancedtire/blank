@@ -5,7 +5,7 @@ interface GuidelineContentProps {
   title: string;
   content: string;
   version: string;
-  source: "local" | "rcem" | "nice";
+  source: string;
   category: string;
   lastUpdated: number;
 }
@@ -15,13 +15,9 @@ const sourceLabels: Record<string, { label: string; className: string }> = {
     label: "Local Guideline",
     className: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
   },
-  rcem: {
-    label: "RCEM Guideline",
-    className: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  },
-  nice: {
-    label: "NICE Guideline",
-    className: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
+  legacy: {
+    label: "Legacy Guideline",
+    className: "bg-muted text-muted-foreground",
   },
 };
 
@@ -169,7 +165,7 @@ export function GuidelineContent({
   category,
   lastUpdated,
 }: GuidelineContentProps) {
-  const sourceInfo = sourceLabels[source];
+  const sourceInfo = sourceLabels[source] ?? sourceLabels.legacy;
   const html = renderMarkdown(content);
 
   return (

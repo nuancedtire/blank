@@ -37,7 +37,6 @@ export const saveDocument = mutation({
     thumbnailStorageId: v.optional(v.id("_storage")),
     fileName: v.string(),
     fileType: v.string(),
-    source: v.union(v.literal("local"), v.literal("rcem"), v.literal("nice")),
   },
   handler: async (ctx, args) => {
     const id = await ctx.db.insert("uploadedDocuments", {
@@ -45,7 +44,7 @@ export const saveDocument = mutation({
       thumbnailStorageId: args.thumbnailStorageId,
       fileName: args.fileName,
       fileType: args.fileType,
-      source: args.source,
+      source: "local",
       status: "pending",
       uploadedAt: Date.now(),
     });
@@ -116,15 +115,15 @@ export const indexDocument = action({
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "");
+      const slugWithTimestamp = `${slug}-${Date.now()}`;
 
       const guidelineId = await ctx.runMutation(
         internal.documents.createGuidelineFromDocument,
         {
           title: llmResult.title,
-          slug: slug + "-" + Date.now(),
+          slug: slugWithTimestamp,
           content: llmResult.cleanedContent,
           summary: llmResult.summary,
-          source: doc.source,
           category: llmResult.category,
           keywords: llmResult.tags,
           storageId: doc.storageId,
@@ -144,11 +143,11 @@ export const indexDocument = action({
         title: llmResult.title,
         metadata: {
           fileName: doc.fileName,
-          source: doc.source,
+          source: "local",
           guidelineId: guidelineId,
+          slug: slugWithTimestamp,
           storageId: doc.storageId,
         },
-        filterValues: [{ name: "source", value: doc.source }],
       });
 
       // Step 5: Update document status and link to guideline
@@ -261,7 +260,6 @@ export const createGuidelineFromDocument = internalMutation({
     slug: v.string(),
     content: v.string(),
     summary: v.string(),
-    source: v.union(v.literal("local"), v.literal("rcem"), v.literal("nice")),
     category: v.string(),
     keywords: v.array(v.string()),
     storageId: v.id("_storage"),
@@ -281,7 +279,7 @@ export const createGuidelineFromDocument = internalMutation({
       keywords: args.keywords,
       version: "1.0",
       status: "draft",
-      source: args.source,
+      source: "local",
       storageId: args.storageId,
       thumbnailStorageId: args.thumbnailStorageId,
       uploadedDocumentId: args.uploadedDocumentId,
@@ -392,7 +390,7 @@ export const deleteDocument = action({
 
     // Delete linked guideline if exists
     if (doc.guidelineId) {
-      await ctx.runMutation(internal.documents.deleteGuideline, {
+      await ctx.runMutation(internal.documents.deleteGuidelineCascade, {
         guidelineId: doc.guidelineId,
       });
     }
@@ -419,10 +417,151 @@ export const deleteDocument = action({
   },
 });
 
+export const purgeNonLocalContent = action({
+  args: {},
+  returns: v.object({
+    deletedDocuments: v.number(),
+    deletedDocumentFiles: v.number(),
+    deletedDocumentThumbnails: v.number(),
+    deletedGuidelines: v.number(),
+    deletedGuidelineVersions: v.number(),
+    deletedRagEntries: v.number(),
+    errors: v.array(v.string()),
+  }),
+  handler: async (ctx) => {
+    const report = {
+      deletedDocuments: 0,
+      deletedDocumentFiles: 0,
+      deletedDocumentThumbnails: 0,
+      deletedGuidelines: 0,
+      deletedGuidelineVersions: 0,
+      deletedRagEntries: 0,
+      errors: [] as string[],
+    };
+
+    const namespace = await rag.getNamespace(ctx, { namespace: "guidelines" });
+    const deletedDocumentIds = new Set<string>();
+
+    const allDocuments = (await ctx.runQuery(
+      internal.documents.listAllDocumentsForMigration,
+      {},
+    )) as any[];
+    const nonLocalDocuments = allDocuments.filter((doc) => doc.source !== "local");
+
+    for (const doc of nonLocalDocuments) {
+      const documentId = String(doc._id);
+      try {
+        if (namespace) {
+          await rag.deleteByKey(ctx, {
+            namespaceId: namespace.namespaceId,
+            key: doc._id,
+          });
+          report.deletedRagEntries += 1;
+        }
+      } catch (error) {
+        report.errors.push(
+          `Failed RAG cleanup for document ${documentId}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+
+      try {
+        await ctx.storage.delete(doc.storageId);
+        report.deletedDocumentFiles += 1;
+      } catch (error) {
+        report.errors.push(
+          `Failed storage file delete for document ${documentId}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+
+      if (doc.thumbnailStorageId) {
+        try {
+          await ctx.storage.delete(doc.thumbnailStorageId);
+          report.deletedDocumentThumbnails += 1;
+        } catch (error) {
+          report.errors.push(
+            `Failed thumbnail delete for document ${documentId}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+
+      try {
+        await ctx.runMutation(internal.documents.removeDocument, {
+          documentId: doc._id,
+        });
+        deletedDocumentIds.add(documentId);
+        report.deletedDocuments += 1;
+      } catch (error) {
+        report.errors.push(
+          `Failed document row delete ${documentId}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
+    const allGuidelines = (await ctx.runQuery(
+      internal.documents.listAllGuidelinesForMigration,
+      {},
+    )) as any[];
+    const nonLocalGuidelines = allGuidelines.filter((g) => g.source !== "local");
+
+    for (const guideline of nonLocalGuidelines) {
+      const guidelineId = String(guideline._id);
+
+      if (
+        namespace &&
+        guideline.uploadedDocumentId &&
+        !deletedDocumentIds.has(String(guideline.uploadedDocumentId))
+      ) {
+        try {
+          await rag.deleteByKey(ctx, {
+            namespaceId: namespace.namespaceId,
+            key: guideline.uploadedDocumentId,
+          });
+          report.deletedRagEntries += 1;
+        } catch (error) {
+          report.errors.push(
+            `Failed RAG cleanup for guideline ${guidelineId}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+
+      try {
+        const deletedVersions = await ctx.runMutation(
+          internal.documents.deleteGuidelineCascade,
+          { guidelineId: guideline._id },
+        );
+        report.deletedGuidelineVersions += deletedVersions;
+        report.deletedGuidelines += 1;
+      } catch (error) {
+        report.errors.push(
+          `Failed guideline delete ${guidelineId}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
+    return report;
+  },
+});
+
 export const getDocument = internalQuery({
   args: { documentId: v.id("uploadedDocuments") },
   handler: async (ctx, { documentId }) => {
     return await ctx.db.get(documentId);
+  },
+});
+
+export const listAllDocumentsForMigration = internalQuery({
+  args: {},
+  returns: v.array(v.any()),
+  handler: async (ctx) => {
+    return await ctx.db.query("uploadedDocuments").collect();
+  },
+});
+
+export const listAllGuidelinesForMigration = internalQuery({
+  args: {},
+  returns: v.array(v.any()),
+  handler: async (ctx) => {
+    return await ctx.db.query("guidelines").collect();
   },
 });
 
@@ -600,11 +739,11 @@ export const restoreGuideline = action({
           text: guideline.content,
           title: guideline.title,
           metadata: {
-            source: guideline.source,
+            source: "local",
             guidelineId: guidelineId,
+            slug: guideline.slug,
             storageId: guideline.storageId ?? "",
           },
-          filterValues: [{ name: "source", value: guideline.source }],
         });
       } catch (e) {
         console.error("RAG re-index failed on restore:", e);
@@ -719,6 +858,24 @@ export const deleteGuideline = internalMutation({
   args: { guidelineId: v.id("guidelines") },
   handler: async (ctx, { guidelineId }) => {
     await ctx.db.delete(guidelineId);
+  },
+});
+
+export const deleteGuidelineCascade = internalMutation({
+  args: { guidelineId: v.id("guidelines") },
+  returns: v.number(),
+  handler: async (ctx, { guidelineId }) => {
+    const versions = await ctx.db
+      .query("guidelineVersions")
+      .withIndex("by_guideline", (q) => q.eq("guidelineId", guidelineId))
+      .collect();
+
+    for (const version of versions) {
+      await ctx.db.delete(version._id);
+    }
+
+    await ctx.db.delete(guidelineId);
+    return versions.length;
   },
 });
 

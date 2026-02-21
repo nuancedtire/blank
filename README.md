@@ -1,6 +1,6 @@
 # ED Clinical Guidelines
 
-An Emergency Department clinical guidelines application with AI-powered search. Clinicians can browse, search, and query uploaded guidelines (local trust, RCEM, NICE) using a RAG-based AI agent that combines semantic vector search with full-text keyword fallback.
+An Emergency Department clinical guidelines application with AI-powered search. Clinicians can browse, search, and query uploaded local guidelines using a RAG-based AI agent with keyword fallback, plus optional external NICE/RCEM web search.
 
 ## Tech Stack
 
@@ -18,7 +18,8 @@ An Emergency Department clinical guidelines application with AI-powered search. 
 ## Features
 
 - **AI Agent Chat** — ask clinical questions in natural language; the agent searches guidelines and synthesises scenario-specific answers with source citations
-- **Tiered RAG Search** — semantic vector search first, keyword full-text fallback second; searches local → RCEM → NICE in priority order
+- **Tiered Local Retrieval** — semantic vector search first, keyword full-text fallback second over uploaded local guidelines
+- **External Web Search** — optional NICE/RCEM-constrained web results for non-local lookups
 - **Document Upload & Indexing** — upload PDF guidelines; LLM extracts metadata, cleans OCR artefacts, classifies by category, and indexes into the RAG pipeline
 - **Browse & Filter** — browse published guidelines by category with search
 - **Version History & Audit Log** — full version tracking and compliance audit trail
@@ -73,14 +74,6 @@ npx convex dev
 ```
 
 This starts the Convex dev server, pushes your schema, and syncs functions.
-
-### 4. Seed sample data (optional)
-
-The `guidelines:seed` mutation populates demo guidelines (Sepsis, Head Injury, Febrile Child, Chest Pain, etc.). Run it from the Convex dashboard or via:
-
-```bash
-npx convex run guidelines:seed
-```
 
 ## Development
 
@@ -138,10 +131,11 @@ convex/
 ## Architecture: Search & RAG Pipeline
 
 1. **User asks a question** via the agent chat interface
-2. **Agent decides** which tools to call (up to 8 steps)
-3. **`ragSearch` tool** — semantic vector search over embedded document chunks, filtered by source (local/RCEM/NICE)
-4. **`searchGuidelines` tool** — full-text keyword search as fallback, returns full guideline content
-5. **Agent synthesises** a scenario-specific answer with source citations and guideline slugs for linking
+2. **Agent decides** which tools to call (up to 4 steps)
+3. **`ragSearch` tool** — semantic vector search over embedded local guideline chunks
+4. **`searchGuidelines` tool** — compact keyword fallback over local guidelines
+5. **`searchExternalWeb` tool** — NICE/RCEM-constrained web search when needed
+6. **Agent synthesises** a scenario-specific answer with source citations and guideline slugs for linking
 
 Document ingestion:
 1. PDF uploaded → text extracted client-side

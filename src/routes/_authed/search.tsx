@@ -66,7 +66,7 @@ function SearchPage() {
   const searchScope: SearchScopeOption =
     searchMode === "local"
       ? "local"
-      : "external_all";
+      : "web";
 
   // Debounced search
   React.useEffect(() => {
@@ -214,7 +214,7 @@ function SearchPage() {
     title: string;
     slug: string;
     category: string;
-    source: "local" | "rcem" | "nice";
+    source: "local";
     summary?: string;
     version: string;
     lastUpdated: number;

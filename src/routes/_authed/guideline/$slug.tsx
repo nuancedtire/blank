@@ -166,12 +166,10 @@ function GuidelineDetailPage() {
             "text-xs",
             guideline.source === "local"
               ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-              : guideline.source === "rcem"
-                ? "bg-blue-500/10 text-blue-600 dark:text-blue-400"
-                : "bg-purple-500/10 text-purple-600 dark:text-purple-400",
+              : "bg-muted text-muted-foreground",
           )}
         >
-          {guideline.source.toUpperCase()}
+          {guideline.source === "local" ? "LOCAL" : "LEGACY"}
         </Badge>
         <Badge variant="secondary" className="text-xs">
           {guideline.category}

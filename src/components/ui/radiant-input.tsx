@@ -3,11 +3,8 @@ import { Search, ArrowUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type SearchScopeOption =
-  | "all"
   | "local"
-  | "external_all"
-  | "external_nice"
-  | "external_rcem";
+  | "web";
 
 export type SearchModeOption = "local" | "web";
 

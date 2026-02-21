@@ -16,13 +16,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -78,9 +71,6 @@ function ManageDocumentsPage() {
   const queryClient = useQueryClient();
   const [isUploading, setIsUploading] = React.useState(false);
   const [uploadProgress, setUploadProgress] = React.useState("");
-  const [selectedSource, setSelectedSource] = React.useState<
-    "local" | "rcem" | "nice"
-  >("local");
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const { data: documents } = useQuery(
@@ -141,7 +131,6 @@ function ManageDocumentsPage() {
           thumbnailStorageId: thumbnailStorageId as any,
           fileName: file.name,
           fileType: file.type,
-          source: selectedSource,
         } as any);
 
         // Step 4: Extract text
@@ -208,21 +197,6 @@ function ManageDocumentsPage() {
     }
   };
 
-  const sourceLabels: Record<string, { label: string; className: string }> = {
-    local: {
-      label: "Local",
-      className: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-    },
-    rcem: {
-      label: "RCEM",
-      className: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-    },
-    nice: {
-      label: "NICE",
-      className: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
-    },
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -256,50 +230,9 @@ function ManageDocumentsPage() {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label className="text-xs">Guideline Source</Label>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="h-9 w-full max-w-xs justify-between rounded-xl font-normal"
-                  >
-                    <span className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "inline-block h-2 w-2 rounded-full",
-                          selectedSource === "local" && "bg-emerald-500",
-                          selectedSource === "rcem" && "bg-blue-500",
-                          selectedSource === "nice" && "bg-purple-500",
-                        )}
-                      />
-                      {selectedSource === "local"
-                        ? "Local Trust"
-                        : selectedSource.toUpperCase()}
-                    </span>
-                    <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-48">
-                  <DropdownMenuRadioGroup
-                    value={selectedSource}
-                    onValueChange={(v) =>
-                      setSelectedSource(v as "local" | "rcem" | "nice")
-                    }
-                  >
-                    <DropdownMenuRadioItem value="local">
-                      <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 mr-1" />
-                      Local Trust
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="rcem">
-                      <span className="inline-block h-2 w-2 rounded-full bg-blue-500 mr-1" />
-                      RCEM
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="nice">
-                      <span className="inline-block h-2 w-2 rounded-full bg-purple-500 mr-1" />
-                      NICE
-                    </DropdownMenuRadioItem>
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <p className="text-xs text-muted-foreground">
+                Uploaded documents are indexed as local guidelines.
+              </p>
             </div>
 
             <div
@@ -343,7 +276,17 @@ function ManageDocumentsPage() {
         </h2>
         <div className="space-y-2">
           {documents?.map((doc: any) => {
-            const source = sourceLabels[doc.source];
+            const source =
+              doc.source === "local"
+                ? {
+                    label: "Local",
+                    className:
+                      "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+                  }
+                : {
+                    label: "Legacy",
+                    className: "bg-muted text-muted-foreground",
+                  };
             return (
               <DocumentRow
                 key={doc._id}

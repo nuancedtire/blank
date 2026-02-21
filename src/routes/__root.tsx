@@ -57,7 +57,7 @@ export const Route = createRootRouteWithContext<{
       ...seo({
         title: "ED Guidelines Assistant",
         description:
-          "AI-powered guideline retrieval for Emergency Department clinicians. Instant access to local trust guidelines, RCEM, and NICE protocols.",
+          "AI-powered guideline retrieval for Emergency Department clinicians. Instant access to uploaded local guidelines with optional NICE/RCEM web search.",
       }),
     ],
     links: [

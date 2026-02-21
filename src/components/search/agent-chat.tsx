@@ -35,20 +35,16 @@ function searchScopeLabel(scope: SearchScopeOption): string {
   switch (scope) {
     case "local":
       return "Local only";
-    case "external_all":
+    case "web":
       return "NICE + RCEM";
-    case "external_nice":
-      return "NICE only";
-    case "external_rcem":
-      return "RCEM only";
     default:
-      return "All sources";
+      return "Local only";
   }
 }
 
 export function AgentChat({
   initialQuery,
-  initialSearchScope = "all",
+  initialSearchScope = "local",
   onClose,
 }: AgentChatProps) {
   const [threadId, setThreadId] = React.useState<string | null>(null);
@@ -58,11 +54,12 @@ export function AgentChat({
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
   const sentInitialRef = React.useRef(false);
 
-  // Create thread mutation
-  const createThread = useConvexRawMutation(api.agentActions.createAgentThread);
+  const startThreadAndSendMessage = useConvexRawMutation(
+    api.agentActions.startThreadAndSendMessage,
+  );
 
   // Send message mutation with optimistic update
-  const sendMessage = useConvexRawMutation(
+  const sendFollowup = useConvexRawMutation(
     api.agentActions.sendMessage,
   ).withOptimisticUpdate(
     optimisticallySendMessage(api.agentActions.listThreadMessages),
@@ -72,7 +69,7 @@ export function AgentChat({
   const messages = useUIMessages(
     api.agentActions.listThreadMessages,
     threadId ? { threadId } : "skip",
-    { initialNumItems: 50, stream: true },
+    { initialNumItems: 10, stream: true },
   );
 
   // Create thread & send initial query
@@ -83,20 +80,18 @@ export function AgentChat({
     (async () => {
       setIsCreating(true);
       try {
-        const { threadId: newThreadId } = await createThread({});
-        setThreadId(newThreadId);
-        await sendMessage({
-          threadId: newThreadId,
+        const { threadId: newThreadId } = await startThreadAndSendMessage({
           prompt: initialQuery.trim(),
           searchScope: initialSearchScope,
         });
+        setThreadId(newThreadId);
       } catch (e) {
         console.error("Failed to create thread:", e);
       } finally {
         setIsCreating(false);
       }
     })();
-  }, [initialQuery, initialSearchScope, createThread, sendMessage]);
+  }, [initialQuery, initialSearchScope, startThreadAndSendMessage]);
 
   // Auto-scroll on new messages
   React.useEffect(() => {
@@ -110,7 +105,7 @@ export function AgentChat({
     const prompt = inputValue.trim();
     setInputValue("");
     try {
-      await sendMessage({
+      await sendFollowup({
         threadId,
         prompt,
         searchScope: initialSearchScope,
@@ -297,6 +292,7 @@ function StreamingText({
   isUser: boolean;
 }) {
   const [visibleText] = useSmoothText(text, {
+    charsPerSec: 420,
     startStreaming: isStreaming,
   });
 

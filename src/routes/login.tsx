@@ -198,7 +198,7 @@ function BrandPanel() {
           </h2>
           <p className="text-base text-white/50 leading-relaxed max-w-md">
             AI-powered guideline retrieval for Emergency Department clinicians.
-            RCEM, NICE, and local trust protocols — at your fingertips.
+            Uploaded local protocols with optional NICE/RCEM web search.
           </p>
         </motion.div>
 

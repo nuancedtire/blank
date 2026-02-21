@@ -44,8 +44,6 @@ import {
   Edit,
   Trash2,
   FileText,
-  Upload,
-  Loader2,
   ChevronsUpDown,
   Check,
   Archive,
@@ -80,7 +78,6 @@ function ManageGuidelinesPage() {
   const createGuideline = useConvexMutation(api.guidelines.create);
   const updateGuideline = useConvexMutation(api.guidelines.update);
   const deleteGuideline = useConvexMutation(api.guidelines.remove);
-  const seedGuidelines = useConvexMutation(api.guidelines.seed);
   const archiveGuideline = useConvexMutation(api.documents.archiveGuideline);
 
   const createMutation = useMutation({
@@ -100,18 +97,11 @@ function ManageGuidelinesPage() {
     mutationFn: (id: string) => deleteGuideline({ id: id as any }),
   });
 
-  const seedMutation = useMutation({
-    mutationFn: () => seedGuidelines({}),
-  });
-
   // Form state
   const [title, setTitle] = React.useState("");
   const [content, setContent] = React.useState("");
   const [summary, setSummary] = React.useState("");
   const [category, setCategory] = React.useState("Medical");
-  const [source, setSource] = React.useState<"local" | "rcem" | "nice">(
-    "local",
-  );
   const [version, setVersion] = React.useState("1.0");
   const [status, setStatus] = React.useState<
     "draft" | "published" | "archived"
@@ -133,7 +123,6 @@ function ManageGuidelinesPage() {
     setContent("");
     setSummary("");
     setCategory("Medical");
-    setSource("local");
     setVersion("1.0");
     setStatus("published");
     setKeywords([]);
@@ -145,7 +134,6 @@ function ManageGuidelinesPage() {
     setContent(g.content);
     setSummary(g.summary ?? "");
     setCategory(g.category);
-    setSource(g.source);
     setVersion(g.version);
     setStatus(g.status);
     setKeywords(g.keywords ?? []);
@@ -161,7 +149,6 @@ function ManageGuidelinesPage() {
       content,
       summary: summary || undefined,
       category,
-      source,
       version,
       status,
       keywords,
@@ -193,19 +180,6 @@ function ManageGuidelinesPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => seedMutation.mutate()}
-            disabled={seedMutation.isPending}
-          >
-            {seedMutation.isPending ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-            ) : (
-              <Upload className="h-3.5 w-3.5 mr-1" />
-            )}
-            Seed Demo Data
-          </Button>
           <Button
             size="sm"
             className="gap-1"
@@ -331,52 +305,7 @@ function ManageGuidelinesPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Source</Label>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="h-9 w-full justify-between rounded-xl font-normal"
-                      >
-                        <span className="flex items-center gap-2">
-                          <span
-                            className={cn(
-                              "inline-block h-2 w-2 rounded-full",
-                              source === "local" && "bg-emerald-500",
-                              source === "rcem" && "bg-blue-500",
-                              source === "nice" && "bg-purple-500",
-                            )}
-                          />
-                          {source === "local" ? "Local" : source.toUpperCase()}
-                        </span>
-                        <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-40">
-                      <DropdownMenuRadioGroup
-                        value={source}
-                        onValueChange={(v) =>
-                          setSource(v as "local" | "rcem" | "nice")
-                        }
-                      >
-                        <DropdownMenuRadioItem value="local">
-                          <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 mr-1" />
-                          Local
-                        </DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="rcem">
-                          <span className="inline-block h-2 w-2 rounded-full bg-blue-500 mr-1" />
-                          RCEM
-                        </DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="nice">
-                          <span className="inline-block h-2 w-2 rounded-full bg-purple-500 mr-1" />
-                          NICE
-                        </DropdownMenuRadioItem>
-                      </DropdownMenuRadioGroup>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="version" className="text-xs">
                     Version
@@ -558,8 +487,7 @@ function ManageGuidelinesPage() {
                   tab === "all" ? g.status !== "archived" : g.status === tab,
                 ).length === 0) && (
                 <div className="p-6 text-center text-sm text-muted-foreground">
-                  No guidelines yet. Click "Add" or "Seed Demo Data" to get
-                  started.
+                  No guidelines yet. Click "Add" to get started.
                 </div>
               )}
             </div>
