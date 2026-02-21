@@ -20,6 +20,7 @@
     "@convex-dev/better-auth": "^0.10.10",
     "@convex-dev/rag": "^0.7.0",
     "@convex-dev/react-query": "^0.1.0",
+    "@embedpdf/react-pdf-viewer": "^2.6.2",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-dialog": "^1.1.15",

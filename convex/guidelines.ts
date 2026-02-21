@@ -21,9 +21,11 @@ export const listPublishedSummaries = query({
       .withIndex("by_status", (q) => q.eq("status", "published"))
       .collect();
 
-    return guidelines.map(
+    return guidelines
+      .sort((a, b) => b.lastUpdated - a.lastUpdated)
+      .map(
       ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest
-    );
+      );
   },
 });
 

@@ -17,6 +17,229 @@ import {
   FileCode,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PDFViewer, type PDFViewerRef } from "@embedpdf/react-pdf-viewer";
+import { useTheme } from "@/components/theme";
+
+const BRAND_PDF_THEME = {
+  light: {
+    background: {
+      app: "#f0fdfa",
+      surface: "#ffffff",
+      surfaceAlt: "#ccfbf1",
+      elevated: "#ffffff",
+      overlay: "rgba(19, 78, 74, 0.16)",
+      input: "#e0f2fe",
+    },
+    foreground: {
+      primary: "#134e4a",
+      secondary: "#0e7490",
+      muted: "#5e6b6a",
+      disabled: "#94a3b8",
+      onAccent: "#ffffff",
+    },
+    border: {
+      default: "#99f6e4",
+      subtle: "#ccfbf1",
+      strong: "#2dd4bf",
+    },
+    accent: {
+      primary: "#0891b2",
+      primaryHover: "#0e7490",
+      primaryActive: "#155e75",
+      primaryLight: "#cffafe",
+      primaryForeground: "#ffffff",
+    },
+    interactive: {
+      hover: "rgba(8, 145, 178, 0.08)",
+      active: "rgba(8, 145, 178, 0.14)",
+      selected: "rgba(34, 197, 94, 0.14)",
+      focus: "#0891b2",
+      focusRing: "rgba(8, 145, 178, 0.28)",
+    },
+    state: {
+      error: "#ef4444",
+      errorLight: "rgba(239, 68, 68, 0.16)",
+      warning: "#f59e0b",
+      warningLight: "rgba(245, 158, 11, 0.18)",
+      success: "#22c55e",
+      successLight: "rgba(34, 197, 94, 0.18)",
+      info: "#0891b2",
+      infoLight: "rgba(8, 145, 178, 0.18)",
+    },
+    scrollbar: {
+      track: "#ecfeff",
+      thumb: "#67e8f9",
+      thumbHover: "#22d3ee",
+    },
+    tooltip: {
+      background: "#134e4a",
+      foreground: "#f0fdfa",
+    },
+  },
+} as const;
+
+const MAIN_TOOLBAR_ITEMS: any[] = [
+  {
+    type: "group",
+    id: "left-group",
+    alignment: "start",
+    gap: 2,
+    items: [
+      {
+        type: "command-button",
+        id: "document-menu-button",
+        commandId: "document:menu",
+        variant: "icon",
+        categories: ["document", "document-menu"],
+      },
+      { type: "divider", id: "divider-1", orientation: "vertical" },
+      {
+        type: "command-button",
+        id: "sidebar-button",
+        commandId: "panel:toggle-sidebar",
+        variant: "icon",
+        categories: ["panel", "panel-sidebar"],
+      },
+      {
+        type: "command-button",
+        id: "overflow-left-action-menu-button",
+        commandId: "left-action-menu:overflow-menu",
+        variant: "icon",
+        categories: ["ui", "ui-menu"],
+      },
+      {
+        type: "command-button",
+        id: "page-settings-button",
+        commandId: "page:settings",
+        variant: "icon",
+        categories: ["page", "page-settings"],
+      },
+    ],
+  },
+  { type: "divider", id: "divider-2", orientation: "vertical" },
+  {
+    type: "group",
+    id: "center-group",
+    alignment: "center",
+    gap: 2,
+    items: [
+      {
+        type: "command-button",
+        id: "zoom-menu-button",
+        commandId: "zoom:toggle-menu-mobile",
+        variant: "icon",
+        categories: ["zoom", "zoom-menu"],
+      },
+      { type: "custom", id: "zoom-toolbar", componentId: "zoom-toolbar", categories: ["zoom"] },
+      {
+        type: "divider",
+        id: "divider-3",
+        orientation: "vertical",
+        visibilityDependsOn: { itemIds: ["zoom-toolbar", "zoom-menu-button"] },
+      },
+      {
+        type: "command-button",
+        id: "pan-button",
+        commandId: "pan:toggle",
+        variant: "icon",
+        categories: ["tools", "pan"],
+      },
+      {
+        type: "command-button",
+        id: "pointer-button",
+        commandId: "pointer:toggle",
+        variant: "icon",
+        categories: ["tools", "pointer"],
+      },
+    ],
+  },
+  { type: "spacer", id: "spacer-1", flex: true },
+  {
+    type: "custom",
+    id: "mode-select-button",
+    componentId: "mode-select-button",
+    categories: ["mode"],
+    visibilityDependsOn: { itemIds: ["mode:annotate", "mode:shapes", "mode:redact"] },
+  },
+  {
+    type: "tab-group",
+    id: "mode-tabs",
+    tabs: [
+      {
+        id: "view-mode",
+        commandId: "mode:view",
+        variant: "text",
+        categories: ["mode", "mode-view"],
+        visibilityDependsOn: { itemIds: ["annotate-mode", "shapes-mode", "redact-mode"] },
+      },
+      {
+        id: "annotate-mode",
+        commandId: "mode:annotate",
+        variant: "text",
+        categories: ["mode", "mode-annotate", "annotation"],
+      },
+      {
+        id: "shapes-mode",
+        commandId: "mode:shapes",
+        variant: "text",
+        categories: ["mode", "mode-shapes", "annotation"],
+      },
+      {
+        id: "redact-mode",
+        commandId: "mode:redact",
+        variant: "text",
+        categories: ["mode", "mode-redact", "redaction"],
+      },
+      {
+        id: "overflow-tabs-button",
+        commandId: "tabs:overflow-menu",
+        variant: "icon",
+        categories: ["ui", "ui-menu"],
+        visibilityDependsOn: { menuId: "mode-tabs-overflow-menu" },
+      },
+    ],
+  },
+  { type: "spacer", id: "spacer-2", flex: true },
+  {
+    type: "group",
+    id: "right-group",
+    alignment: "end",
+    gap: 2,
+    items: [
+      {
+        type: "command-button",
+        id: "search-button",
+        commandId: "panel:toggle-search",
+        variant: "icon",
+        categories: ["panel", "panel-search"],
+      },
+      {
+        type: "command-button",
+        id: "screenshot-button",
+        commandId: "document:capture",
+        variant: "icon",
+        categories: ["document", "document-capture"],
+      },
+    ],
+  },
+];
+
+const DOCUMENT_MENU_ITEMS: any[] = [
+  { type: "command", id: "document:open", commandId: "document:open", categories: ["document", "document-open"] },
+  { type: "command", id: "document:close", commandId: "document:close", categories: ["document", "document-close"] },
+  { type: "divider", id: "divider-10", visibilityDependsOn: { itemIds: ["document:open", "document:close"] } },
+  { type: "command", id: "document:print", commandId: "document:print", categories: ["document", "document-print"] },
+  { type: "command", id: "document:capture", commandId: "document:capture", categories: ["document", "document-capture"] },
+  { type: "command", id: "document:export", commandId: "document:export", categories: ["document", "document-export"] },
+  {
+    type: "divider",
+    id: "divider-11",
+    visibilityDependsOn: {
+      itemIds: ["document:export", "document:print", "document:capture"],
+    },
+  },
+  { type: "command", id: "document:fullscreen", commandId: "document:fullscreen", categories: ["document", "document-fullscreen"] },
+];
 
 export const Route = createFileRoute("/_authed/guideline/$slug")({
   component: GuidelineDetailPage,
@@ -24,8 +247,18 @@ export const Route = createFileRoute("/_authed/guideline/$slug")({
 
 function GuidelineDetailPage() {
   const { slug } = Route.useParams();
+  const { resolvedTheme } = useTheme();
   const queryClient = useQueryClient();
+  const viewerRef = React.useRef<PDFViewerRef>(null);
   const [viewMode, setViewMode] = React.useState<"pdf" | "text">("pdf");
+  const viewerThemePreference = resolvedTheme === "dark" ? "dark" : "light";
+
+  React.useEffect(() => {
+    viewerRef.current?.container?.setTheme({
+      ...BRAND_PDF_THEME,
+      preference: viewerThemePreference,
+    });
+  }, [viewerThemePreference]);
 
   const { data: guideline, isLoading } = useQuery(
     convexQuery(api.guidelines.getBySlug, { slug }),
@@ -186,12 +419,55 @@ function GuidelineDetailPage() {
           <div className="bg-muted/50 px-4 py-2 border-b">
             <h1 className="text-lg font-bold">{guideline.title}</h1>
           </div>
-          <iframe
-            src={fileUrl}
-            className="w-full border-0"
-            style={{ height: "calc(100vh - 220px)", minHeight: "500px" }}
-            title={guideline.title}
-          />
+          {fileUrl ? (
+            <PDFViewer
+              ref={viewerRef}
+              config={{
+                theme: {
+                  ...BRAND_PDF_THEME,
+                  preference: viewerThemePreference,
+                },
+                tabBar: "never",
+                disabledCategories: ["annotation", "redaction"],
+                documentManager: {
+                  initialDocuments: [
+                    {
+                      url: fileUrl,
+                      name: `${guideline.title}.pdf`,
+                      autoActivate: true,
+                    },
+                  ],
+                },
+              }}
+              onReady={(registry) => {
+                const uiPlugin = registry.getPlugin("ui");
+                const ui = uiPlugin?.provides?.();
+                if (!ui) return;
+
+                ui.mergeSchema({
+                  toolbars: {
+                    "main-toolbar": {
+                      id: "main-toolbar",
+                      position: {
+                        placement: "top",
+                        slot: "main",
+                        order: 0,
+                      },
+                      items: MAIN_TOOLBAR_ITEMS,
+                    },
+                  },
+                  menus: {
+                    "document-menu": {
+                      id: "document-menu",
+                      items: DOCUMENT_MENU_ITEMS,
+                    },
+                  },
+                });
+              }}
+              className="w-full"
+              style={{ height: "calc(100vh - 220px)", minHeight: "500px" }}
+            />
+          ) : null}
         </div>
       ) : (
         <div className="rounded-lg border bg-card p-4 sm:p-6">
