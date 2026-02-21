@@ -1,16 +1,14 @@
 import { v } from "convex/values";
 import { query, mutation, MutationCtx, QueryCtx } from "./_generated/server";
 import { authComponent } from "./auth";
+import { findUserProfile } from "./userProfile";
 
 // Helper to get the current authenticated user profile
 async function getCurrentUser(ctx: QueryCtx | MutationCtx) {
   const authUser = await authComponent.safeGetAuthUser(ctx);
   if (!authUser) return null;
 
-  const user = await ctx.db
-    .query("users")
-    .withIndex("by_email", (q) => q.eq("email", authUser.email))
-    .first();
+  const user = await findUserProfile(ctx, authUser);
   if (!user || user.isBanned) return null;
   return user;
 }

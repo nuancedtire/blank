@@ -2,16 +2,27 @@ import { v } from "convex/values";
 import { query, mutation, type QueryCtx, type MutationCtx } from "./_generated/server";
 import { authComponent } from "./auth";
 import type { Doc } from "./_generated/dataModel";
+import {
+  deriveDisplayName,
+  findUserProfile,
+  normalizeEmail,
+} from "./userProfile";
 
 type UsersCtx = QueryCtx | MutationCtx;
+
+async function linkAuthUserToProfile(
+  ctx: MutationCtx,
+  authUser: { _id?: string; userId?: string | null },
+  profileId: string,
+) {
+  if (!authUser._id || authUser.userId === profileId) return;
+  await authComponent.setUserId(ctx, authUser._id, profileId);
+}
 
 async function getCurrentProfile(ctx: UsersCtx): Promise<Doc<"users"> | null> {
   const authUser = await authComponent.safeGetAuthUser(ctx);
   if (!authUser) return null;
-  return await ctx.db
-    .query("users")
-    .withIndex("by_email", (q) => q.eq("email", authUser.email))
-    .first();
+  return await findUserProfile(ctx, authUser);
 }
 
 async function requireAdmin(ctx: UsersCtx): Promise<Doc<"users">> {
@@ -29,19 +40,15 @@ export const me = query({
     const authUser = await authComponent.safeGetAuthUser(ctx);
     if (!authUser) return null;
 
-    // Look up app user by email
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_email", (q) => q.eq("email", authUser.email))
-      .first();
+    const user = await findUserProfile(ctx, authUser);
 
     return user
       ? { ...user, authUser }
       : {
           // New user - return basic info from auth
           _id: null,
-          email: authUser.email,
-          name: authUser.name ?? authUser.email.split("@")[0],
+          email: normalizeEmail(authUser.email),
+          name: deriveDisplayName(authUser),
           role: "user" as const,
           isBanned: false,
           authUser,
@@ -56,27 +63,32 @@ export const ensureProfile = mutation({
     const authUser = await authComponent.getAuthUser(ctx);
     if (!authUser) throw new Error("Not authenticated");
 
-    const existing = await ctx.db
-      .query("users")
-      .withIndex("by_email", (q) => q.eq("email", authUser.email))
-      .first();
+    const normalizedEmail = normalizeEmail(authUser.email);
+    const name = deriveDisplayName(authUser);
+    const existing = await findUserProfile(ctx, authUser);
 
     if (existing) {
       if (existing.isBanned) {
         throw new Error("Account is banned");
       }
-      await ctx.db.patch(existing._id, { lastActive: Date.now() });
+      await ctx.db.patch(existing._id, {
+        email: normalizedEmail,
+        name,
+        lastActive: Date.now(),
+      });
+      await linkAuthUserToProfile(ctx, authUser, existing._id);
       return existing._id;
     }
 
     // Create new user profile (default role is user; admins can promote later)
     const id = await ctx.db.insert("users", {
-      email: authUser.email,
-      name: authUser.name ?? authUser.email.split("@")[0],
+      email: normalizedEmail,
+      name,
       role: "user",
       isBanned: false,
       lastActive: Date.now(),
     });
+    await linkAuthUserToProfile(ctx, authUser, id);
 
     await ctx.db.insert("auditLogs", {
       userId: id,
@@ -164,20 +176,18 @@ export const togglePin = mutation({
     const authUser = await authComponent.getAuthUser(ctx);
     if (!authUser) throw new Error("Not authenticated");
 
-    let user = await ctx.db
-      .query("users")
-      .withIndex("by_email", (q) => q.eq("email", authUser.email))
-      .first();
+    let user = await findUserProfile(ctx, authUser);
 
     if (!user) {
       // Auto-create user profile if it doesn't exist yet
       const id = await ctx.db.insert("users", {
-        email: authUser.email,
-        name: authUser.name ?? authUser.email.split("@")[0],
+        email: normalizeEmail(authUser.email),
+        name: deriveDisplayName(authUser),
         role: "user",
         isBanned: false,
         lastActive: Date.now(),
       });
+      await linkAuthUserToProfile(ctx, authUser, id);
       user = (await ctx.db.get(id))!;
     }
     if (user.isBanned) throw new Error("Account is banned");

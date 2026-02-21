@@ -24,11 +24,14 @@ function AuthedLayout() {
   const calledRef = useRef(false);
 
   useEffect(() => {
-    if (!calledRef.current) {
+    const profileMissing = me !== undefined && me?._id === null;
+    if (!calledRef.current || profileMissing) {
       calledRef.current = true;
-      profileMutation.mutate();
+      if (!profileMutation.isPending) {
+        profileMutation.mutate();
+      }
     }
-  }, []);
+  }, [me?._id, profileMutation.isPending]);
 
   useEffect(() => {
     if (me?.isBanned) {

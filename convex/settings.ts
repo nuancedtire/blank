@@ -1,16 +1,14 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { authComponent } from "./auth";
+import { findUserProfile } from "./userProfile";
 
 // Helper to get the current authenticated user profile
 async function getCurrentUser(ctx: any) {
   const authUser = await authComponent.safeGetAuthUser(ctx);
   if (!authUser) return null;
 
-  return await ctx.db
-    .query("users")
-    .withIndex("by_email", (q: any) => q.eq("email", authUser.email))
-    .first();
+  return await findUserProfile(ctx, authUser);
 }
 
 /**
@@ -23,10 +21,7 @@ export const getAccountInfo = query({
     const authUser = await authComponent.safeGetAuthUser(ctx);
     if (!authUser) return null;
 
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_email", (q: any) => q.eq("email", authUser.email))
-      .first();
+    const user = await findUserProfile(ctx, authUser);
     if (!user) return null;
 
     return {
