@@ -19,6 +19,7 @@ import { GuidelineCard } from "@/components/guidelines/guideline-card";
 import { GuidelineCardSkeleton } from "@/components/guidelines/guideline-card-skeleton";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import {
   TrendingUp,
   Clock,
@@ -30,6 +31,9 @@ import {
   ExternalLink,
 } from "lucide-react";
 export const Route = createFileRoute("/_authed/search")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    threadId: typeof search.threadId === "string" ? search.threadId : undefined,
+  }),
   component: SearchPage,
 });
 
@@ -46,9 +50,18 @@ const CATEGORIES = [
 ];
 
 function SearchPage() {
+  const navigate = Route.useNavigate();
+  const { threadId: routeThreadId } = Route.useSearch();
   const [query, setQuery] = React.useState("");
   const [searchQuery, setSearchQuery] = React.useState("");
-  const [agentQuery, setAgentQuery] = React.useState<string | null>(null);
+  const [agentPanelOpen, setAgentPanelOpen] = React.useState<boolean>(
+    !!routeThreadId,
+  );
+  const [agentQuery, setAgentQuery] = React.useState("");
+  const [agentRequestId, setAgentRequestId] = React.useState(0);
+  const [agentThreadId, setAgentThreadId] = React.useState<string | null>(
+    routeThreadId ?? null,
+  );
   const [searchMode, setSearchMode] = React.useState<"local" | "web">("local");
   const [webResultMode, setWebResultMode] = React.useState<"pdf" | "full">("pdf");
   const [localPage, setLocalPage] = React.useState(1);
@@ -177,6 +190,7 @@ function SearchPage() {
   const { data: currentUser } = useQuery(convexQuery(api.users.me, {}));
 
   const togglePin = useConvexMutation(api.users.togglePin);
+  const recordSearchMemory = useConvexMutation(api.agentActions.recordSearchMemory);
   const generateUploadUrl = useConvexMutation(api.documents.generateUploadUrl);
   const setGuidelineThumbnail = useConvexMutation(
     (api.documents as any).setGuidelineThumbnail,
@@ -193,13 +207,46 @@ function SearchPage() {
 
   const handleSubmit = (q: string) => {
     if (q.trim()) {
+      void recordSearchMemory({
+        kind: "search_topic",
+        key: `agent:${q.trim().toLowerCase()}`,
+        summary: `User asked assistant about: ${q.trim()}`,
+        weight: 0.24,
+      }).catch(() => {});
+      setAgentPanelOpen(true);
       setAgentQuery(q.trim());
+      setAgentRequestId((prev) => prev + 1);
     }
   };
 
   const handleCloseAgent = () => {
-    setAgentQuery(null);
+    setAgentPanelOpen(false);
+    setAgentQuery("");
+    setAgentThreadId(null);
+    void navigate({
+      search: (prev: { threadId?: string }) => ({ ...prev, threadId: undefined }),
+      replace: true,
+    });
   };
+
+  React.useEffect(() => {
+    if (!routeThreadId) return;
+    setAgentPanelOpen(true);
+    setAgentThreadId(routeThreadId);
+    setAgentQuery("");
+  }, [routeThreadId]);
+
+  React.useEffect(() => {
+    if (!agentPanelOpen) return;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
+    };
+  }, [agentPanelOpen]);
 
   const pinnedIds = (currentUser as any)?.pinnedGuidelines ?? [];
 
@@ -208,7 +255,7 @@ function SearchPage() {
     return allGuidelines.filter((g: any) => pinnedIds.includes(g._id));
   }, [allGuidelines, pinnedIds]);
 
-  const showSearchResults = !!searchQuery && !agentQuery;
+  const showSearchResults = !!searchQuery && !agentPanelOpen;
   const localResults = ((localSearchData as any)?.items ?? []) as Array<{
     _id: string;
     title: string;
@@ -427,44 +474,119 @@ function SearchPage() {
     queryClient,
   ]);
 
+  React.useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) return;
+    const timeoutId = setTimeout(() => {
+      void recordSearchMemory({
+        kind: "search_topic",
+        key: `${searchMode}:${trimmed.toLowerCase()}`,
+        summary: `User searched ${searchMode} sources for: ${trimmed}`,
+        weight: 0.16,
+      }).catch(() => {});
+
+      void recordSearchMemory({
+        kind: "source_preference",
+        key: searchMode === "web" ? "prefers_web_nice_rcem" : "prefers_local_documents",
+        summary:
+          searchMode === "web"
+            ? "User often explores NICE/RCEM web guidance."
+            : "User often prioritizes local uploaded guidance.",
+        weight: 0.08,
+      }).catch(() => {});
+    }, 450);
+    return () => clearTimeout(timeoutId);
+  }, [recordSearchMemory, searchMode, searchQuery]);
+
+  const recordLocalOpen = React.useCallback(
+    (args: { slug: string; title: string }) => {
+      void recordSearchMemory({
+        kind: "guideline_interest",
+        key: `local:${args.slug}`,
+        summary: `User opened local guideline: ${args.title}`,
+        weight: 0.22,
+      }).catch(() => {});
+    },
+    [recordSearchMemory],
+  );
+
+  const recordWebOpen = React.useCallback(
+    (args: { url: string; title: string; source: "NICE" | "RCEM" }) => {
+      let host = "external";
+      try {
+        host = new URL(args.url).hostname;
+      } catch {
+        host = "external";
+      }
+      void recordSearchMemory({
+        kind: "guideline_interest",
+        key: `web:${host}`,
+        summary: `User opened ${args.source} web guidance: ${args.title}`,
+        weight: 0.2,
+      }).catch(() => {});
+    },
+    [recordSearchMemory],
+  );
+
   return (
-    <div className="max-w-[1480px] mx-auto space-y-8">
-      {/* Hero Search Section */}
-      <div className="text-center space-y-6 py-8">
-        <h1 className="text-3xl sm:text-4xl font-bold text-foreground">
-          What do you need to know?
-        </h1>
+    <div
+      className={cn(
+        "max-w-[1480px] mx-auto",
+        agentPanelOpen
+          ? "space-y-0 h-[calc(100dvh-10.5rem)] md:h-[calc(100dvh-9rem)] overflow-hidden"
+          : "space-y-8",
+      )}
+    >
+      {!agentPanelOpen && (
+        <div className="text-center space-y-6 py-8">
+          <h1 className="text-3xl sm:text-4xl font-bold text-foreground">
+            What do you need to know?
+          </h1>
 
-        {/* Radiant Search Input */}
-        <div className="max-w-4xl mx-auto">
-          <RadiantPromptInput
-            placeholder="Ask about any protocol, symptom, or treatment..."
-            value={query}
-            onChange={(val) => {
-              setQuery(val);
-              if (agentQuery) setAgentQuery(null);
-            }}
-            mode={searchMode}
-            onModeChange={setSearchMode}
-            onSubmit={handleSubmit}
-          />
+          <div className="max-w-4xl mx-auto">
+            <RadiantPromptInput
+              placeholder="Ask about any protocol, symptom, or treatment..."
+              value={query}
+              onChange={(val) => {
+                setQuery(val);
+                if (agentPanelOpen) {
+                  setAgentPanelOpen(false);
+                  setAgentThreadId(null);
+                  setAgentQuery("");
+                  void navigate({
+                    search: (prev: { threadId?: string }) => ({
+                      ...prev,
+                      threadId: undefined,
+                    }),
+                    replace: true,
+                  });
+                }
+              }}
+              mode={searchMode}
+              onModeChange={setSearchMode}
+              onSubmit={handleSubmit}
+            />
+          </div>
+
+          <p className="text-sm text-muted-foreground">
+            Press{" "}
+            <kbd className="px-2 py-1 rounded bg-card border border-border text-xs font-mono">
+              Enter
+            </kbd>{" "}
+            to ask AI or type to search
+          </p>
         </div>
-
-        <p className="text-sm text-muted-foreground">
-          Press{" "}
-          <kbd className="px-2 py-1 rounded bg-card border border-border text-xs font-mono">
-            Enter
-          </kbd>{" "}
-          to ask AI or type to search
-        </p>
-      </div>
+      )}
 
       {/* Agent Chat */}
-      {agentQuery && (
-        <div className="animate-scale-in">
+      {agentPanelOpen && (
+        <div className="animate-scale-in h-full min-h-0">
           <AgentChat
             initialQuery={agentQuery}
+            initialRequestId={agentRequestId}
+            initialThreadId={agentThreadId}
             initialSearchScope={searchScope}
+            className="h-full"
             onClose={handleCloseAgent}
           />
         </div>
@@ -537,6 +659,7 @@ function SearchPage() {
                       slug={result.slug}
                       title={result.title}
                       thumbnailUrl={localThumbnailUrlById.get(result._id) ?? null}
+                      onOpen={recordLocalOpen}
                     />
                   ))}
                 </div>
@@ -592,6 +715,7 @@ function SearchPage() {
                         cachedSourceLastModified={cached?.sourceLastModified ?? null}
                         cachedCheckedAt={cached?.checkedAt ?? null}
                         onPersistThumbnail={persistWebPdfThumbnail}
+                        onOpen={recordWebOpen}
                       />
                     );
                   })}
@@ -605,6 +729,7 @@ function SearchPage() {
                     url={result.url}
                     source={result.source}
                     snippet={result.snippet}
+                    onOpen={recordWebOpen}
                   />
                 ))}
               {!isWebSearching && webTotal > 0 && (
@@ -622,7 +747,7 @@ function SearchPage() {
       )}
 
       {/* Default View */}
-      {!showSearchResults && !agentQuery && (
+      {!agentPanelOpen && !showSearchResults && (
         <>
           {/* Quick Categories */}
           <div>
@@ -735,15 +860,18 @@ function LocalSearchTile({
   slug,
   title,
   thumbnailUrl,
+  onOpen,
 }: {
   slug: string;
   title: string;
   thumbnailUrl: string | null;
+  onOpen: (args: { slug: string; title: string }) => void;
 }) {
   return (
     <Link
       to="/guideline/$slug"
       params={{ slug }}
+      onClick={() => onOpen({ slug, title })}
       className="group block rounded-[22px] overflow-hidden bg-card ring-1 ring-black/8 dark:ring-white/10 hover:shadow-xl transition-all duration-300"
     >
       <div className="relative aspect-[210/297] w-full overflow-hidden bg-gradient-to-b from-muted/60 to-muted/20">
@@ -800,11 +928,13 @@ function WebSearchResultCard({
   url,
   source,
   snippet,
+  onOpen,
 }: {
   title: string;
   url: string;
   source: "NICE" | "RCEM";
   snippet: string;
+  onOpen: (args: { url: string; title: string; source: "NICE" | "RCEM" }) => void;
 }) {
   return (
     <Card className="p-0 group">
@@ -812,6 +942,7 @@ function WebSearchResultCard({
         href={url}
         target="_blank"
         rel="noreferrer"
+        onClick={() => onOpen({ url, title, source })}
         className="flex items-start gap-4 p-4"
       >
         <WebResultCover url={url} source={source} />
@@ -843,6 +974,7 @@ function WebPdfTile({
   cachedSourceLastModified,
   cachedCheckedAt,
   onPersistThumbnail,
+  onOpen,
 }: {
   title: string;
   url: string;
@@ -857,6 +989,7 @@ function WebPdfTile({
     sourceEtag: string | null;
     sourceLastModified: string | null;
   }) => Promise<void>;
+  onOpen: (args: { url: string; title: string; source: "NICE" | "RCEM" }) => void;
 }) {
   const iconUrl = `https://www.google.com/s2/favicons?domain_url=${encodeURIComponent(url)}&sz=64`;
   const proxiedPdfUrl = React.useMemo(
@@ -972,6 +1105,7 @@ function WebPdfTile({
       href={url}
       target="_blank"
       rel="noreferrer"
+      onClick={() => onOpen({ url, title, source })}
       className="group block rounded-[22px] overflow-hidden bg-card ring-1 ring-black/8 dark:ring-white/10 hover:shadow-xl transition-all duration-300"
     >
       <div className="relative aspect-[210/297] w-full overflow-hidden bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900">

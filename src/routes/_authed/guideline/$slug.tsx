@@ -85,7 +85,7 @@ function GuidelineDetailPage() {
       <div className="text-center py-12">
         <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
         <p className="text-muted-foreground mb-2">Guideline not found</p>
-        <Link to="/search">
+        <Link to="/search" search={{ threadId: undefined }}>
           <Button variant="outline" size="sm">
             Back to search
           </Button>
@@ -98,7 +98,7 @@ function GuidelineDetailPage() {
     <div className="space-y-4">
       {/* Header with back button and actions */}
       <div className="flex items-center justify-between">
-        <Link to="/search">
+        <Link to="/search" search={{ threadId: undefined }}>
           <Button variant="ghost" size="sm" className="h-8 gap-1">
             <ArrowLeft className="h-4 w-4" />
             Back

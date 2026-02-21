@@ -134,6 +134,28 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_thread", ["threadId"]),
 
+  // Curated long-term user memory for cross-thread recall
+  userMemories: defineTable({
+    userId: v.id("users"),
+    kind: v.union(
+      v.literal("search_topic"),
+      v.literal("source_preference"),
+      v.literal("guideline_interest"),
+      v.literal("response_style"),
+    ),
+    key: v.string(),
+    summary: v.string(),
+    frequency: v.number(),
+    strength: v.number(),
+    firstSeenAt: v.number(),
+    lastSeenAt: v.number(),
+    lastUsedAt: v.optional(v.number()),
+    redacted: v.boolean(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_kind_key", ["userId", "kind", "key"])
+    .index("by_user_lastSeen", ["userId", "lastSeenAt"]),
+
   // Audit log for compliance
   auditLogs: defineTable({
     userId: v.optional(v.id("users")),

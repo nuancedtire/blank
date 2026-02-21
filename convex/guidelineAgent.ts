@@ -1,6 +1,7 @@
 import { Agent, createTool } from "@convex-dev/agent";
 import { components, internal } from "./_generated/api";
 import { cerebras } from "@ai-sdk/cerebras";
+import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 import rag from "./rag";
 
@@ -274,6 +275,18 @@ const searchExternalWebTool = createTool({
 export const guidelineAgent: Agent<object, any> = new Agent(components.agent, {
   name: "ED Guidelines Assistant",
   languageModel: cerebras.chat("gpt-oss-120b"),
+  textEmbeddingModel: process.env.OPENAI_API_KEY
+    ? openai.embedding("text-embedding-3-small")
+    : undefined,
+  contextOptions: {
+    // Enable practical cross-thread recall for this authenticated user.
+    searchOtherThreads: true,
+    searchOptions: {
+      textSearch: true,
+      vectorSearch: true,
+      limit: 8,
+    },
+  },
   instructions: ED_GUIDELINES_SYSTEM_PROMPT,
   tools: {
     searchGuidelines: searchGuidelinesTool,

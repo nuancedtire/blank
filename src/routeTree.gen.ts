@@ -14,6 +14,7 @@ import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthedSettingsRouteImport } from './routes/_authed/settings'
 import { Route as AuthedSearchRouteImport } from './routes/_authed/search'
+import { Route as AuthedHistoryRouteImport } from './routes/_authed/history'
 import { Route as AuthedAdminRouteImport } from './routes/_authed/admin'
 import { Route as AuthedBrowseIndexRouteImport } from './routes/_authed/browse/index'
 import { Route as AuthedAdminIndexRouteImport } from './routes/_authed/admin/index'
@@ -46,6 +47,11 @@ const AuthedSettingsRoute = AuthedSettingsRouteImport.update({
 const AuthedSearchRoute = AuthedSearchRouteImport.update({
   id: '/search',
   path: '/search',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedHistoryRoute = AuthedHistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
   getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedAdminRoute = AuthedAdminRouteImport.update({
@@ -99,6 +105,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/admin': typeof AuthedAdminRouteWithChildren
+  '/history': typeof AuthedHistoryRoute
   '/search': typeof AuthedSearchRoute
   '/settings': typeof AuthedSettingsRoute
   '/admin/documents': typeof AuthedAdminDocumentsRoute
@@ -113,6 +120,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/history': typeof AuthedHistoryRoute
   '/search': typeof AuthedSearchRoute
   '/settings': typeof AuthedSettingsRoute
   '/admin/documents': typeof AuthedAdminDocumentsRoute
@@ -130,6 +138,7 @@ export interface FileRoutesById {
   '/_authed': typeof AuthedRouteWithChildren
   '/login': typeof LoginRoute
   '/_authed/admin': typeof AuthedAdminRouteWithChildren
+  '/_authed/history': typeof AuthedHistoryRoute
   '/_authed/search': typeof AuthedSearchRoute
   '/_authed/settings': typeof AuthedSettingsRoute
   '/_authed/admin/documents': typeof AuthedAdminDocumentsRoute
@@ -147,6 +156,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/admin'
+    | '/history'
     | '/search'
     | '/settings'
     | '/admin/documents'
@@ -161,6 +171,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/history'
     | '/search'
     | '/settings'
     | '/admin/documents'
@@ -177,6 +188,7 @@ export interface FileRouteTypes {
     | '/_authed'
     | '/login'
     | '/_authed/admin'
+    | '/_authed/history'
     | '/_authed/search'
     | '/_authed/settings'
     | '/_authed/admin/documents'
@@ -230,6 +242,13 @@ declare module '@tanstack/react-router' {
       path: '/search'
       fullPath: '/search'
       preLoaderRoute: typeof AuthedSearchRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/history': {
+      id: '/_authed/history'
+      path: '/history'
+      fullPath: '/history'
+      preLoaderRoute: typeof AuthedHistoryRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/admin': {
@@ -320,6 +339,7 @@ const AuthedAdminRouteWithChildren = AuthedAdminRoute._addFileChildren(
 
 interface AuthedRouteChildren {
   AuthedAdminRoute: typeof AuthedAdminRouteWithChildren
+  AuthedHistoryRoute: typeof AuthedHistoryRoute
   AuthedSearchRoute: typeof AuthedSearchRoute
   AuthedSettingsRoute: typeof AuthedSettingsRoute
   AuthedBrowseCategoryRoute: typeof AuthedBrowseCategoryRoute
@@ -329,6 +349,7 @@ interface AuthedRouteChildren {
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedAdminRoute: AuthedAdminRouteWithChildren,
+  AuthedHistoryRoute: AuthedHistoryRoute,
   AuthedSearchRoute: AuthedSearchRoute,
   AuthedSettingsRoute: AuthedSettingsRoute,
   AuthedBrowseCategoryRoute: AuthedBrowseCategoryRoute,

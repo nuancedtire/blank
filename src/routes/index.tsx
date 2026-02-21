@@ -20,7 +20,7 @@ import { useState } from "react";
 export const Route = createFileRoute("/")({
   beforeLoad: ({ context }) => {
     if (context.isAuthenticated) {
-      throw redirect({ to: "/search" });
+      throw redirect({ to: "/search", search: { threadId: undefined } });
     }
   },
   component: LandingPage,

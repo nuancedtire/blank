@@ -2,6 +2,7 @@ import { Link, useLocation } from "@tanstack/react-router";
 import {
   Search,
   FolderOpen,
+  History,
   Settings,
   LogOut,
   Bell,
@@ -41,6 +42,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 const baseNavItems = [
   { label: "Search", icon: Search, href: "/search" },
   { label: "Browse", icon: FolderOpen, href: "/browse" },
+  { label: "History", icon: History, href: "/history" },
 ] as const;
 
 const adminNavItem = {
@@ -266,7 +268,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <header className="sticky top-0 z-50 border-b border-border bg-card/80 backdrop-blur-xl">
         <div className="flex h-16 items-center justify-between px-4 lg:px-8">
-          <Link to="/search" className="flex items-center">
+          <Link
+            to="/search"
+            search={{ threadId: undefined }}
+            className="flex items-center"
+          >
             <AideLogo size="md" animate="hover" />
           </Link>
 

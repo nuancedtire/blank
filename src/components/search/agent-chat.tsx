@@ -1,5 +1,8 @@
 import * as React from "react";
-import { useMutation as useConvexRawMutation } from "convex/react";
+import {
+  useMutation as useConvexRawMutation,
+  useQuery as useConvexRawQuery,
+} from "convex/react";
 import {
   useUIMessages,
   useSmoothText,
@@ -18,6 +21,14 @@ import {
   FileText,
   Search,
   BookOpen,
+  Clock3,
+  MessagesSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Pencil,
+  Trash2,
+  Check,
+  History,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -27,7 +38,10 @@ import type { SearchScopeOption } from "@/components/ui/radiant-input";
 
 interface AgentChatProps {
   initialQuery: string;
+  initialRequestId?: number;
+  initialThreadId?: string | null;
   initialSearchScope?: SearchScopeOption;
+  className?: string;
   onClose: () => void;
 }
 
@@ -42,169 +56,507 @@ function searchScopeLabel(scope: SearchScopeOption): string {
   }
 }
 
+const WAITING_STEPS = [
+  "Preparing response plan",
+  "Looking up relevant resources",
+  "Scanning guideline excerpts",
+  "Composing answer",
+];
+
 export function AgentChat({
   initialQuery,
+  initialRequestId = 0,
+  initialThreadId = null,
   initialSearchScope = "local",
+  className,
   onClose,
 }: AgentChatProps) {
-  const [threadId, setThreadId] = React.useState<string | null>(null);
+  const [threadId, setThreadId] = React.useState<string | null>(initialThreadId);
+  const [historyCollapsed, setHistoryCollapsed] = React.useState(false);
   const [isCreating, setIsCreating] = React.useState(false);
   const [inputValue, setInputValue] = React.useState("");
+  const [activeStep, setActiveStep] = React.useState(0);
+  const [pendingAssistantTarget, setPendingAssistantTarget] = React.useState<number | null>(
+    null,
+  );
+  const [editingThreadId, setEditingThreadId] = React.useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = React.useState("");
+  const [isRenaming, setIsRenaming] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
-  const sentInitialRef = React.useRef(false);
+  const handledInitialRequestRef = React.useRef(0);
 
   const startThreadAndSendMessage = useConvexRawMutation(
     api.agentActions.startThreadAndSendMessage,
   );
-
-  // Send message mutation with optimistic update
-  const sendFollowup = useConvexRawMutation(
-    api.agentActions.sendMessage,
-  ).withOptimisticUpdate(
+  const sendFollowup = useConvexRawMutation(api.agentActions.sendMessage).withOptimisticUpdate(
     optimisticallySendMessage(api.agentActions.listThreadMessages),
   );
+  const renameThread = useConvexRawMutation(api.agentActions.renameThread);
+  const deleteThread = useConvexRawMutation(api.agentActions.deleteThread);
+  const recentThreads = useConvexRawQuery(api.agentActions.listMyThreads, {
+    limit: 20,
+    includeArchived: false,
+  });
 
-  // Fetch messages with streaming
   const messages = useUIMessages(
     api.agentActions.listThreadMessages,
     threadId ? { threadId } : "skip",
-    { initialNumItems: 10, stream: true },
+    { initialNumItems: 20, stream: true },
   );
 
-  // Create thread & send initial query
+  const assistantCount = React.useMemo(
+    () => messages.results.filter((m) => m.role === "assistant").length,
+    [messages.results],
+  );
+  const isAgentThinking = messages.results.some(
+    (m) => m.role === "assistant" && m.status === "streaming",
+  );
+
   React.useEffect(() => {
-    if (sentInitialRef.current || !initialQuery.trim()) return;
-    sentInitialRef.current = true;
+    setThreadId(initialThreadId ?? null);
+  }, [initialThreadId]);
+
+  React.useEffect(() => {
+    if (!pendingAssistantTarget) return;
+    if (assistantCount >= pendingAssistantTarget && !isAgentThinking) {
+      setPendingAssistantTarget(null);
+      setActiveStep(0);
+    }
+  }, [assistantCount, isAgentThinking, pendingAssistantTarget]);
+
+  React.useEffect(() => {
+    if (!pendingAssistantTarget) return;
+    if (isAgentThinking) return;
+    const id = window.setInterval(() => {
+      setActiveStep((prev) => (prev + 1) % WAITING_STEPS.length);
+    }, 1300);
+    return () => window.clearInterval(id);
+  }, [pendingAssistantTarget, isAgentThinking]);
+
+  React.useEffect(() => {
+    if (!threadId && recentThreads && recentThreads.length > 0 && initialRequestId === 0) {
+      setThreadId(recentThreads[0]._id);
+    }
+  }, [threadId, recentThreads, initialRequestId]);
+
+  React.useEffect(() => {
+    if (!threadId || !recentThreads) return;
+    const stillExists = recentThreads.some((thread) => thread._id === threadId);
+    if (!stillExists) {
+      setThreadId(recentThreads[0]?._id ?? null);
+    }
+  }, [threadId, recentThreads]);
+
+  React.useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages.results, pendingAssistantTarget]);
+
+  React.useEffect(() => {
+    if (initialRequestId <= 0) return;
+    if (initialRequestId <= handledInitialRequestRef.current) return;
+    if (!initialQuery.trim()) return;
+    handledInitialRequestRef.current = initialRequestId;
 
     (async () => {
-      setIsCreating(true);
       try {
+        const expected = assistantCount + 1;
+        setPendingAssistantTarget(expected);
+
+        if (threadId) {
+          await sendFollowup({
+            threadId,
+            prompt: initialQuery.trim(),
+            searchScope: initialSearchScope,
+          });
+          return;
+        }
+
+        setIsCreating(true);
         const { threadId: newThreadId } = await startThreadAndSendMessage({
           prompt: initialQuery.trim(),
           searchScope: initialSearchScope,
         });
         setThreadId(newThreadId);
       } catch (e) {
-        console.error("Failed to create thread:", e);
+        console.error("Failed to process initial request:", e);
+        setPendingAssistantTarget(null);
       } finally {
         setIsCreating(false);
       }
     })();
-  }, [initialQuery, initialSearchScope, startThreadAndSendMessage]);
-
-  // Auto-scroll on new messages
-  React.useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages.results]);
+  }, [
+    assistantCount,
+    initialQuery,
+    initialRequestId,
+    initialSearchScope,
+    sendFollowup,
+    startThreadAndSendMessage,
+    threadId,
+  ]);
 
   const handleSend = async () => {
-    if (!inputValue.trim() || !threadId) return;
+    if (!inputValue.trim()) return;
     const prompt = inputValue.trim();
     setInputValue("");
     try {
-      await sendFollowup({
-        threadId,
-        prompt,
-        searchScope: initialSearchScope,
-      });
+      setPendingAssistantTarget(assistantCount + 1);
+      if (threadId) {
+        await sendFollowup({
+          threadId,
+          prompt,
+          searchScope: initialSearchScope,
+        });
+      } else {
+        setIsCreating(true);
+        const { threadId: newThreadId } = await startThreadAndSendMessage({
+          prompt,
+          searchScope: initialSearchScope,
+        });
+        setThreadId(newThreadId);
+      }
     } catch (e) {
       console.error("Failed to send:", e);
+      setPendingAssistantTarget(null);
+    } finally {
+      setIsCreating(false);
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      void handleSend();
     }
   };
 
-  const isLoading =
-    isCreating || messages.status === "LoadingFirstPage";
+  const startRename = (thread: { _id: string; title?: string }) => {
+    setEditingThreadId(thread._id);
+    setEditingTitle(thread.title ?? "");
+  };
 
-  // Check if agent is currently generating (any message is streaming)
-  const isAgentThinking = messages.results.some(
-    (m) => m.status === "streaming",
-  );
+  const commitRename = async () => {
+    if (!editingThreadId) return;
+    try {
+      setIsRenaming(true);
+      await renameThread({
+        threadId: editingThreadId,
+        title: editingTitle.trim() || "Untitled conversation",
+      });
+      setEditingThreadId(null);
+      setEditingTitle("");
+    } catch (e) {
+      console.error("Failed to rename thread:", e);
+    } finally {
+      setIsRenaming(false);
+    }
+  };
+
+  const handleDeleteThread = async (targetThreadId: string) => {
+    if (!window.confirm("Delete this conversation from recent history?")) return;
+    try {
+      await deleteThread({ threadId: targetThreadId });
+      if (threadId === targetThreadId) {
+        setThreadId(null);
+      }
+    } catch (e) {
+      console.error("Failed to delete thread:", e);
+    }
+  };
+
+  const isLoading = isCreating || messages.status === "LoadingFirstPage";
+  const hasPendingNoStream = !!pendingAssistantTarget && !isAgentThinking;
 
   return (
-    <div className="flex flex-col border rounded-2xl bg-card shadow-[var(--clay-shadow-md)] overflow-hidden animate-in slide-in-from-top-2 fade-in duration-300">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b bg-gradient-to-r from-primary/5 to-accent/5">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-            <Sparkles className="h-4 w-4 text-primary-foreground" />
-          </div>
-          <div>
-            <p className="text-sm font-bold">Guidelines Agent</p>
-            <p className="text-[10px] text-muted-foreground">
-              {isAgentThinking
-                ? "Searching & analysing guidelines..."
-                : `Ask about any clinical guideline · ${searchScopeLabel(initialSearchScope)}`}
-            </p>
-          </div>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-8 w-8 p-0 rounded-full"
-          onClick={onClose}
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
-
-      {/* Messages */}
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[60vh] min-h-[200px]"
-      >
-        {isLoading && (
-          <div className="flex items-center gap-3 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="text-sm">Starting conversation...</span>
-          </div>
+    <div
+      className={cn(
+        "grid h-full min-h-0 border rounded-2xl bg-card shadow-[var(--clay-shadow-md)] animate-in slide-in-from-top-2 fade-in duration-300",
+        historyCollapsed ? "overflow-visible" : "overflow-hidden",
+        historyCollapsed
+          ? "md:grid-cols-[72px_minmax(0,1fr)]"
+          : "md:grid-cols-[320px_minmax(0,1fr)]",
+        className,
+      )}
+    >
+      <aside
+        className={cn(
+          "relative flex flex-col border-b md:border-b-0 md:border-r bg-gradient-to-b from-muted/30 to-card min-h-0",
+          historyCollapsed ? "overflow-visible z-20" : "overflow-x-hidden",
         )}
-
-        {messages.results.map((msg) => (
-          <MessageBubble key={msg.key} message={msg} />
-        ))}
-      </div>
-
-      {/* Input */}
-      <div className="border-t p-3">
-        <div className="flex items-end gap-2">
-          <textarea
-            ref={inputRef}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask a follow-up question..."
-            className="flex-1 resize-none rounded-xl border bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-[40px] max-h-[120px]"
-            rows={1}
-            disabled={!threadId}
-          />
+      >
+        <div className="px-3 py-3 border-b flex items-center justify-between gap-2">
+          {historyCollapsed ? (
+            <span className="h-6 w-6 rounded-md bg-muted/70 flex items-center justify-center text-muted-foreground">
+              <MessagesSquare className="h-3.5 w-3.5" />
+            </span>
+          ) : (
+            <p className="text-xs uppercase tracking-wide text-muted-foreground flex items-center gap-2">
+              <MessagesSquare className="h-3.5 w-3.5" />
+              Recent Conversations
+            </p>
+          )}
           <Button
+            variant="ghost"
             size="sm"
-            className="h-10 w-10 p-0 rounded-xl shrink-0"
-            onClick={handleSend}
-            disabled={!inputValue.trim() || !threadId}
+            className="h-7 w-7 p-0"
+            onClick={() => setHistoryCollapsed((prev) => !prev)}
+            title={historyCollapsed ? "Expand history" : "Collapse history"}
           >
-            <CornerDownLeft className="h-4 w-4" />
+            {historyCollapsed ? (
+              <PanelLeftOpen className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )}
           </Button>
         </div>
-        <p className="text-[10px] text-muted-foreground/50 mt-1.5 px-1">
-          Press Enter to send · Shift+Enter for new line
-        </p>
+
+        {historyCollapsed ? (
+          <div className="flex-1 flex flex-col justify-between py-3">
+            <div className="px-2 space-y-2">
+              {(recentThreads ?? []).slice(0, 6).map((thread) => (
+                <div key={thread._id} className="group relative w-9 mx-auto">
+                  <button
+                    type="button"
+                    className={cn(
+                      "w-9 h-9 rounded-full border text-[11px] font-semibold transition-colors shadow-sm block",
+                      threadId === thread._id
+                        ? "bg-primary/20 border-primary/40 text-primary"
+                        : "bg-card/90 border-border text-muted-foreground hover:bg-muted",
+                    )}
+                    title={thread.title ?? "Untitled conversation"}
+                    onClick={() => setThreadId(thread._id)}
+                  >
+                    {(thread.title ?? "C").slice(0, 1).toUpperCase()}
+                  </button>
+                  <div className="pointer-events-none absolute top-1/2 left-full ml-2 -translate-y-1/2 z-40 opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-180">
+                    <div className="w-56 rounded-lg border bg-card/95 backdrop-blur px-2.5 py-2 shadow-lg">
+                      <p className="text-xs font-semibold truncate">
+                        {thread.title ?? "Untitled conversation"}
+                      </p>
+                      <p className="text-[11px] leading-4 text-muted-foreground line-clamp-2 mt-0.5">
+                        {thread.summary ?? "No summary yet"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {!!recentThreads?.length && recentThreads.length > 6 && (
+                <div className="w-9 h-6 mx-auto rounded-full bg-muted/70 text-[10px] text-muted-foreground flex items-center justify-center">
+                  +{recentThreads.length - 6}
+                </div>
+              )}
+            </div>
+
+            <div className="px-2 pt-3 border-t">
+              <Link
+                to="/history"
+                className="w-9 h-9 mx-auto rounded-full border border-border bg-card hover:bg-muted/60 flex items-center justify-center text-muted-foreground"
+                title="Open full history"
+              >
+                <History className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2 space-y-1.5">
+              {(recentThreads ?? []).map((thread) => {
+                const isActive = threadId === thread._id;
+                const isEditing = editingThreadId === thread._id;
+                return (
+                  <div
+                    key={thread._id}
+                    className={cn(
+                      "rounded-xl border transition-colors",
+                      isActive
+                        ? "bg-primary/10 border-primary/30"
+                        : "bg-card/60 border-border hover:bg-muted/60",
+                    )}
+                  >
+                    <div className="flex items-start gap-1 min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => setThreadId(thread._id)}
+                        className="flex-1 min-w-0 text-left px-3 py-2.5"
+                      >
+                        {isEditing ? (
+                          <input
+                            autoFocus
+                            value={editingTitle}
+                            onChange={(e) => setEditingTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") void commitRename();
+                              if (e.key === "Escape") {
+                                setEditingThreadId(null);
+                                setEditingTitle("");
+                              }
+                            }}
+                            className="w-full text-sm font-medium bg-background border rounded px-2 py-1"
+                            placeholder="Conversation title"
+                          />
+                        ) : (
+                          <>
+                            <p className="text-sm font-medium truncate">
+                              {thread.title ?? "Untitled conversation"}
+                            </p>
+                            <p className="text-[11px] leading-4 text-muted-foreground line-clamp-2 mt-0.5">
+                              {thread.summary ?? "No summary yet"}
+                            </p>
+                          </>
+                        )}
+                      </button>
+                      <div className="flex items-center gap-0.5 p-1.5">
+                        {isEditing ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={() => void commitRename()}
+                            disabled={isRenaming}
+                            title="Save name"
+                          >
+                            {isRenaming ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Check className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={() => startRename(thread)}
+                            title="Rename conversation"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                          onClick={() => void handleDeleteThread(thread._id)}
+                          title="Delete conversation"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {!recentThreads?.length && (
+                <p className="text-xs text-muted-foreground px-2 py-3">
+                  No history yet.
+                </p>
+              )}
+            </div>
+            <div className="border-t p-2">
+              <Link
+                to="/history"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground hover:bg-muted/60"
+              >
+                <History className="h-3.5 w-3.5" />
+                View Full History
+              </Link>
+            </div>
+          </>
+        )}
+      </aside>
+
+      <div className="flex flex-col min-h-0">
+        <div className="flex items-center justify-between px-4 py-3 border-b bg-gradient-to-r from-primary/5 to-accent/5">
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+              <Sparkles className="h-4 w-4 text-primary-foreground" />
+            </div>
+            <div>
+              <p className="text-sm font-bold">Guidelines Agent</p>
+              <p className="text-[10px] text-muted-foreground">
+                {isAgentThinking
+                  ? "Actively reasoning with tools..."
+                  : `Ask about any clinical guideline · ${searchScopeLabel(initialSearchScope)}`}
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 rounded-full"
+            onClick={onClose}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div
+          ref={scrollRef}
+          className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4"
+        >
+          {isLoading && (
+            <div className="flex items-center gap-3 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm">Starting conversation...</span>
+            </div>
+          )}
+
+          {!threadId && !isLoading && (
+            <div className="text-sm text-muted-foreground border border-dashed rounded-xl px-4 py-3">
+              Select a conversation from history or send a new prompt.
+            </div>
+          )}
+
+          {messages.results.map((msg) => (
+            <MessageBubble key={msg.key} message={msg} />
+          ))}
+
+          {hasPendingNoStream && (
+            <div className="flex gap-3">
+              <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center shrink-0 mt-0.5">
+                <Bot className="h-3.5 w-3.5 text-primary" />
+              </div>
+              <div className="max-w-[85%] rounded-2xl rounded-bl-md border bg-muted/25 px-4 py-3 space-y-2">
+                <div className="inline-flex items-center gap-2 text-xs rounded-lg px-2.5 py-1 bg-primary/10 text-primary border border-primary/20">
+                  <Clock3 className="h-3 w-3" />
+                  <span>{WAITING_STEPS[activeStep]}</span>
+                </div>
+                <PulsingDots />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="border-t p-3">
+          <div className="flex items-end gap-2">
+            <textarea
+              ref={inputRef}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask a follow-up question..."
+              className="flex-1 resize-none rounded-xl border bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-[40px] max-h-[120px]"
+              rows={1}
+            />
+            <Button
+              size="sm"
+              className="h-10 w-10 p-0 rounded-xl shrink-0"
+              onClick={() => void handleSend()}
+              disabled={!inputValue.trim()}
+            >
+              <CornerDownLeft className="h-4 w-4" />
+            </Button>
+          </div>
+          <p className="text-[10px] text-muted-foreground/50 mt-1.5 px-1">
+            Press Enter to send · Shift+Enter for new line
+          </p>
+        </div>
       </div>
     </div>
   );
 }
-
-// ─── Message bubble ────────────────────────────────────────────────────────
 
 function MessageBubble({ message }: { message: UIMessage }) {
   const isUser = message.role === "user";
@@ -222,12 +574,7 @@ function MessageBubble({ message }: { message: UIMessage }) {
   const isStreaming = message.status === "streaming";
 
   return (
-    <div
-      className={cn(
-        "flex gap-3",
-        isUser ? "justify-end" : "justify-start",
-      )}
-    >
+    <div className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")}>
       {!isUser && (
         <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center shrink-0 mt-0.5">
           <Bot className="h-3.5 w-3.5 text-primary" />
@@ -242,20 +589,14 @@ function MessageBubble({ message }: { message: UIMessage }) {
             : "",
         )}
       >
-        {/* Tool invocations — show as thinking steps */}
         {toolParts?.map((tp, i) => (
           <ToolCallChip key={i} invocation={(tp as any).toolInvocation} />
         ))}
 
-        {/* Text content with smooth streaming */}
         {displayText ? (
           <StreamingText text={displayText} isStreaming={isStreaming} isUser={isUser} />
         ) : (
-          /* Streaming but no text yet — pulsing dots */
-          isStreaming &&
-          !toolParts?.length && (
-            <PulsingDots />
-          )
+          isStreaming && !toolParts?.length && <PulsingDots />
         )}
       </div>
 
@@ -280,8 +621,6 @@ function sanitizeUserPrompt(text: string): string {
   return text.slice(markerIndex + marker.length).trim();
 }
 
-// ─── Streaming text with smooth reveal ─────────────────────────────────────
-
 function StreamingText({
   text,
   isStreaming,
@@ -305,10 +644,8 @@ function StreamingText({
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          // Render source cards for lines matching the citation format
           p: ({ children, ...props }) => {
             const text = extractText(children);
-            // Match: 📄 **Title** — Source: xxx — File: yyy — Slug: zzz
             const sourceMatch = text?.match(
               /\u{1F4C4}\s*\*?\*?(.+?)\*?\*?\s*[\u2014—-]+\s*Source:\s*(\w+)\s*[\u2014—-]+\s*File:\s*([\w.-]+)(?:\s*[\u2014—-]+\s*Slug:\s*([\w-]+))?/u,
             );
@@ -332,7 +669,6 @@ function StreamingText({
   );
 }
 
-/** Recursively extract plain text from React children */
 function extractText(children: React.ReactNode): string | null {
   if (typeof children === "string") return children;
   if (typeof children === "number") return String(children);
@@ -346,8 +682,6 @@ function extractText(children: React.ReactNode): string | null {
   return null;
 }
 
-// ─── Tool call chip ────────────────────────────────────────────────────────
-
 function ToolCallChip({
   invocation,
 }: {
@@ -355,12 +689,11 @@ function ToolCallChip({
     toolName: string;
     state: string;
     args?: Record<string, unknown>;
+    result?: Record<string, unknown>;
   };
 }) {
-  const isRunning =
-    invocation.state === "call" || invocation.state === "partial-call";
-  const query =
-    (invocation.args as Record<string, string>)?.query ?? "guidelines";
+  const isRunning = invocation.state === "call" || invocation.state === "partial-call";
+  const query = (invocation.args as Record<string, string>)?.query ?? "guidelines";
 
   let icon = <Sparkles className="h-3 w-3" />;
   let label = invocation.toolName;
@@ -371,21 +704,27 @@ function ToolCallChip({
     ) : (
       <BookOpen className="h-3 w-3" />
     );
-    label = `RAG: "${query}"`;
+    const sourceFiles = Array.isArray((invocation.result as any)?.sources)
+      ? ((invocation.result as any).sources as Array<{ fileName?: string }>)
+          .map((s) => s.fileName)
+          .filter(Boolean)
+          .slice(0, 2)
+      : [];
+    label = sourceFiles.length > 0 ? `RAG: ${sourceFiles.join(", ")}` : `RAG: "${query}"`;
   } else if (invocation.toolName === "searchGuidelines") {
     icon = isRunning ? (
       <Loader2 className="h-3 w-3 animate-spin" />
     ) : (
       <Search className="h-3 w-3" />
     );
-    label = `Search: "${query}"`;
+    label = `Local search: "${query}"`;
   } else if (invocation.toolName === "searchExternalWeb") {
     icon = isRunning ? (
       <Loader2 className="h-3 w-3 animate-spin" />
     ) : (
       <Search className="h-3 w-3" />
     );
-    label = `External: "${query}"`;
+    label = `Web search: "${query}"`;
   }
 
   return (
@@ -398,12 +737,10 @@ function ToolCallChip({
       )}
     >
       {icon}
-      <span className="truncate max-w-[250px]">{label}</span>
+      <span className="truncate max-w-[260px]">{label}</span>
     </div>
   );
 }
-
-// ─── Pulsing dots ──────────────────────────────────────────────────────────
 
 function PulsingDots() {
   return (
@@ -420,9 +757,6 @@ function PulsingDots() {
     </div>
   );
 }
-
-
-// ─── Source card ───────────────────────────────────────────────────────────
 
 function SourceCard({
   title,
