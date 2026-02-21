@@ -24,7 +24,8 @@ function AuthedLayout() {
   const calledRef = useRef(false);
 
   useEffect(() => {
-    const profileMissing = me !== undefined && me?._id === null;
+    const profileMissing =
+      me !== undefined && (me === null || me?._id === null);
     if (!calledRef.current || profileMissing) {
       calledRef.current = true;
       if (!profileMutation.isPending) {

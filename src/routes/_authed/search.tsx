@@ -227,6 +227,74 @@ function SearchPage() {
     (localSearchData as any)?.totalPages ?? Math.ceil(localTotal / localPageSize || 1),
   );
   const webTotalPages = Math.max(1, Math.ceil((webTotal || 0) / webPageSize));
+  const webThumbnailCacheUrls = React.useMemo(
+    () => Array.from(new Set(webResults.map((result) => result.url))),
+    [webResults],
+  );
+  const { data: webThumbnailCacheData } = useQuery({
+    ...convexQuery((api.documents as any).listWebPdfThumbnails, {
+      urls: webThumbnailCacheUrls,
+    }),
+    enabled:
+      searchMode === "web" &&
+      webResultMode === "pdf" &&
+      webThumbnailCacheUrls.length > 0,
+  });
+  const upsertWebPdfThumbnail = useConvexMutation(
+    (api.documents as any).upsertWebPdfThumbnail,
+  );
+  const webThumbnailCacheByUrl = React.useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        thumbnailUrl: string | null;
+        sourceEtag: string | null;
+        sourceLastModified: string | null;
+        checkedAt: number;
+      }
+    >();
+    const items = (webThumbnailCacheData ?? []) as Array<{
+      url: string;
+      thumbnailUrl: string | null;
+      sourceEtag: string | null;
+      sourceLastModified: string | null;
+      checkedAt: number;
+    }>;
+    for (const item of items) {
+      map.set(item.url, {
+        thumbnailUrl: item.thumbnailUrl ?? null,
+        sourceEtag: item.sourceEtag ?? null,
+        sourceLastModified: item.sourceLastModified ?? null,
+        checkedAt: item.checkedAt,
+      });
+    }
+    return map;
+  }, [webThumbnailCacheData]);
+  const persistWebPdfThumbnail = React.useCallback(
+    async (args: {
+      url: string;
+      blob: Blob;
+      sourceEtag: string | null;
+      sourceLastModified: string | null;
+    }) => {
+      const uploadUrl = await generateUploadUrl({});
+      const uploadResponse = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": "image/jpeg" },
+        body: args.blob,
+      });
+      if (!uploadResponse.ok) throw new Error("Thumbnail upload failed");
+      const uploadJson = (await uploadResponse.json()) as { storageId?: string };
+      if (!uploadJson.storageId) throw new Error("Missing thumbnail storageId");
+      await upsertWebPdfThumbnail({
+        url: args.url,
+        thumbnailStorageId: uploadJson.storageId as any,
+        sourceEtag: args.sourceEtag ?? undefined,
+        sourceLastModified: args.sourceLastModified ?? undefined,
+      });
+    },
+    [generateUploadUrl, upsertWebPdfThumbnail],
+  );
 
   React.useEffect(() => {
     if (localPage > localTotalPages) {
@@ -511,14 +579,22 @@ function SearchPage() {
               )}
               {!isWebSearching && webResultMode === "pdf" && (
                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-                  {webResults.map((result) => (
-                    <WebPdfTile
-                      key={result.url}
-                      title={result.title}
-                      url={result.url}
-                      source={result.source}
-                    />
-                  ))}
+                  {webResults.map((result) => {
+                    const cached = webThumbnailCacheByUrl.get(result.url);
+                    return (
+                      <WebPdfTile
+                        key={result.url}
+                        title={result.title}
+                        url={result.url}
+                        source={result.source}
+                        cachedThumbnailUrl={cached?.thumbnailUrl ?? null}
+                        cachedSourceEtag={cached?.sourceEtag ?? null}
+                        cachedSourceLastModified={cached?.sourceLastModified ?? null}
+                        cachedCheckedAt={cached?.checkedAt ?? null}
+                        onPersistThumbnail={persistWebPdfThumbnail}
+                      />
+                    );
+                  })}
                 </div>
               )}
               {!isWebSearching && webResultMode === "full" &&
@@ -762,30 +838,104 @@ function WebPdfTile({
   title,
   url,
   source,
+  cachedThumbnailUrl,
+  cachedSourceEtag,
+  cachedSourceLastModified,
+  cachedCheckedAt,
+  onPersistThumbnail,
 }: {
   title: string;
   url: string;
   source: "NICE" | "RCEM";
+  cachedThumbnailUrl: string | null;
+  cachedSourceEtag: string | null;
+  cachedSourceLastModified: string | null;
+  cachedCheckedAt: number | null;
+  onPersistThumbnail: (args: {
+    url: string;
+    blob: Blob;
+    sourceEtag: string | null;
+    sourceLastModified: string | null;
+  }) => Promise<void>;
 }) {
   const iconUrl = `https://www.google.com/s2/favicons?domain_url=${encodeURIComponent(url)}&sz=64`;
-  const [thumbnailUrl, setThumbnailUrl] = React.useState<string | null>(null);
-  const [isLoadingThumbnail, setIsLoadingThumbnail] = React.useState(true);
+  const proxiedPdfUrl = React.useMemo(
+    () => `/api/pdf-proxy?url=${encodeURIComponent(url)}`,
+    [url],
+  );
+  const [thumbnailUrl, setThumbnailUrl] = React.useState<string | null>(
+    cachedThumbnailUrl,
+  );
+  const [isLoadingThumbnail, setIsLoadingThumbnail] = React.useState(
+    !cachedThumbnailUrl,
+  );
   const objectUrlRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (cachedThumbnailUrl) {
+      setThumbnailUrl(cachedThumbnailUrl);
+      setIsLoadingThumbnail(false);
+    }
+  }, [cachedThumbnailUrl]);
 
   React.useEffect(() => {
     let cancelled = false;
     const run = async () => {
-      setIsLoadingThumbnail(true);
+      const now = Date.now();
+      const staleAfterMs = 6 * 60 * 60 * 1000;
+      const hasCachedThumbnail = !!cachedThumbnailUrl;
+      const isFreshEnough =
+        !!cachedCheckedAt && now - cachedCheckedAt < staleAfterMs;
+      const hasValidators = !!(cachedSourceEtag || cachedSourceLastModified);
+      const shouldCheckSource = !hasCachedThumbnail || !isFreshEnough || !hasValidators;
+      let sourceEtag: string | null = null;
+      let sourceLastModified: string | null = null;
+      let shouldRegenerate = !hasCachedThumbnail;
+
+      if (!hasCachedThumbnail) {
+        setIsLoadingThumbnail(true);
+      }
+
       try {
-        const blob = await generatePdfThumbnailBlobFromUrl(url);
+        if (shouldCheckSource) {
+          const headResponse = await fetch(proxiedPdfUrl, { method: "HEAD" });
+          if (headResponse.ok) {
+            sourceEtag = headResponse.headers.get("etag");
+            sourceLastModified = headResponse.headers.get("last-modified");
+
+            const etagChanged =
+              !!cachedSourceEtag && !!sourceEtag && cachedSourceEtag !== sourceEtag;
+            const lastModifiedChanged =
+              !!cachedSourceLastModified &&
+              !!sourceLastModified &&
+              cachedSourceLastModified !== sourceLastModified;
+
+            if (etagChanged || lastModifiedChanged) {
+              shouldRegenerate = true;
+            }
+          }
+        }
+
+        if (!shouldRegenerate) return;
+
+        const blob = await generatePdfThumbnailBlobFromUrl(proxiedPdfUrl);
         if (!blob || cancelled) {
           if (!cancelled) setThumbnailUrl(null);
           return;
+        }
+        if (objectUrlRef.current) {
+          URL.revokeObjectURL(objectUrlRef.current);
         }
         const objectUrl = URL.createObjectURL(blob);
         objectUrlRef.current = objectUrl;
         if (!cancelled) {
           setThumbnailUrl(objectUrl);
+          void onPersistThumbnail({
+            url,
+            blob,
+            sourceEtag,
+            sourceLastModified,
+          }).catch(() => {});
         } else {
           URL.revokeObjectURL(objectUrl);
         }
@@ -807,7 +957,15 @@ function WebPdfTile({
         objectUrlRef.current = null;
       }
     };
-  }, [url]);
+  }, [
+    proxiedPdfUrl,
+    cachedThumbnailUrl,
+    cachedSourceEtag,
+    cachedSourceLastModified,
+    cachedCheckedAt,
+    onPersistThumbnail,
+    url,
+  ]);
 
   return (
     <a

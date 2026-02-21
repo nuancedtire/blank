@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import {
   mutation,
   action,
@@ -20,6 +20,16 @@ async function sha256Hex(input: string): Promise<string> {
   return Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+}
+
+function normalizeExternalPdfUrl(input: string): string {
+  try {
+    const url = new URL(input.trim());
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return input.trim();
+  }
 }
 
 // Generate upload URL for file storage
@@ -375,6 +385,110 @@ export const setGuidelineThumbnail = mutation({
         thumbnailStorageId,
       });
     }
+    return null;
+  },
+});
+
+export const listWebPdfThumbnails = query({
+  args: {
+    urls: v.array(v.string()),
+  },
+  returns: v.array(
+    v.object({
+      url: v.string(),
+      thumbnailUrl: v.union(v.string(), v.null()),
+      sourceEtag: v.union(v.string(), v.null()),
+      sourceLastModified: v.union(v.string(), v.null()),
+      checkedAt: v.number(),
+      updatedAt: v.number(),
+    }),
+  ),
+  handler: async (ctx, { urls }) => {
+    if (urls.length > 60) {
+      throw new ConvexError({
+        code: "TOO_MANY_URLS",
+        message: "Maximum 60 URLs per thumbnail cache lookup.",
+      });
+    }
+
+    const normalized = Array.from(
+      new Set(
+        urls
+          .map((url) => normalizeExternalPdfUrl(url))
+          .filter((url) => url.length > 0),
+      ),
+    );
+
+    const rows = await Promise.all(
+      normalized.map((url) =>
+        ctx.db
+          .query("webPdfThumbnails")
+          .withIndex("by_url", (q) => q.eq("url", url))
+          .first(),
+      ),
+    );
+
+    const hydrated = await Promise.all(
+      rows
+        .filter((row): row is NonNullable<typeof row> => !!row)
+        .map(async (row) => ({
+          url: row.url,
+          thumbnailUrl: await ctx.storage.getUrl(row.thumbnailStorageId),
+          sourceEtag: row.sourceEtag ?? null,
+          sourceLastModified: row.sourceLastModified ?? null,
+          checkedAt: row.checkedAt,
+          updatedAt: row.updatedAt,
+        })),
+    );
+
+    return hydrated;
+  },
+});
+
+export const upsertWebPdfThumbnail = mutation({
+  args: {
+    url: v.string(),
+    thumbnailStorageId: v.id("_storage"),
+    sourceEtag: v.optional(v.string()),
+    sourceLastModified: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const url = normalizeExternalPdfUrl(args.url);
+    const now = Date.now();
+
+    const existing = await ctx.db
+      .query("webPdfThumbnails")
+      .withIndex("by_url", (q) => q.eq("url", url))
+      .first();
+
+    if (existing) {
+      if (
+        existing.thumbnailStorageId &&
+        existing.thumbnailStorageId !== args.thumbnailStorageId
+      ) {
+        await ctx.storage.delete(existing.thumbnailStorageId);
+      }
+
+      await ctx.db.patch(existing._id, {
+        thumbnailStorageId: args.thumbnailStorageId,
+        sourceEtag: args.sourceEtag,
+        sourceLastModified: args.sourceLastModified,
+        checkedAt: now,
+        updatedAt: now,
+      });
+      return null;
+    }
+
+    await ctx.db.insert("webPdfThumbnails", {
+      url,
+      thumbnailStorageId: args.thumbnailStorageId,
+      sourceEtag: args.sourceEtag,
+      sourceLastModified: args.sourceLastModified,
+      checkedAt: now,
+      updatedAt: now,
+    });
+
     return null;
   },
 });

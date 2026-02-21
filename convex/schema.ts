@@ -96,6 +96,16 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_uploadedAt", ["uploadedAt"]),
 
+  // Cached page-1 thumbnails for external web PDFs (shared across users)
+  webPdfThumbnails: defineTable({
+    url: v.string(),
+    thumbnailStorageId: v.id("_storage"),
+    sourceEtag: v.optional(v.string()),
+    sourceLastModified: v.optional(v.string()),
+    checkedAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_url", ["url"]),
+
   // Guideline version history
   guidelineVersions: defineTable({
     guidelineId: v.id("guidelines"),

@@ -26,8 +26,12 @@ export async function findUserProfile(
 ): Promise<Doc<"users"> | null> {
   // Preferred path: Better Auth's linked app user id.
   if (authUser.userId) {
-    const linked = await ctx.db.get(authUser.userId as Id<"users">);
-    if (linked) return linked;
+    try {
+      const linked = await ctx.db.get(authUser.userId as Id<"users">);
+      if (linked) return linked;
+    } catch {
+      // Ignore malformed/stale linked IDs and continue with email fallback.
+    }
   }
 
   const rawEmail = authUser.email.trim();
