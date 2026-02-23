@@ -92,7 +92,7 @@ export function RadiantPromptInput({
               type="button"
               onClick={() => onModeChange?.("local")}
               className={cn(
-                "h-7 px-3 text-xs rounded-md transition-colors",
+                "h-8 px-2.5 sm:px-3 text-xs rounded-md transition-colors min-w-[44px]",
                 mode === "local"
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground",
@@ -105,7 +105,7 @@ export function RadiantPromptInput({
               type="button"
               onClick={() => onModeChange?.("web")}
               className={cn(
-                "h-7 px-3 text-xs rounded-md transition-colors",
+                "h-8 px-2.5 sm:px-3 text-xs rounded-md transition-colors min-w-[44px]",
                 mode === "web"
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground",
@@ -121,7 +121,7 @@ export function RadiantPromptInput({
             onClick={handleSubmit}
             disabled={!value || disabled}
             className={cn(
-              "flex items-center justify-center w-9 h-9 rounded-lg transition-all duration-150 cursor-pointer shrink-0",
+              "flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-150 cursor-pointer shrink-0",
               value
                 ? "bg-primary text-primary-foreground hover:bg-primary/90"
                 : "bg-muted text-muted-foreground cursor-not-allowed",

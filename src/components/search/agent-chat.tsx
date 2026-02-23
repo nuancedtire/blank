@@ -35,6 +35,12 @@ import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { SearchScopeOption } from "@/components/ui/radiant-input";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 interface AgentChatProps {
   initialQuery: string;
@@ -73,6 +79,7 @@ export function AgentChat({
 }: AgentChatProps) {
   const [threadId, setThreadId] = React.useState<string | null>(initialThreadId);
   const [historyCollapsed, setHistoryCollapsed] = React.useState(false);
+  const [mobileHistoryOpen, setMobileHistoryOpen] = React.useState(false);
   const [isCreating, setIsCreating] = React.useState(false);
   const [inputValue, setInputValue] = React.useState("");
   const [activeStep, setActiveStep] = React.useState(0);
@@ -266,23 +273,28 @@ export function AgentChat({
     }
   };
 
+  const selectThread = (id: string) => {
+    setThreadId(id);
+    setMobileHistoryOpen(false);
+  };
+
   const isLoading = isCreating || messages.status === "LoadingFirstPage";
   const hasPendingNoStream = !!pendingAssistantTarget && !isAgentThinking;
 
   return (
     <div
       className={cn(
-        "grid h-full min-h-0 border rounded-2xl bg-card shadow-[var(--clay-shadow-md)] animate-in slide-in-from-top-2 fade-in duration-300",
-        historyCollapsed ? "overflow-visible" : "overflow-hidden",
+        "grid h-full min-h-0 border rounded-2xl bg-card shadow-[var(--shadow-md)] animate-in slide-in-from-top-2 fade-in duration-300 overflow-hidden",
         historyCollapsed
           ? "md:grid-cols-[72px_minmax(0,1fr)]"
-          : "md:grid-cols-[320px_minmax(0,1fr)]",
+          : "md:grid-cols-[280px_minmax(0,1fr)]",
         className,
       )}
     >
+      {/* Desktop sidebar — hidden on mobile, visible on md+ */}
       <aside
         className={cn(
-          "relative flex flex-col border-b md:border-b-0 md:border-r bg-gradient-to-b from-muted/30 to-card min-h-0",
+          "relative hidden md:flex flex-col border-r bg-gradient-to-b from-muted/30 to-card min-h-0",
           historyCollapsed ? "overflow-visible z-20" : "overflow-x-hidden",
         )}
       >
@@ -366,86 +378,23 @@ export function AgentChat({
                 const isActive = threadId === thread._id;
                 const isEditing = editingThreadId === thread._id;
                 return (
-                  <div
+                  <ThreadItem
                     key={thread._id}
-                    className={cn(
-                      "rounded-xl border transition-colors",
-                      isActive
-                        ? "bg-primary/10 border-primary/30"
-                        : "bg-card/60 border-border hover:bg-muted/60",
-                    )}
-                  >
-                    <div className="flex items-start gap-1 min-w-0">
-                      <button
-                        type="button"
-                        onClick={() => setThreadId(thread._id)}
-                        className="flex-1 min-w-0 text-left px-3 py-2.5"
-                      >
-                        {isEditing ? (
-                          <input
-                            autoFocus
-                            value={editingTitle}
-                            onChange={(e) => setEditingTitle(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") void commitRename();
-                              if (e.key === "Escape") {
-                                setEditingThreadId(null);
-                                setEditingTitle("");
-                              }
-                            }}
-                            className="w-full text-sm font-medium bg-background border rounded px-2 py-1"
-                            placeholder="Conversation title"
-                          />
-                        ) : (
-                          <>
-                            <p className="text-sm font-medium truncate">
-                              {thread.title ?? "Untitled conversation"}
-                            </p>
-                            <p className="text-[11px] leading-4 text-muted-foreground line-clamp-2 mt-0.5">
-                              {thread.summary ?? "No summary yet"}
-                            </p>
-                          </>
-                        )}
-                      </button>
-                      <div className="flex items-center gap-0.5 p-1.5">
-                        {isEditing ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0"
-                            onClick={() => void commitRename()}
-                            disabled={isRenaming}
-                            title="Save name"
-                          >
-                            {isRenaming ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Check className="h-3.5 w-3.5" />
-                            )}
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0"
-                            onClick={() => startRename(thread)}
-                            title="Rename conversation"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                          onClick={() => void handleDeleteThread(thread._id)}
-                          title="Delete conversation"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
+                    thread={thread}
+                    isActive={isActive}
+                    isEditing={isEditing}
+                    editingTitle={editingTitle}
+                    isRenaming={isRenaming}
+                    onSelect={() => setThreadId(thread._id)}
+                    onStartRename={() => startRename(thread)}
+                    onCommitRename={() => void commitRename()}
+                    onEditingTitleChange={setEditingTitle}
+                    onCancelRename={() => {
+                      setEditingThreadId(null);
+                      setEditingTitle("");
+                    }}
+                    onDelete={() => void handleDeleteThread(thread._id)}
+                  />
                 );
               })}
               {!recentThreads?.length && (
@@ -467,25 +416,89 @@ export function AgentChat({
         )}
       </aside>
 
+      {/* Mobile history drawer */}
+      <Sheet open={mobileHistoryOpen} onOpenChange={setMobileHistoryOpen}>
+        <SheetContent side="left" className="w-[300px] p-0 flex flex-col">
+          <SheetHeader className="px-3 py-3 border-b">
+            <SheetTitle className="text-xs uppercase tracking-wide text-muted-foreground flex items-center gap-2 font-normal">
+              <MessagesSquare className="h-3.5 w-3.5" />
+              Recent Conversations
+            </SheetTitle>
+          </SheetHeader>
+          <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1.5">
+            {(recentThreads ?? []).map((thread) => {
+              const isActive = threadId === thread._id;
+              const isEditing = editingThreadId === thread._id;
+              return (
+                <ThreadItem
+                  key={thread._id}
+                  thread={thread}
+                  isActive={isActive}
+                  isEditing={isEditing}
+                  editingTitle={editingTitle}
+                  isRenaming={isRenaming}
+                  onSelect={() => selectThread(thread._id)}
+                  onStartRename={() => startRename(thread)}
+                  onCommitRename={() => void commitRename()}
+                  onEditingTitleChange={setEditingTitle}
+                  onCancelRename={() => {
+                    setEditingThreadId(null);
+                    setEditingTitle("");
+                  }}
+                  onDelete={() => void handleDeleteThread(thread._id)}
+                />
+              );
+            })}
+            {!recentThreads?.length && (
+              <p className="text-xs text-muted-foreground px-2 py-3">
+                No history yet.
+              </p>
+            )}
+          </div>
+          <div className="border-t p-2">
+            <Link
+              to="/history"
+              onClick={() => setMobileHistoryOpen(false)}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-border px-3 py-2.5 text-xs text-muted-foreground hover:bg-muted/60"
+            >
+              <History className="h-3.5 w-3.5" />
+              View Full History
+            </Link>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Main chat area */}
       <div className="flex flex-col min-h-0">
-        <div className="flex items-center justify-between px-4 py-3 border-b bg-gradient-to-r from-primary/5 to-accent/5">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+        <div className="flex items-center justify-between px-3 md:px-4 py-3 border-b bg-gradient-to-r from-primary/5 to-accent/5">
+          <div className="flex items-center gap-2 min-w-0">
+            {/* Mobile: history button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 w-9 p-0 rounded-full md:hidden shrink-0"
+              onClick={() => setMobileHistoryOpen(true)}
+              title="Conversation history"
+            >
+              <MessagesSquare className="h-4 w-4" />
+            </Button>
+
+            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center shrink-0">
               <Sparkles className="h-4 w-4 text-primary-foreground" />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-sm font-bold">Guidelines Agent</p>
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-[10px] text-muted-foreground truncate">
                 {isAgentThinking
                   ? "Actively reasoning with tools..."
-                  : `Ask about any clinical guideline · ${searchScopeLabel(initialSearchScope)}`}
+                  : `Ask about any guideline · ${searchScopeLabel(initialSearchScope)}`}
               </p>
             </div>
           </div>
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 w-8 p-0 rounded-full"
+            className="h-9 w-9 p-0 rounded-full shrink-0"
             onClick={onClose}
           >
             <X className="h-4 w-4" />
@@ -494,7 +507,7 @@ export function AgentChat({
 
         <div
           ref={scrollRef}
-          className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4"
+          className="flex-1 min-h-0 overflow-y-auto p-3 md:p-5 space-y-4"
         >
           {isLoading && (
             <div className="flex items-center gap-3 text-muted-foreground">
@@ -537,21 +550,128 @@ export function AgentChat({
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask a follow-up question..."
-              className="flex-1 resize-none rounded-xl border bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-[40px] max-h-[120px]"
+              className="flex-1 resize-none rounded-xl border bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-[44px] max-h-[120px]"
               rows={1}
             />
             <Button
               size="sm"
-              className="h-10 w-10 p-0 rounded-xl shrink-0"
+              className="h-11 w-11 p-0 rounded-xl shrink-0"
               onClick={() => void handleSend()}
               disabled={!inputValue.trim()}
             >
               <CornerDownLeft className="h-4 w-4" />
             </Button>
           </div>
-          <p className="text-[10px] text-muted-foreground/50 mt-1.5 px-1">
+          <p className="hidden sm:block text-[10px] text-muted-foreground/50 mt-1.5 px-1">
             Press Enter to send · Shift+Enter for new line
           </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface ThreadItemProps {
+  thread: { _id: string; title?: string; summary?: string };
+  isActive: boolean;
+  isEditing: boolean;
+  editingTitle: string;
+  isRenaming: boolean;
+  onSelect: () => void;
+  onStartRename: () => void;
+  onCommitRename: () => void;
+  onEditingTitleChange: (v: string) => void;
+  onCancelRename: () => void;
+  onDelete: () => void;
+}
+
+function ThreadItem({
+  thread,
+  isActive,
+  isEditing,
+  editingTitle,
+  isRenaming,
+  onSelect,
+  onStartRename,
+  onCommitRename,
+  onEditingTitleChange,
+  onCancelRename,
+  onDelete,
+}: ThreadItemProps) {
+  return (
+    <div
+      className={cn(
+        "rounded-xl border transition-colors",
+        isActive
+          ? "bg-primary/10 border-primary/30"
+          : "bg-card/60 border-border hover:bg-muted/60",
+      )}
+    >
+      <div className="flex items-start gap-1 min-w-0">
+        <button
+          type="button"
+          onClick={onSelect}
+          className="flex-1 min-w-0 text-left px-3 py-2.5"
+        >
+          {isEditing ? (
+            <input
+              autoFocus
+              value={editingTitle}
+              onChange={(e) => onEditingTitleChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") onCommitRename();
+                if (e.key === "Escape") onCancelRename();
+              }}
+              className="w-full text-sm font-medium bg-background border rounded px-2 py-1"
+              placeholder="Conversation title"
+            />
+          ) : (
+            <>
+              <p className="text-sm font-medium truncate">
+                {thread.title ?? "Untitled conversation"}
+              </p>
+              <p className="text-[11px] leading-4 text-muted-foreground line-clamp-2 mt-0.5">
+                {thread.summary ?? "No summary yet"}
+              </p>
+            </>
+          )}
+        </button>
+        <div className="flex items-center gap-0.5 p-1.5">
+          {isEditing ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={onCommitRename}
+              disabled={isRenaming}
+              title="Save name"
+            >
+              {isRenaming ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Check className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={onStartRename}
+              title="Rename conversation"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+            onClick={onDelete}
+            title="Delete conversation"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </div>
     </div>
@@ -574,7 +694,7 @@ function MessageBubble({ message }: { message: UIMessage }) {
   const isStreaming = message.status === "streaming";
 
   return (
-    <div className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")}>
+    <div className={cn("flex gap-2 md:gap-3", isUser ? "justify-end" : "justify-start")}>
       {!isUser && (
         <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center shrink-0 mt-0.5">
           <Bot className="h-3.5 w-3.5 text-primary" />
@@ -583,9 +703,9 @@ function MessageBubble({ message }: { message: UIMessage }) {
 
       <div
         className={cn(
-          "max-w-[85%] space-y-2",
+          "max-w-[88%] md:max-w-[85%] space-y-2",
           isUser
-            ? "bg-primary text-primary-foreground rounded-2xl rounded-br-md px-4 py-2.5"
+            ? "bg-primary text-primary-foreground rounded-2xl rounded-br-md px-3 md:px-4 py-2.5"
             : "",
         )}
       >
@@ -730,14 +850,14 @@ function ToolCallChip({
   return (
     <div
       className={cn(
-        "inline-flex items-center gap-2 text-xs rounded-lg px-3 py-1.5 transition-colors",
+        "inline-flex items-center gap-2 text-xs rounded-lg px-2.5 md:px-3 py-1.5 transition-colors",
         isRunning
           ? "bg-primary/10 text-primary border border-primary/20"
           : "bg-muted/50 text-muted-foreground",
       )}
     >
       {icon}
-      <span className="truncate max-w-[260px]">{label}</span>
+      <span className="truncate max-w-[140px] sm:max-w-[220px] md:max-w-[260px]">{label}</span>
     </div>
   );
 }
