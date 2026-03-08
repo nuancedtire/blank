@@ -1,0 +1,868 @@
+author:	nuancedtire
+association:	owner
+edited:	false
+status:	none
+--
+/opencode
+
+Look at the issue and pretend you’re senior dev doing a plan review and you HATE this implementation. What would you criticize? What edge cases am I missing?
+
+And then comment back with a plan before executing code or creating a PR
+--
+author:	opencode-agent
+association:	none
+edited:	false
+status:	none
+--
+## Senior Dev Review: The Harsh Truth
+
+This plan has **multiple architectural issues** and **critical edge cases** that will bite you in production. Here's what's wrong:
+
+### 🔴 Critical Issues
+
+**1. SHA256 Timing Race Condition**
+- Computing hash on frontend is vulnerable to tampering
+- Doing it during processing means you've already stored the file in Convex storage
+- Better: hash immediately in `saveDocument` before storage write, fail fast
+
+**2. Semantic Search for Duplicate Detection is Flaky**
+- RAG search is **lossy** - it finds semantically similar, not identical documents
+- LLM-detected version dates are unreliable (what if document doesn't have dates?)
+- You're proposing a blocking UI flow after an already-expensive LLM call
+- **Missing:** Thresholds for similarity scores - what's "similar enough"?
+
+**3. The "Version History" Design is Broken**
+- `guidelineVersions` table stores **full content copies** for every change
+- With duplicate handling, this becomes exponential bloat
+- No deduplication between versions
+- **Missing:** How do you handle 50+ versions of a 100MB PDF?
+
+**4. RAG Indexing Complexity**
+- `rag.deleteByKey()` is irreversible - what if restore fails halfway?
+- RAG is keyed by `documentId`, but you're archiving by `guidelineId`
+- **Missing:** Transaction safety between DB updates and RAG operations
+
+### 🟠 Edge Cases You Missed
+
+**Race Condition:** Two users upload same file simultaneously
+- Both pass hash check → both get stored → duplicate created
+- Need: unique constraint on hash field OR atomic check-and-set
+
+**Partial Upload Failure:** 
+- Document indexed in RAG, but DB transaction fails
+- RAG has embedding, DB has no record → orphan data
+
+**Restore Conflicts:**
+- What if new version exists with *different* content than the archived one?
+- Restoring shouldn't blindly overwrite - need merge conflict UI
+
+**Search Consistency:**
+- Convex queries are eventually consistent
+- Archiving status change won't immediately reflect in all search queries
+- Users may see "archived" documents briefly
+
+**Storage Bloat:**
+- Archived documents still consume Convex storage
+- No cleanup strategy for old file versions
+
+**Multi-file Guidelines:**
+- What if a guideline comprises multiple uploaded documents?
+- Your 1:1 `uploadedDocumentId` relationship breaks this
+
+### 🟡 UX Problems
+
+**1. LLM-Powered Version Detection is Slow**
+- You're proposing: upload → LLM extract → RAG search → LLM compare → user dialog
+- This is 3-5 seconds minimum per upload
+- **Better:** Detect duplicates BEFORE LLM processing using cheap heuristics (title similarity, file hash, word count)
+
+**2. The Confirmation Flow is Awkward**
+- User uploads file, walks away, comes back to a modal?
+- Web uploads should be async - blocking UI is bad UX
+- **Better:** Queue for review, notify later
+
+**3. No "Force Upload" Escape Hatch**
+- What if hash collision is legitimate (different files, same hash)?
+- Need override for false positives
+
+### 🟢 Implementation Concerns
+
+**Schema Design Issues:**
+```typescript
+// Proposed: sha256Hash in uploadedDocuments
+// Problem: This table tracks upload metadata, not content
+// Better: Store hash in guidelines table where content lives
+// Why: What if same content uploaded via different sources?
+```
+
+**The Archive/Restore State Machine is Underspecified:**
+- Can you archive a draft?
+- What happens to citations in chat history?
+- Do archived documents still appear in audit logs?
+- What if you restore to a slug that now conflicts?
+
+**Index Strategy:**
+- You propose indexing `sha256Hash` - good
+- But you also need partial indexes (only non-archived) for performance
+- Convex doesn't support partial indexes natively - filter at query level
+
+---
+
+## Revised Implementation Plan
+
+Here's what you should actually do:
+
+### Phase 1: Exact Duplicate (MVP)
+1. **Add hash field to `uploadedDocuments`** with index
+2. **Hash in `saveDocument` mutation** BEFORE storage write
+3. **Fail fast** - reject before any processing
+4. **No LLM involvement** - purely hash-based
+5. **Simple error message** - "This file already exists"
+
+### Phase 2: Smart Duplicate Detection (Optional)
+Skip the LLM-based version comparison for now. Instead:
+1. **Use simple heuristics**: title similarity (fuzzy match), category match, file size
+2. **Show "Possible duplicates" sidebar** in upload UI
+3. **Let user decide** - no blocking flow
+4. **Queue-based processing** - don't block on detection
+
+### Phase 3: Archive System
+1. **Soft delete approach**: `status: "archived"` + `archivedAt`
+2. **Filter at query level** - all queries exclude archived
+3. **RAG cleanup**: Delete embeddings on archive, re-add on restore
+4. **Storage cleanup**: Optional - delete file after X days archived
+5. **Audit trail**: Use existing `auditLogs` table
+
+### Phase 4: Version Replacement
+Instead of archive/restore dance:
+1. **"Replace document" flow** - upload new version, auto-archive old
+2. **Preserve slug** - new content, same URL
+3. **Version history in `guidelineVersions`** - but don't store full content, store diff/changelog
+4. **Redirect old slugs** - if someone had bookmarked
+
+### Schema Changes (Minimal)
+```typescript
+// uploadedDocuments table
+sha256Hash: v.optional(v.string()), // NEW
+isDuplicateOf: v.optional(v.id("uploadedDocuments")), // NEW
+
+// guidelines table - NO CHANGES NEEDED
+// status: "archived" already exists
+// Use auditLogs for archive metadata
+```
+
+### Functions to Add
+1. `checkDuplicate(hash)` - query, returns existing doc or null
+2. `archiveGuideline(id, reason)` - mutation
+3. `restoreGuideline(id)` - mutation  
+4. `listArchived()` - query (admin only)
+
+### What to Skip (For Now)
+- ❌ LLM-based version comparison (too slow/complex)
+- ❌ Automatic version detection (use manual replacement)
+- ❌ Full content in version history (store diffs only)
+- ❌ Complex restore logic (just re-upload if needed)
+
+---
+
+## Bottom Line
+
+The original plan is **over-engineered**. You don't need semantic search for duplicate detection - hash works for exact matches, and fuzzy title matching catches most "new version" cases. The LLM-powered comparison adds complexity without clear value.
+
+**My recommendation:** Start with exact duplicate (hash) only. Ship that. See if users actually need the "smart version detection" before building it. Most "updated version" scenarios are users re-uploading the same file with minor edits - hash catches that too.
+
+Want me to implement the **simplified MVP** (hash-based exact duplicate only)? Or do you want the full complex version?
+
+[github run](/nuancedtire/blank/actions/runs/22084043362)
+--
+author:	kiloconnect
+association:	none
+edited:	false
+status:	none
+--
+## Senior Dev Code Review: This Plan Has Serious Problems
+
+Let me be direct. I've seen this exact pattern of "smart" duplicate detection fail in production multiple times. Each time it was the same story: over-engineered AI solution, under-tested edge cases, and a production incident.
+
+---
+
+## The Implementation is Fundamentally Flawed
+
+### 1. SHA256 Hash Storage Location is Wrong
+
+You're putting `sha256Hash` in `uploadedDocuments`. That's the **wrong table**.
+
+**Why this is wrong:**
+- `uploadedDocuments` is a processing queue table - documents move through states (pending to indexing to indexed)
+- What happens when you delete the uploaded document but keep the guideline? **You lose the hash.**
+- What if the same content is uploaded twice with different filenames? You'd have two `uploadedDocuments` entries with the same hash but only one `guideline`.
+
+**Correct approach:** Store the hash in the `guidelines` table where the canonical content lives. Or better, a separate `contentHashes` table that maps hash to active guideline ID.
+
+---
+
+### 2. The "Semantic Search for Version Detection" is Reckless
+
+You're proposing to use RAG vector search to find "similar" documents and then use an LLM to compare them. This is **dangerous** for clinical guidelines.
+
+**What could go wrong:**
+
+| Scenario | What Happens | Consequence |
+|----------|--------------|-------------|
+| Two guidelines about sepsis from different sources | RAG finds them as "similar" | LLM incorrectly flags one as duplicate |
+| Updated guideline with major clinical changes | RAG similarity is high | LLM might say "same document, minor changes" |
+| Guideline renamed/restructured | RAG similarity is low | Version detection **fails completely** |
+| Document with embedded dates | LLM extracts wrong date | Wrong version marked as "newer" |
+
+**The fundamental problem:** You're using **similarity** as a proxy for **version relationship**. These are completely different concepts.
+
+- Similarity = "documents discuss the same topic"
+- Version = "document B is a revision of document A"
+
+RAG cannot distinguish between "Sepsis guideline v2.0" and "Sepsis guideline from different hospital." An LLM guessing at it is **not reliable enough for clinical systems**.
+
+---
+
+### 3. The Archive/Restore Flow Has No Transactional Safety
+
+Look at your proposed archive flow:
+
+1. Set status = "archived"
+2. Remove RAG embeddings
+3. Update version history
+
+**What happens when step 2 fails?**
+- DB says archived, RAG still returns it in search
+- Users see document in search that they can't access
+- **Data inconsistency** that's hard to debug
+
+**What about restore?**
+If re-adding RAG embeddings fails, you have a "published" document that **doesn't appear in AI search results**. In a clinical setting, that means doctors might not see critical guidelines.
+
+**You need:** Idempotent operations with rollback, or a queue-based approach with retry logic.
+
+---
+
+### 4. The User Confirmation Flow is a UX Nightmare
+
+Your flow:
+Upload -> LLM Process -> RAG Search -> LLM Compare -> Block UI for User Confirmation
+
+**Problems:**
+1. **5-10 second blocking operation** - user thinks the app is broken
+2. **What if user closes the tab?** - document is in limbo
+3. **What if LLM is slow/down?** - no fallback
+4. **Mobile users** - they won't wait for this
+
+**Real-world scenario:** A clinician uploads a guideline during a busy shift. They don't have time to wait for your AI comparison. They close the tab. Now you have a half-processed document with no clear state.
+
+---
+
+## Edge Cases That Will Break This
+
+### Race Conditions
+
+User A uploads "sepsis-v2.pdf" at T+0ms
+User B uploads "sepsis-v2.pdf" at T+50ms
+
+Both pass the hash check (neither document exists yet)
+Both get processed
+Both create guidelines
+
+**Result: Two identical guidelines in the system**
+
+**Fix:** You need a **unique constraint** on the hash field with atomic check-and-insert. Convex doesn't support unique constraints natively, so you need to handle this in application logic with proper locking.
+
+---
+
+### The "Same Content, Different Source" Problem
+
+Guideline A: Local trust sepsis protocol (hash: abc123)
+Guideline B: RCEM sepsis guideline (hash: abc123)
+
+Wait, they have the same hash? Yes - if the local trust **copied** the RCEM guideline verbatim.
+
+Your system would reject the second upload. But they're **different sources** with different authority levels. The local trust might want both indexed.
+
+**Your schema doesn't account for this.**
+
+---
+
+### Archive Cascading Failures
+
+What happens when:
+1. Guideline A is archived
+2. Guideline B cites Guideline A in its content
+3. User searches for the topic in Guideline B
+4. AI tries to retrieve Guideline A for context
+5. **Error** - guideline not found in active set
+
+Your RAG system needs to handle **broken citations** gracefully.
+
+---
+
+### Storage Cost Explosion
+
+Your `guidelineVersions` table stores **full content** for each version:
+
+Guideline: 500KB PDF -> 2MB extracted text
+10 versions = 20MB stored
+100 guidelines with 10 versions each = 2GB
+
+Convex storage isn't free. This adds up fast.
+
+---
+
+## The AI Approach is Wrong
+
+### Where AI Makes Sense
+- Document processing - extracting metadata, cleaning OCR (you already do this)
+- Search queries - understanding user intent (you already do this)
+- Content summarization - generating summaries for cards (you already do this)
+
+### Where AI is Overkill
+- Duplicate detection - hash comparison is O(1), AI is O(expensive)
+- Version comparison - this should be **explicit user action**, not AI guessing
+- Archive decisions - this is a **business rule**, not an AI decision
+
+### Where AI is Dangerous
+"LLM suggests which version is newer" - LLMs hallucinate. They can't reliably extract dates from clinical documents. They can't reliably compare document versions. **Do not put AI in this critical path.**
+
+---
+
+## A Better Implementation Plan
+
+### Phase 1: Hash-Based Exact Duplicate Detection (Do This First)
+
+Add hash to guidelines table (not uploadedDocuments):
+
+```typescript
+guidelines: {
+  // ... existing fields
+  contentHash: v.optional(v.string()),
+}
+```
+
+Create index:
+
+```typescript
+.index("by_contentHash", ["contentHash"])
+```
+
+Hash BEFORE upload - Frontend calculates SHA256 of file content, passes hash to saveDocument mutation.
+
+Atomic check in mutation:
+
+```typescript
+export const saveDocument = mutation({
+  args: {
+    // ... existing args
+    contentHash: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Check for existing guideline with same hash
+    const existing = await ctx.db
+      .query("guidelines")
+      .withIndex("by_contentHash", q => q.eq("contentHash", args.contentHash))
+      .filter(q => q.neq("status", "archived"))
+      .first();
+    
+    if (existing) {
+      throw new Error(`Duplicate: This content already exists as "${existing.title}"`);
+    }
+    
+    // Proceed with upload
+  },
+});
+```
+
+**Key differences:**
+- Hash is checked against **guidelines**, not uploadedDocuments
+- Archived documents are excluded from duplicate check
+- Fail-fast before any storage/processing
+
+---
+
+### Phase 2: Manual Version Management (Not AI)
+
+Instead of AI detecting versions, let users **explicitly mark** documents as versions:
+
+```typescript
+// Add to guidelines schema
+previousVersionId: v.optional(v.id("guidelines")),
+nextVersionId: v.optional(v.id("guidelines")),
+```
+
+**UI Flow:**
+1. User uploads document
+2. System shows "Similar documents" sidebar (simple title fuzzy-match)
+3. User can optionally click "This is a new version of..." and select
+4. System creates the version linkage
+
+**No AI guessing. No blocking flows. User is in control.**
+
+---
+
+### Phase 3: Archive System (Simple Soft Delete)
+
+```typescript
+export const archiveGuideline = mutation({
+  args: {
+    guidelineId: v.id("guidelines"),
+    reason: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const guideline = await ctx.db.get(args.guidelineId);
+    if (!guideline) throw new Error("Not found");
+    
+    // 1. Update status
+    await ctx.db.patch(args.guidelineId, {
+      status: "archived",
+      archivedAt: Date.now(),
+    });
+    
+    // 2. Queue RAG cleanup (don't do inline - too slow)
+    await ctx.scheduler.enqueue(
+      internal.documents.removeFromRAG,
+      { guidelineId: args.guidelineId }
+    );
+    
+    // 3. Audit log
+    await ctx.db.insert("auditLogs", {
+      action: "guideline.archived",
+      resourceType: "guideline",
+      resourceId: args.guidelineId,
+      details: args.reason,
+      timestamp: Date.now(),
+    });
+  },
+});
+```
+
+**Key improvements:**
+- Use Convex scheduler for async RAG cleanup
+- Proper audit trail
+- No transactional complexity
+
+---
+
+### Phase 4: Restore (With Conflict Handling)
+
+```typescript
+export const restoreGuideline = mutation({
+  args: {
+    guidelineId: v.id("guidelines"),
+    archiveCurrent: v.boolean(), // What to do if another version is active
+  },
+  handler: async (ctx, args) => {
+    // Check for conflicts
+    const activeVersion = await ctx.db
+      .query("guidelines")
+      .withIndex("by_slug", q => q.eq("slug", guideline.slug))
+      .filter(q => q.eq("status", "published"))
+      .first();
+    
+    if (activeVersion && !args.archiveCurrent) {
+      throw new Error("Conflict: Another version is currently active");
+    }
+    
+    // Handle based on user choice
+  },
+});
+```
+
+---
+
+## Summary: What to Build
+
+| Feature | Original Plan | Better Approach |
+|---------|---------------|-----------------|
+| Exact duplicate | SHA256 in uploadedDocuments | SHA256 in guidelines, check before upload |
+| Version detection | AI/LLM comparison | Manual user selection |
+| Archive flow | Inline RAG deletion | Async queue with scheduler |
+| Restore flow | Simple status change | Conflict detection + user choice |
+| Similar docs | RAG semantic search | Title fuzzy match (cheaper, faster) |
+
+**Bottom line:** Your plan tries to be too clever. AI is not the answer here. Simple, deterministic logic with user control is what you need for a clinical system.
+
+Ship the hash-based duplicate detection first. It's 80% of the value with 20% of the complexity. Then iterate based on actual user feedback, not imagined requirements.
+
+---
+
+Built for [bgcb24tf2v](https://fazeen.slack.com/archives/D0AEZLQBGTX/p1771296280577879) by [Kilo for Slack](https://kilo.ai/features/slack-integration)
+--
+author:	kiloconnect
+association:	none
+edited:	false
+status:	none
+--
+## Third Review: Security, Scale, and Practical AI Integration
+
+I've reviewed the issue and the two excellent comments above. Let me add critical concerns that haven't been fully addressed, plus a practical AI-enhanced implementation plan.
+
+---
+
+## 🔴 Security Concerns Not Yet Addressed
+
+### 1. Hash Collision Attacks Are Trivial
+
+SHA256 has known collision scenarios. A malicious (or just unlucky) upload could:
+
+```
+File A: sepsis-guideline-v1.pdf (hash: abc123...)
+File B: malicious-altered-sepsis.pdf (crafted to have hash: abc123...)
+```
+
+Your system would reject File B as a duplicate even though it contains different content. In a clinical setting, this could prevent critical updates from being uploaded.
+
+**Mitigation:** Use **double hashing** (SHA256 + file size + first/last N bytes) or BLAKE3. Store multiple hash fields, not just one.
+
+### 2. Frontend Hash Computation Is Tamperable
+
+If you compute SHA256 on the frontend before upload:
+
+```javascript
+// Attacker intercepts and modifies
+const fakeHash = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+await saveDocument({ storageId, contentHash: fakeHash, ... });
+```
+
+The attacker bypasses duplicate detection entirely. **Never trust client-provided hashes.** Compute server-side in the mutation.
+
+### 3. Archive/Restore Authorization Gaps
+
+Who can archive? Who can restore? Your schema has `archivedBy` but no authorization checks. Consider:
+
+- Can a regular user archive a guideline they didn't create?
+- Can anyone restore an archived guideline?
+- What's the audit trail for restore operations?
+
+**Missing:** Role-based permissions for archive/restore actions.
+
+---
+
+## 🟠 Performance at Scale
+
+### 1. RAG Search for Duplicates Will Kill Your Budget
+
+Current RAG setup uses OpenAI `text-embedding-3-small` at $0.02/1M tokens. Let's do math:
+
+```
+Average guideline: 10,000 tokens
+100 uploads/day × 10,000 tokens = 1M tokens/day = $0.02/day
+Plus the comparison LLM call (Cerebras): ~$0.01 per comparison
+Total: ~$3-5/day just for duplicate detection
+
+At 1000 uploads/day: $30-50/day = $900-1500/month
+```
+
+**This is expensive for a feature that catches maybe 5% duplicates.**
+
+### 2. Index Contention on Hash Lookups
+
+Your proposed `by_contentHash` index will have hot spots:
+
+```typescript
+// Every upload hits this index
+const existing = await ctx.db
+  .query("guidelines")
+  .withIndex("by_contentHash", q => q.eq("contentHash", args.contentHash))
+  .first();
+```
+
+With concurrent uploads, you get read contention. Convex handles this, but at high volume, you'll see latency spikes.
+
+### 3. RAG Embedding Deletion Is Not Instant
+
+When you archive a document:
+
+```typescript
+await rag.deleteByKey(ctx, { namespaceId, key: documentId });
+```
+
+This is **asynchronous** in the RAG component. Users searching immediately after archive may still see the document in results. You need to handle this gracefully in the UI.
+
+---
+
+## 🟡 Architectural Flaws
+
+### 1. The `uploadedDocuments` vs `guidelines` Confusion
+
+Looking at your current schema:
+
+```typescript
+// uploadedDocuments: processing queue
+uploadedDocuments: {
+  storageId, fileName, fileType, source, status, guidelineId
+}
+
+// guidelines: canonical content
+guidelines: {
+  title, slug, content, status, source, uploadedDocumentId
+}
+```
+
+The issue proposes adding `sha256Hash` to `uploadedDocuments`. But:
+
+- What if the same file is uploaded twice with different sources (local vs RCEM)?
+- What if a guideline is created manually (no upload)?
+- What happens to the hash when the uploadedDocument is deleted but guideline remains?
+
+**The hash belongs in `guidelines`**, not `uploadedDocuments`. The guideline is the source of truth.
+
+### 2. Version History Stores Full Content
+
+Your `guidelineVersions` table:
+
+```typescript
+guidelineVersions: {
+  guidelineId, version, content, changeNote, createdAt
+}
+```
+
+This stores **full content** for every version. With duplicate handling:
+
+1. Upload v1 → 500KB content stored
+2. Upload v2 (detected as update) → 500KB content stored
+3. Archive v1 → v1 still in guidelineVersions
+4. Upload v3 → 500KB content stored
+
+**Storage grows linearly with versions.** For 100 guidelines with 10 versions each at 500KB = 500MB of text storage.
+
+**Better:** Store diffs or just metadata for archived versions. Keep full content only for the active version.
+
+### 3. No Migration Path for Existing Documents
+
+Your plan doesn't address:
+
+- How to backfill hashes for existing documents?
+- What if an existing document is a duplicate of a new upload?
+- Do you re-process all existing documents through the duplicate detection?
+
+---
+
+## Edge Cases Still Missing
+
+### 1. Partial Content Matches
+
+What if:
+
+- Document A: Full sepsis guideline (50 pages)
+- Document B: Extracted section (5 pages from Document A)
+
+Same hash? No. Similar content? Yes. Should Document B be rejected? **Unclear.**
+
+### 2. Metadata-Only Updates
+
+What if a user wants to:
+
+- Update the title of a guideline without changing content?
+- Change the category/classification?
+- Fix a typo in the summary?
+
+Your duplicate detection would flag these as "same content" and potentially block legitimate metadata updates.
+
+### 3. Concurrent Archive/Restore
+
+User A archives guideline X
+User B restores guideline X (before A's action completes)
+
+What's the final state? You need optimistic concurrency control or version vectors.
+
+### 4. Search Index Consistency
+
+Your `search_guidelines` searchIndex filters by `status`:
+
+```typescript
+.searchIndex("search_guidelines", {
+  searchField: "content",
+  filterFields: ["category", "status", "source"],
+})
+```
+
+When status changes from `published` to `archived`, the search index updates **eventually**. Users may see inconsistent results during the transition.
+
+---
+
+## A Practical AI-Enhanced Implementation Plan
+
+Here's how to use AI **intelligently** rather than recklessly:
+
+### Phase 1: Deterministic Duplicate Detection (No AI)
+
+```typescript
+// In guidelines schema
+contentHash: v.optional(v.string()),
+contentSize: v.optional(v.number()),
+
+// Compound check for collision resistance
+async function checkDuplicate(ctx, hash: string, size: number) {
+  return await ctx.db
+    .query("guidelines")
+    .withIndex("by_contentHash", q => q.eq("contentHash", hash))
+    .filter(q => q.eq("contentSize", size))
+    .filter(q => q.neq("status", "archived"))
+    .first();
+}
+```
+
+**Compute hash server-side** in the action that processes the upload:
+
+```typescript
+export const indexDocument = action({
+  args: { documentId, content, title },
+  handler: async (ctx, args) => {
+    // Compute hash BEFORE any LLM processing
+    const crypto = await import('crypto');
+    const hash = crypto.createHash('sha256').update(args.content).digest('hex');
+    const size = new Blob([args.content]).size;
+    
+    // Check for duplicates
+    const existing = await ctx.runQuery(internal.guidelines.checkDuplicate, { hash, size });
+    if (existing) {
+      throw new Error(`Duplicate: This content already exists as "${existing.title}"`);
+    }
+    
+    // Proceed with LLM processing...
+  }
+});
+```
+
+### Phase 2: Smart Similarity Detection (AI-Assisted, Not AI-Driven)
+
+Instead of LLM comparing documents, use **cheaper heuristics first**:
+
+```typescript
+// 1. Title similarity (fuzzy match, no AI needed)
+const titleSimilarity = fuzzyMatch(newTitle, existingTitles);
+
+// 2. Category match (exact, no AI needed)
+const sameCategory = newCategory === existing.category;
+
+// 3. File size similarity (no AI needed)
+const sizeSimilar = Math.abs(newSize - existing.size) < 1000;
+
+// Only if heuristics suggest similarity, THEN use AI
+if (titleSimilarity > 0.7 && sameCategory) {
+  // Use Cerebras (fast, cheap) for quick comparison
+  const isVersion = await ctx.runAction(internal.ai.compareVersions, {
+    doc1: { title: existing.title, summary: existing.summary },
+    doc2: { title: newTitle, summary: extractedSummary },
+  });
+  
+  // Return suggestion, NOT automatic action
+  return { suggestion: isVersion ? 'newer' : 'different', confidence };
+}
+```
+
+### Phase 3: Archive System with Proper Transactions
+
+```typescript
+export const archiveGuideline = mutation({
+  args: { 
+    guidelineId: v.id("guidelines"),
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const guideline = await ctx.db.get(args.guidelineId);
+    if (!guideline) throw new Error("Not found");
+    
+    // Check permissions
+    const user = await ctx.auth.getUserIdentity();
+    if (!user || user.role !== 'admin') {
+      throw new Error("Unauthorized: Only admins can archive");
+    }
+    
+    // Atomic update
+    await ctx.db.patch(args.guidelineId, {
+      status: "archived",
+      archivedAt: Date.now(),
+      archivedBy: user.id,
+      archiveReason: args.reason,
+    });
+    
+    // Queue async RAG cleanup (don't block)
+    await ctx.scheduler.runAfter(0, internal.documents.removeFromRAG, {
+      guidelineId: args.guidelineId,
+    });
+    
+    // Audit log
+    await ctx.db.insert("auditLogs", {
+      action: "guideline.archived",
+      resourceType: "guideline",
+      resourceId: args.guidelineId,
+      userId: user.id,
+      details: args.reason,
+      timestamp: Date.now(),
+    });
+  },
+});
+```
+
+### Phase 4: AI-Powered Version Suggestions (Optional Enhancement)
+
+Use Cerebras (fast, cheap) to suggest version relationships:
+
+```typescript
+// Small model for quick comparison
+const result = await generateObject({
+  model: cerebras.chat("zai-glm-4.7"), // Fast inference
+  schema: z.object({
+    isLikelyNewerVersion: z.boolean(),
+    confidence: z.enum(['high', 'medium', 'low']),
+    reasoning: z.string(),
+    suggestedAction: z.enum(['replace', 'keep_both', 'manual_review']),
+  }),
+  prompt: `Compare these two documents:
+
+Document A (existing): ${existing.title}
+Summary: ${existing.summary}
+Version: ${existing.version}
+Last updated: ${existing.lastUpdated}
+
+Document B (new upload): ${newDoc.title}
+Summary: ${newDoc.summary}
+Extracted version hint: ${newDoc.versionHint}
+
+Is Document B likely a newer version of Document A? Respond with your assessment.`,
+});
+
+// Return suggestion to user, don't auto-archive
+return result;
+```
+
+---
+
+## Summary: What to Build
+
+| Priority | Feature | AI Usage | Complexity |
+|----------|---------|----------|------------|
+| P0 | Hash-based exact duplicate | None | Low |
+| P0 | Server-side hash computation | None | Low |
+| P1 | Archive with proper auth | None | Medium |
+| P1 | RAG cleanup via scheduler | None | Medium |
+| P2 | Title/category heuristics | None | Low |
+| P3 | AI version suggestions | Cerebras (optional) | Medium |
+
+**Don't build:** LLM-based automatic version detection, blocking UI flows, client-side hashing.
+
+---
+
+## Bottom Line
+
+The original plan tries to use AI as a hammer for every nail. AI is great for:
+- Document processing (already doing this)
+- Search queries (already doing this)
+- Version **suggestions** (new, optional)
+
+AI is terrible for:
+- Duplicate detection (hash is faster, cheaper, deterministic)
+- Archive decisions (business rule, not AI decision)
+- Version comparison (too slow, too expensive, too unreliable)
+
+**Ship the hash-based duplicate detection first.** It's 90% of the value with 10% of the complexity. Add AI suggestions later if users actually need them.
+
+---
+
+Built for [bgcb24tf2v](https://fazeen.slack.com/archives/C0AEZLJK04V/p1771296503550279) by [Kilo for Slack](https://kilo.ai/features/slack-integration)
+--

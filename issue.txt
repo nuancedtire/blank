@@ -1,0 +1,178 @@
+title:	Implement Duplicate Document Handling with Version Management
+state:	OPEN
+author:	kiloconnect
+labels:	
+comments:	4
+assignees:	
+projects:	
+milestone:	
+number:	7
+--
+## Overview
+
+Implement a comprehensive duplicate document handling system that detects exact duplicates using SHA256 hashing and identifies updated versions using semantic search. When a newer version is uploaded, the old version should be archived and excluded from search results and RAG indexing.
+
+## Two Scenarios for Duplicates
+
+### 1. Exact Duplicates
+- **Detection**: Calculate SHA256 hash of uploaded file content
+- **Action**: Reject the upload outright with a clear error message
+- **User feedback**: Display message indicating the file already exists with the same content
+
+### 2. Updated Versions
+- **Detection**: Use semantic search (existing RAG/agents already in place) to find similar documents
+- **Process**: 
+  - LLM analyzes document content and dates within the documents
+  - LLM suggests which version is newer based on content analysis
+  - User confirms which document is the newer version
+- **Action**: Archive the old version and promote the new version
+
+## Key Requirements
+
+### Archive Functionality
+- [ ] Archive the old version when a new version is uploaded
+- [ ] Maintain version history linkage between archived and active documents
+- [ ] Store archive metadata (archivedAt, archivedBy, replacedBy)
+
+### Search Filtering
+- [ ] Filter archived documents from search results
+- [ ] Update existing search queries to exclude `status: "archived"`
+
+### RAG Indexing
+- [ ] Filter archived documents from RAG indexing
+- [ ] Remove embeddings when document is archived
+- [ ] Re-add embeddings when document is restored
+
+### Restore Capability
+- [ ] Ability to restore documents from archive
+- [ ] Set restored document as the latest version
+- [ ] Archive the currently active version if restoring an older one
+
+## Acceptance Criteria
+
+### Exact Duplicate Detection
+- [ ] SHA256 hash is calculated for every uploaded file
+- [ ] Hash is stored in `uploadedDocuments` table
+- [ ] Upload is rejected if hash matches an existing non-archived document
+- [ ] User receives clear error message: "This file has already been uploaded"
+- [ ] Exact duplicate check happens before any LLM processing
+
+### Updated Version Detection
+- [ ] Semantic search finds potential matches using existing RAG setup
+- [ ] LLM compares document content and extracts version dates
+- [ ] LLM suggests which document is newer with confidence score
+- [ ] User is presented with comparison UI to confirm
+- [ ] User can choose to: keep both, replace old, or cancel upload
+
+### Archive Management
+- [ ] Archived documents have `status: "archived"`
+- [ ] Archived documents are excluded from all public search queries
+- [ ] Archived documents are excluded from RAG vector search
+- [ ] Version history is preserved via `guidelineVersions` table
+- [ ] Admin can view archived documents in dedicated view
+
+### Restore Functionality
+- [ ] Admin can restore archived documents
+- [ ] Restoring archives the current active version
+- [ ] Restored document appears in search results immediately
+- [ ] RAG embeddings are re-created on restore
+
+## Implementation Notes
+
+### Existing Code Patterns to Reference
+
+1. **`guidelineVersions` table** ([`convex/schema.ts:87-94`](convex/schema.ts:87))
+   - Already tracks version history with `guidelineId`, `version`, `content`, `changeNote`
+   - Can be extended to track archive/restore events
+
+2. **`status: "archived"` field** ([`convex/schema.ts:39-43`](convex/schema.ts:39))
+   - Guidelines already have `status` with `"archived"` as valid value
+   - Existing index `by_status` can filter archived documents
+
+3. **Existing RAG setup** ([`convex/rag.ts`](convex/rag.ts))
+   - RAG component already configured with OpenAI embeddings
+   - `rag.add()` and `rag.deleteByKey()` methods available
+   - Can extend to support archive filtering
+
+4. **Document processing flow** ([`convex/documents.ts:46-133`](convex/documents.ts:46))
+   - `indexDocument` action handles full processing pipeline
+   - Add hash check at the start of this flow
+   - Add semantic similarity check after LLM processing
+
+### Schema Changes Required
+
+```typescript
+// In uploadedDocuments table
+sha256Hash: v.optional(v.string()),
+
+// In guidelines table (add archive metadata)
+archivedAt: v.optional(v.number()),
+archivedBy: v.optional(v.id("users")),
+replacedBy: v.optional(v.id("guidelines")), // ID of the newer version
+previousVersion: v.optional(v.id("guidelines")), // ID of the older version
+```
+
+### New Functions Required
+
+1. **`checkExactDuplicate`** - Query to check if hash exists
+2. **`findSimilarDocuments`** - Action using RAG semantic search
+3. **`archiveGuideline`** - Mutation to archive a guideline
+4. **`restoreGuideline`** - Mutation to restore from archive
+5. **`listArchived`** - Query for admin archive view
+
+### UI Components Needed
+
+1. Duplicate detection dialog during upload
+2. Version comparison UI for confirming updates
+3. Archive management page in admin section
+4. Restore confirmation dialog
+
+## Technical Approach
+
+### Phase 1: Exact Duplicate Detection
+1. Add `sha256Hash` field to `uploadedDocuments` schema
+2. Calculate hash in frontend before upload or during processing
+3. Add index on `sha256Hash` for fast lookups
+4. Check hash before starting LLM processing
+
+### Phase 2: Semantic Similarity Detection
+1. Use existing `rag.search()` to find similar documents
+2. Create LLM action to compare documents and extract dates
+3. Return confidence score and recommendation
+4. Present to user for confirmation
+
+### Phase 3: Archive System
+1. Add archive metadata fields to guidelines schema
+2. Update all search queries to filter `status != "archived"`
+3. Create archive mutation that:
+   - Sets status to "archived"
+   - Records archive metadata
+   - Removes RAG embeddings
+4. Create restore mutation that reverses the process
+
+### Phase 4: UI Implementation
+1. Add duplicate detection to upload flow
+2. Create version comparison component
+3. Add archive management to admin panel
+4. Add restore functionality
+
+## Dependencies
+
+- Existing RAG setup with OpenAI embeddings
+- `guidelineVersions` table for version tracking
+- `status` field with "archived" value
+
+## Testing Considerations
+
+- Test with identical files (exact duplicate detection)
+- Test with slightly modified files (semantic similarity)
+- Test with documents containing version dates
+- Test archive/restore cycle
+- Test search filtering with archived documents
+- Test RAG search excludes archived documents
+
+/opencode
+
+---
+
+Built for [bgcb24tf2v](https://fazeen.slack.com/archives/C0AEZLJK04V/p1771295071237089?thread_ts=1771272058.128549&cid=C0AEZLJK04V) by [Kilo for Slack](https://kilo.ai/features/slack-integration)
