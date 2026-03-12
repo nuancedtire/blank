@@ -33,12 +33,104 @@ const QUICK_ACTIONS = [
   { label: "Trauma Assessment", icon: Shield },
 ];
 
+const FEATURE_HIGHLIGHTS = [
+  {
+    value: "Local Guidance First",
+    label: "Hospital protocols are searched before broader web sources.",
+  },
+  {
+    value: "Citations Included",
+    label: "Every response points back to the underlying guideline text.",
+  },
+  {
+    value: "Built for ED Pace",
+    label: "Fast retrieval when time pressure is high.",
+  },
+];
+
+const FEATURE_BENTO_CARDS = [
+  {
+    icon: Search,
+    title: "Natural language input",
+    description:
+      "Type questions the way clinicians actually speak. No rigid command syntax required.",
+    tone: "from-primary/15 to-secondary/20",
+  },
+  {
+    icon: Brain,
+    title: "Evidence-aware answers",
+    description:
+      "Responses are generated from retrieved guidance, with source context preserved.",
+    tone: "from-accent/15 to-accent/5",
+  },
+  {
+    icon: Clock,
+    title: "Always current",
+    description:
+      "Keep local protocols updated while still drawing from NICE and RCEM when needed.",
+    tone: "from-secondary/15 to-primary/10",
+  },
+  {
+    icon: Shield,
+    title: "Clinically defensible",
+    description:
+      "Teams can validate each recommendation quickly because sources remain visible.",
+    tone: "from-primary/10 to-accent/10",
+  },
+  {
+    icon: Zap,
+    title: "Fast when it matters",
+    description:
+      "Retrieve the right section quickly during triage and escalation moments.",
+    tone: "from-accent/20 to-secondary/10",
+  },
+  {
+    icon: FileText,
+    title: "Full document access",
+    description:
+      "Move from summary to full guideline in one tap when deeper review is needed.",
+    tone: "from-primary/10 to-secondary/10",
+  },
+];
+
+const WORKFLOW_STEPS = [
+  {
+    step: "01",
+    phase: "Input",
+    title: "Type naturally",
+    description:
+      "Enter the clinical question in plain language exactly how you would ask it on shift.",
+    icon: Search,
+  },
+  {
+    step: "02",
+    phase: "Retrieval",
+    title: "Search and retrieval runs",
+    description:
+      "The system searches local guidance first, then NICE/RCEM sources where relevant.",
+    icon: Brain,
+  },
+  {
+    step: "03",
+    phase: "Optional AI Agent",
+    title: "Continue with the AI agent",
+    description:
+      "For deeper follow-up, chat with the AI agent to keep searching and retrieving for you.",
+    icon: FileText,
+  },
+];
+
 function LandingPage() {
   const [searchQuery, setSearchQuery] = useState("");
 
   const handleSearch = (query: string) => {
     window.location.href = `/login?redirect=/search&q=${encodeURIComponent(query)}`;
   };
+
+  const navCtaClass =
+    "h-9 px-4 rounded-md font-medium transition-all duration-200 !bg-primary !text-primary-foreground hover:!bg-primary/90 hover:shadow-lg hover:shadow-primary/20";
+  const primaryCtaClass =
+    "h-12 px-8 rounded-xl font-semibold transition-all duration-200 !bg-white !text-primary hover:!bg-white/90 hover:shadow-2xl hover:shadow-black/15 dark:!bg-card dark:!text-primary dark:hover:!bg-card/90";
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-card to-background relative overflow-hidden">
@@ -80,10 +172,7 @@ function LandingPage() {
           </Link>
           <div className="flex items-center gap-3">
             <ThemeToggle variant="ghost" size="sm" />
-            <Button
-              asChild
-              className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25"
-            >
+            <Button asChild className={navCtaClass}>
               <Link to="/login">Sign In</Link>
             </Button>
           </div>
@@ -160,153 +249,176 @@ function LandingPage() {
             Trusted by Emergency Departments across the UK
           </p>
           <div className="flex flex-wrap items-center justify-center gap-8 opacity-60">
-            {["NHS Trusts", "Local Protocols", "NICE Web", "RCEM Web"].map((org) => (
-              <div key={org} className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-primary" />
-                <span className="text-sm font-medium text-foreground">
-                  {org}
-                </span>
-              </div>
-            ))}
+            {["NHS Trusts", "Local Protocols", "NICE Web", "RCEM Web"].map(
+              (org) => (
+                <div key={org} className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-primary" />
+                  <span className="text-sm font-medium text-foreground">
+                    {org}
+                  </span>
+                </div>
+              ),
+            )}
           </div>
         </div>
       </section>
 
-      {/* Features Grid */}
+      {/* Feature Studio Section */}
       <section className="relative z-10 px-6 lg:px-12 py-20">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-12">
             <Badge className="mb-4 bg-primary/10 text-primary border-primary/20 hover:bg-primary/20">
               Why ED Guidelines?
             </Badge>
-            <h2 className="text-2xl sm:text-3xl font-bold text-foreground">
+            <h2 className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight">
               Built for High-Pressure Environments
             </h2>
+            <p className="mt-4 max-w-2xl mx-auto text-muted-foreground">
+              Real-world ED workflow support: local guidance first, cited
+              retrieval, and optional AI-agent follow-up when you need deeper
+              search.
+            </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              {
-                icon: Search,
-                title: "Natural Language Search",
-                description:
-                  "Ask questions like you would ask a senior colleague. No need to remember exact terminology.",
-                color: "from-primary to-secondary",
-              },
-              {
-                icon: Brain,
-                title: "AI-Powered Answers",
-                description:
-                  "Get instant, accurate responses grounded in official guidelines with proper citations.",
-                color: "from-accent to-accent/70",
-              },
-              {
-                icon: Clock,
-                title: "Always Current",
-                description:
-                  "Upload and maintain your local protocols while still searching NICE/RCEM web guidance when needed.",
-                color: "from-primary to-primary/70",
-              },
-              {
-                icon: Shield,
-                title: "Clinical Confidence",
-                description:
-                  "Every answer shows sources. Know exactly which guideline your information comes from.",
-                color: "from-secondary to-primary",
-              },
-              {
-                icon: Zap,
-                title: "Lightning Fast",
-                description:
-                  "Sub-second response times. Critical information when every second counts.",
-                color: "from-accent/70 to-accent",
-              },
-              {
-                icon: FileText,
-                title: "Full Documents",
-                description:
-                  "Access complete guideline documents with one tap. No more searching through folders.",
-                color: "from-primary/70 to-primary",
-              },
-            ].map((feature) => (
-              <div
-                key={feature.title}
-                className="group bg-card rounded-2xl p-6 shadow-sm border border-border hover:shadow-lg hover:shadow-primary/5 hover:border-primary/30 transition-all duration-300"
-              >
-                <div
-                  className={`w-12 h-12 rounded-xl bg-gradient-to-br ${feature.color} flex items-center justify-center mb-4 shadow-lg group-hover:scale-110 transition-transform duration-300`}
-                >
-                  <feature.icon className="w-6 h-6 text-white dark:text-black" />
+          <div className="relative space-y-5">
+            <div className="pointer-events-none absolute -inset-6 bg-gradient-to-r from-primary/8 via-transparent to-accent/10 blur-3xl" />
+            <div className="relative grid grid-cols-1 gap-5 lg:grid-cols-12">
+              <article className="group relative overflow-hidden rounded-3xl border border-border/70 bg-card/85 p-6 sm:p-8 lg:col-span-7 shadow-[0_20px_45px_-34px_rgba(8,145,178,0.95)] transition-all duration-300 hover:-translate-y-1 hover:border-primary/35 hover:shadow-[0_30px_65px_-38px_rgba(8,145,178,0.95)]">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/12 via-transparent to-accent/12" />
+                <div className="absolute -top-20 right-0 h-56 w-56 rounded-full bg-primary/15 blur-3xl" />
+                <Activity className="pointer-events-none absolute -bottom-16 -right-14 h-64 w-64 text-primary/8" />
+                <div className="relative z-10">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                    Clinical Response Engine
+                  </div>
+                  <h3 className="mt-4 text-2xl sm:text-3xl font-bold text-foreground leading-tight">
+                    Ask naturally, retrieve reliably, and escalate to an AI
+                    agent only when you want more.
+                  </h3>
+                  <p className="mt-4 max-w-2xl text-muted-foreground leading-relaxed">
+                    The app supports direct search and guided AI assistance in
+                    the same flow, so clinicians can move from initial query to
+                    validated action without context switching.
+                  </p>
+
+                  <div className="mt-8 grid gap-3 sm:grid-cols-3">
+                    {FEATURE_HIGHLIGHTS.map((highlight) => (
+                      <div
+                        key={highlight.value}
+                        className="rounded-2xl border border-border/70 bg-background/70 p-4"
+                      >
+                        <p className="text-sm font-bold text-primary">
+                          {highlight.value}
+                        </p>
+                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                          {highlight.label}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <h3 className="text-lg font-bold text-foreground mb-2">
-                  {feature.title}
-                </h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  {feature.description}
-                </p>
+              </article>
+
+              <div className="grid gap-5 sm:grid-cols-2 lg:col-span-5">
+                {FEATURE_BENTO_CARDS.slice(0, 4).map((feature) => (
+                  <article
+                    key={feature.title}
+                    className="group relative overflow-hidden rounded-2xl border border-border/70 bg-card/80 p-5 shadow-[0_16px_36px_-30px_rgba(8,145,178,0.8)] transition-all duration-300 hover:-translate-y-1 hover:border-primary/35 hover:shadow-[0_28px_52px_-34px_rgba(8,145,178,0.85)]"
+                  >
+                    <div
+                      className={`absolute inset-0 bg-gradient-to-br ${feature.tone}`}
+                    />
+                    <feature.icon className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 text-foreground/[0.05] transition-all duration-300 group-hover:scale-105 group-hover:text-primary/[0.10]" />
+                    <div className="relative">
+                      <h3 className="text-lg font-bold text-foreground">
+                        {feature.title}
+                      </h3>
+                      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                        {feature.description}
+                      </p>
+                    </div>
+                  </article>
+                ))}
               </div>
-            ))}
+            </div>
+
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {FEATURE_BENTO_CARDS.slice(4).map((feature, index) => (
+                <article
+                  key={feature.title}
+                  className={`group relative overflow-hidden rounded-2xl border border-border/70 bg-card/80 p-5 shadow-[0_16px_36px_-30px_rgba(8,145,178,0.8)] transition-all duration-300 hover:-translate-y-1 hover:border-primary/35 hover:shadow-[0_28px_52px_-34px_rgba(8,145,178,0.85)] ${
+                    index === 1 ? "lg:col-span-2" : "lg:col-span-1"
+                  }`}
+                >
+                  <div
+                    className={`absolute inset-0 bg-gradient-to-br ${feature.tone}`}
+                  />
+                  <feature.icon className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 text-foreground/[0.05] transition-all duration-300 group-hover:scale-105 group-hover:text-primary/[0.10]" />
+                  <div className="relative">
+                    <h3 className="text-lg font-bold text-foreground">
+                      {feature.title}
+                    </h3>
+                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                      {feature.description}
+                    </p>
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      {/* How It Works */}
-      <section className="relative z-10 px-6 lg:px-12 py-20 bg-card">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-12">
-            <Badge className="mb-4 bg-accent/10 text-accent border-accent/20 hover:bg-accent/20">
-              Simple & Fast
-            </Badge>
-            <h2 className="text-2xl sm:text-3xl font-bold text-foreground">
-              Get Answers in 3 Steps
-            </h2>
+      {/* Process Section */}
+      <section className="relative z-10 px-6 lg:px-12 pb-20">
+        <div className="max-w-6xl mx-auto">
+          <div className="mb-10 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <Badge className="mb-4 bg-accent/10 text-accent border-accent/20 hover:bg-accent/20">
+                Workflow
+              </Badge>
+              <h2 className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight">
+                How It Works in 3 Steps
+              </h2>
+            </div>
+            <p className="max-w-md text-sm text-muted-foreground md:text-right">
+              Start with natural language, run retrieval across trusted
+              sources, then optionally continue with the AI agent for deeper
+              search support.
+            </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              {
-                step: "1",
-                title: "Ask Your Question",
-                description:
-                  "Type naturally about any clinical scenario. No special syntax needed.",
-                icon: Search,
-              },
-              {
-                step: "2",
-                title: "AI Searches Guidelines",
-                description:
-                  "Our AI searches uploaded local guidelines first, then NICE/RCEM web sources when needed.",
-                icon: Brain,
-              },
-              {
-                step: "3",
-                title: "Get Your Answer",
-                description:
-                  "Receive a clear, cited answer with links to full documents.",
-                icon: FileText,
-              },
-            ].map((item, index) => (
-              <div key={item.step} className="relative text-center">
-                <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center mb-4 shadow-lg shadow-primary/20">
-                  <item.icon className="w-7 h-7 text-primary-foreground" />
-                </div>
-                <div className="text-sm font-bold text-primary mb-2">
-                  Step {item.step}
-                </div>
-                <h3 className="text-lg font-bold text-foreground mb-2">
-                  {item.title}
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  {item.description}
-                </p>
-
-                {index < 2 && (
-                  <div className="hidden md:block absolute top-8 left-full w-full">
-                    <ChevronRight className="w-6 h-6 text-primary/30 mx-auto" />
+          <div className="relative">
+            <div className="pointer-events-none absolute left-[17%] right-[17%] top-14 hidden lg:block border-t border-dashed border-primary/35" />
+            <div className="grid gap-5 lg:grid-cols-3">
+              {WORKFLOW_STEPS.map((item, index) => (
+                <article
+                  key={item.step}
+                  className="group relative overflow-hidden rounded-3xl border border-border/70 bg-background/75 p-6 transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-[0_22px_48px_-34px_rgba(8,145,178,0.9)]"
+                >
+                  <item.icon className="pointer-events-none absolute -right-8 -bottom-10 h-36 w-36 text-foreground/[0.045] transition-colors duration-300 group-hover:text-primary/[0.08]" />
+                  <div className="mb-6 flex items-start justify-between">
+                    <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold tracking-wider text-primary">
+                      {item.phase}
+                    </span>
+                    <span className="text-3xl font-bold leading-none text-primary/30">
+                      {item.step}
+                    </span>
                   </div>
-                )}
-              </div>
-            ))}
+
+                  <h3 className="text-xl font-bold text-foreground">
+                    {item.title}
+                  </h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    {item.description}
+                  </p>
+
+                  {index < WORKFLOW_STEPS.length - 1 && (
+                    <ChevronRight className="pointer-events-none absolute -right-3 top-12 hidden h-6 w-6 text-primary/50 lg:block" />
+                  )}
+                </article>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -329,21 +441,9 @@ function LandingPage() {
                 Join thousands of healthcare professionals accessing guidelines
                 faster.
               </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button
-                  size="lg"
-                  asChild
-                  className="bg-white text-primary hover:bg-white/90 dark:bg-background dark:text-primary h-12 px-8 font-semibold shadow-xl"
-                >
-                  <Link to="/login">Get Started Free</Link>
-                </Button>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  asChild
-                  className="border-2 border-white/30 text-primary-foreground hover:bg-white/10 h-12 px-8 font-semibold"
-                >
-                  <Link to="/login">Sign In</Link>
+              <div className="flex justify-center">
+                <Button size="lg" asChild className={primaryCtaClass}>
+                  <Link to="/login">Get Started Now</Link>
                 </Button>
               </div>
             </div>
