@@ -1,6 +1,20 @@
 import { v } from "convex/values";
 import { query, mutation, internalQuery } from "./_generated/server";
 
+// Look up a guideline slug by title — used as fallback when the AI omits the slug
+export const getSlugByTitle = query({
+  args: { title: v.string() },
+  handler: async (ctx, { title }) => {
+    const guidelines = await ctx.db
+      .query("guidelines")
+      .withIndex("by_status", (q) => q.eq("status", "published"))
+      .collect();
+    const normalized = title.toLowerCase().trim();
+    const match = guidelines.find((g) => g.title.toLowerCase().trim() === normalized);
+    return match?.slug ?? null;
+  },
+});
+
 // Get all published guidelines (full, including content)
 export const listPublished = query({
   args: {},

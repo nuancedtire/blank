@@ -767,7 +767,7 @@ function StreamingText({
           p: ({ children, ...props }) => {
             const text = extractText(children);
             const sourceMatch = text?.match(
-              /\u{1F4C4}\s*\*?\*?(.+?)\*?\*?\s*[\u2014—-]+\s*Source:\s*(\w+)\s*[\u2014—-]+\s*File:\s*([\w.-]+)(?:\s*[\u2014—-]+\s*Slug:\s*([\w-]+))?/u,
+              /\u{1F4C4}\s*\*?\*?(.+?)\*?\*?\s*[\u2014—-]+\s*Source:\s*(\w+)\s*[\u2014—-]+\s*File:\s*(.+?)(?:\s*[\u2014—-]+\s*Slug:\s*([\w-]+))?\s*$/mu,
             );
             if (sourceMatch) {
               return (
@@ -775,7 +775,14 @@ function StreamingText({
                   title={sourceMatch[1].trim()}
                   source={sourceMatch[2]}
                   fileName={sourceMatch[3]}
-                  slug={sourceMatch[4] || null}
+                  slug={
+                    sourceMatch[4] &&
+                    !["none", "n/a", "unknown", "null", "undefined", "na", "the-slug-value"].includes(
+                      sourceMatch[4].toLowerCase(),
+                    )
+                      ? sourceMatch[4]
+                      : null
+                  }
                 />
               );
             }
@@ -889,10 +896,18 @@ function SourceCard({
   fileName: string;
   slug?: string | null;
 }) {
+  const lookedUpSlug = useConvexRawQuery(
+    api.guidelines.getSlugByTitle,
+    !slug ? { title } : "skip",
+  );
+  const resolvedSlug = slug ?? lookedUpSlug ?? null;
+
   return (
     <Link
-      to={slug ? "/guideline/$slug" : "/browse"}
-      {...(slug ? { params: { slug } } : {})}
+      to={resolvedSlug ? "/guideline/$slug" : "/browse"}
+      {...(resolvedSlug ? { params: { slug: resolvedSlug } } : {})}
+      target="_blank"
+      rel="noopener noreferrer"
       className="flex items-center gap-3 px-3 py-2.5 my-1.5 rounded-lg border bg-muted/30 hover:bg-muted/60 transition-colors group no-underline"
     >
       <div className="h-9 w-9 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
