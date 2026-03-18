@@ -136,6 +136,14 @@ Once connected, the playground should discover the agent exported by the playgro
 
 - `ED Guidelines Assistant`
 
+If you are using the hosted playground instead of the local CLI, the official docs note that you may also need to enter the playground module path if it is not the default. In this repo the path is the default:
+
+```text
+playground
+```
+
+Source: [Convex Agent Playground](https://docs.convex.dev/agents/playground)
+
 ## How this project is wired
 
 The playground is not attached to every agent automatically. It only exposes the agents you return from `definePlaygroundAPI(...)`.
@@ -179,6 +187,386 @@ If you also want to compare app UI behavior with playground behavior, run the fr
 ```bash
 pnpm dev
 ```
+
+## Playground UI walkthrough
+
+This section explains the actual playground UX using the official Convex playground model and how it applies to this repository.
+
+Official reference:
+
+- [Convex Agent Playground](https://docs.convex.dev/agents/playground)
+- [Convex LLM Context](https://docs.convex.dev/agents/context)
+- [Convex Debugging](https://docs.convex.dev/agents/debugging)
+
+### 1. Connection panel
+
+This is the first screen or header area you interact with.
+
+You provide:
+
+- Convex deployment URL
+- Agent API key
+- optional playground module path if not using `convex/playground.ts`
+
+In this repository, use:
+
+- deployment URL: your `VITE_CONVEX_URL`
+- module path: `playground`
+- API key: the issued agent API key
+
+What it does:
+
+- validates the API key using `isApiKeyValid`
+- loads the registered playground agents using `listAgents`
+
+If this step fails, the rest of the UI cannot work.
+
+### 2. Agent selector
+
+Once connected, the playground lists the agents returned by `definePlaygroundAPI(...)`.
+
+In this repo there is one:
+
+- `ED Guidelines Assistant`
+
+What it shows:
+
+- agent name
+- instructions
+- context options
+- storage options
+- retry/tool configuration metadata exposed by the API
+
+How to use it:
+
+- confirm you are testing the right agent
+- scan the displayed instructions if you want to verify the currently deployed prompt
+- use this as a quick sanity check after prompt changes
+
+### 3. User browser
+
+The playground can list users known to the agent component.
+
+Officially, this lets you:
+
+- pick a user
+- list that user’s threads
+
+In this repo, the selected user matters because the agent enables other-thread recall through `searchOtherThreads: true`.
+
+What that means in practice:
+
+- if you reuse a user, the agent may retrieve relevant messages from other threads for that same user
+- if you want isolated tests, create or select a fresh user
+
+When to reuse a user:
+
+- evaluating memory or consistency over time
+- testing whether cross-thread recall helps or hurts answers
+
+When to avoid reuse:
+
+- prompt regression checks
+- retrieval precision tests
+- clean comparisons between two prompt variants
+
+### 4. Thread browser
+
+After choosing a user, the playground lists that user’s threads.
+
+Officially, threads are the linear history containers for agent conversations. The playground lets you:
+
+- browse threads
+- create a new thread
+- select an existing thread for inspection or continuation
+
+What thread metadata is useful for:
+
+- title and summary help identify the scenario
+- recent message activity helps find the right test conversation
+
+In this repo, create a new thread when you want:
+
+- a clean clinical scenario
+- no carry-over from earlier questions in the same conversation
+- a reproducible test for a single prompt
+
+Reuse a thread when you want:
+
+- follow-up questioning
+- citation consistency across multiple turns
+- verification that the agent respects prior “search scope preference” instructions
+
+### 5. Message list
+
+When you select a thread, the playground lists its saved messages.
+
+Per the official docs, the playground can list:
+
+- thread messages
+- tool call details
+- message metadata
+
+What you should expect to see in a real agent turn:
+
+- the user message
+- any assistant tool call messages
+- tool result messages
+- the final assistant response
+
+Why this matters:
+
+- it tells you whether the answer came from retrieval or from the model alone
+- it lets you confirm whether the tool sequence matched the prompt policy
+- it exposes failed or partial tool execution that the final answer may hide
+
+For this repo, the expected healthy pattern is usually:
+
+1. user message
+2. `ragSearch` tool call and result
+3. optional `searchGuidelines` tool call and result
+4. optional `searchExternalWeb` tool call and result
+5. final assistant answer with citations
+
+### 6. Tool call details
+
+This is one of the most important debugging views.
+
+The official playground exposes tool call details for the selected thread’s messages. Use that view to inspect:
+
+- which tool was called
+- which arguments were passed
+- what the tool returned
+- whether the tool failed or returned empty results
+
+For this project, inspect tool details to verify:
+
+- `ragSearch` was attempted first for local clinical questions
+- `searchGuidelines` only ran as a fallback
+- `searchExternalWeb` only ran when local content was insufficient or you explicitly asked for web-only behavior
+
+This is the fastest way to spot:
+
+- prompt regressions
+- poor tool selection
+- empty retrieval results caused by indexing problems
+- external search failures
+
+### 7. Message metadata panel
+
+The official docs call out a metadata details view. Use it when you need to inspect the saved structure of a message instead of only the rendered text.
+
+Metadata is useful for checking:
+
+- role
+- status
+- ordering
+- associated agent name
+- whether a message is a tool message versus a final assistant message
+
+Why this matters:
+
+- Convex agents save multiple message records per turn
+- tool calls and tool results are separate from the final assistant answer
+- debugging ordering problems is easier at the metadata layer than in the rendered transcript
+
+If something looks off in the UI, the official debugging docs also recommend inspecting the agent component tables in the Convex dashboard, especially:
+
+- `threads`
+- `messages`
+- `streamingMessages`
+
+Source: [Convex Debugging](https://docs.convex.dev/agents/debugging)
+
+### 8. Context lookup panel
+
+This is the part of the playground used to inspect what the model is likely to receive before generation.
+
+Officially, the playground lets you:
+
+- experiment with contextual message lookup
+- adjust `contextOptions`
+- fetch prompt context without generating a reply
+
+This maps to the exported `fetchPromptContext` API and the context system described in the Convex docs.
+
+The most important controls conceptually are:
+
+- recent messages
+- text search on or off
+- vector search on or off
+- search result limit
+- message range around matches
+- whether to search other threads
+- whether to exclude tool messages
+
+Source: [Convex LLM Context](https://docs.convex.dev/agents/context)
+
+How to use this well in this repo:
+
+- increase recent messages if a follow-up question depends heavily on the immediate thread history
+- keep `searchOtherThreads` in mind because this agent already enables cross-thread retrieval by default
+- test with tool messages included and excluded if you suspect the agent is overfitting to tool output formatting
+- fetch context first when the agent answer feels “contaminated” by old conversations
+
+### 9. Send/generate panel
+
+The playground includes a message composer for sending a new turn to the selected thread.
+
+Officially, this lets you:
+
+- send a message to the thread
+- choose configurable saving options
+
+What this means in practice:
+
+- you can test a fresh prompt directly against the real deployed agent
+- you can often control whether the resulting call should be persisted in the thread history
+- you can compare generation behavior under different context options
+
+Use this panel for:
+
+- prompt regression testing
+- citation checks
+- tool-selection verification
+- comparing “local first” versus “web only” instruction behavior
+
+### 10. Create-thread controls
+
+The official playground API supports thread creation with user association and optional metadata like title and summary.
+
+That means the UI can be used not just to continue conversations, but to intentionally create test fixtures such as:
+
+- `Head injury CT criteria`
+- `DKA local summary`
+- `Web-only NICE sepsis lookup`
+
+This is useful because thread metadata helps keep repeated testing organized, especially when many users and scenarios accumulate.
+
+## What each playground-backed function does
+
+The playground UI is powered by the functions exported from [convex/playground.ts](/Users/fazeennasser/development/blank/convex/playground.ts).
+
+### `isApiKeyValid`
+
+Purpose:
+
+- checks whether the provided Agent API key is valid for the deployment
+
+In the UI:
+
+- used during connection/authentication
+
+### `listAgents`
+
+Purpose:
+
+- returns the registered agents exposed to the playground
+
+In the UI:
+
+- populates the agent selector
+- displays the current instructions, tools, and context settings
+
+### `listUsers`
+
+Purpose:
+
+- lists users known to the agent component
+
+In the UI:
+
+- powers the user picker
+
+Why it matters here:
+
+- user choice affects cross-thread retrieval behavior
+
+### `listThreads`
+
+Purpose:
+
+- lists the selected user’s threads
+
+In the UI:
+
+- powers the thread browser
+
+### `listMessages`
+
+Purpose:
+
+- returns the selected thread’s messages, including stream synchronization data
+
+In the UI:
+
+- renders the transcript
+- exposes tool call/result messages
+- supports metadata inspection
+
+### `createThread`
+
+Purpose:
+
+- creates a new thread for a user with optional title and summary
+
+In the UI:
+
+- used by the “new thread” or equivalent control
+
+### `generateText`
+
+Purpose:
+
+- sends the prompt through the chosen agent in the selected thread
+- stores the resulting messages and tool-call outputs
+
+In the UI:
+
+- drives the main “send message” action
+
+### `fetchPromptContext`
+
+Purpose:
+
+- fetches context messages without calling the LLM
+
+In the UI:
+
+- powers the context inspection/debugging area
+- lets you see what the agent is likely to receive before generation
+
+## How to learn the UI efficiently
+
+If you want to build intuition quickly, use this sequence:
+
+1. Connect with the deployment URL and API key.
+2. Select `ED Guidelines Assistant`.
+3. Pick or create a test user.
+4. Create a new thread titled for the scenario you are testing.
+5. Send a straightforward local-guideline question.
+6. Open the tool details and confirm `ragSearch` ran first.
+7. Open the context panel and inspect what messages were used.
+8. Retry with altered context options and compare behavior.
+9. Repeat with a web-only prompt and confirm `searchExternalWeb` is used appropriately.
+
+## Practical UX advice for this repository
+
+The playground is most useful here when you use it as a debugging console, not just a chat window.
+
+Focus on these views in this order:
+
+1. final answer
+2. tool call details
+3. context lookup
+4. message metadata
+
+That order usually tells you:
+
+- whether the answer is acceptable
+- whether the tool choice was correct
+- whether the retrieved context explains the answer
+- whether the saved message structure matches what you think happened
 
 ## How to use the playground effectively
 
