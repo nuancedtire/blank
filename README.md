@@ -85,7 +85,7 @@ pnpm dev
 npx convex dev
 ```
 
-For the standalone agent debugger, see [docs/convex-agent-playground-user-guide.md](/Users/fazeennasser/development/blank/docs/convex-agent-playground-user-guide.md).
+For the standalone agent debugger, see [docs/convex-agent-playground-user-guide.md](docs/convex-agent-playground-user-guide.md).
 
 ### Available scripts
 
