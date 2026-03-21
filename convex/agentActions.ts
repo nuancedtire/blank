@@ -151,7 +151,7 @@ async function maybeGenerateThreadMetadata(
 
   try {
     const meta = await generateObject({
-      model: cerebras.chat("llama-3.3-70b"),
+      model: cerebras.chat("llama3.1-8b"),
       schema: threadMetaSchema,
       prompt: [
         "Create concise metadata for a clinical guideline support conversation.",
