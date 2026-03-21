@@ -678,15 +678,21 @@ function ThreadItem({
   );
 }
 
-function MessageBubble({ message }: { message: UIMessage }) {
+const MessageBubble = React.memo(function MessageBubble({
+  message,
+}: {
+  message: UIMessage;
+}) {
   const isUser = message.role === "user";
 
   const textParts = message.parts?.filter(
     (p): p is { type: "text"; text: string } => p.type === "text",
   );
   const toolParts = message.parts?.filter(
-    (p): p is Extract<(typeof message.parts)[number], { type: "tool-invocation" }> =>
-      p.type === "tool-invocation",
+    (p): p is Extract<
+      (typeof message.parts)[number],
+      { type: "tool-invocation" }
+    > => p.type === "tool-invocation",
   );
 
   const fullText = textParts?.map((t) => t.text).join("") ?? "";
@@ -694,7 +700,12 @@ function MessageBubble({ message }: { message: UIMessage }) {
   const isStreaming = message.status === "streaming";
 
   return (
-    <div className={cn("flex gap-2 md:gap-3", isUser ? "justify-end" : "justify-start")}>
+    <div
+      className={cn(
+        "flex gap-2 md:gap-3",
+        isUser ? "justify-end" : "justify-start",
+      )}
+    >
       {!isUser && (
         <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center shrink-0 mt-0.5">
           <Bot className="h-3.5 w-3.5 text-primary" />
@@ -714,7 +725,11 @@ function MessageBubble({ message }: { message: UIMessage }) {
         ))}
 
         {displayText ? (
-          <StreamingText text={displayText} isStreaming={isStreaming} isUser={isUser} />
+          <StreamingText
+            text={displayText}
+            isStreaming={isStreaming}
+            isUser={isUser}
+          />
         ) : (
           isStreaming && !toolParts?.length && <PulsingDots />
         )}
@@ -727,7 +742,7 @@ function MessageBubble({ message }: { message: UIMessage }) {
       )}
     </div>
   );
-}
+});
 
 function sanitizeUserPrompt(text: string): string {
   if (!text.startsWith("Search scope preference:")) {
