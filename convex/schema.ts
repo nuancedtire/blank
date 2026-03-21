@@ -175,6 +175,16 @@ export default defineSchema({
     .index("by_action", ["action"])
     .index("by_timestamp", ["timestamp"]),
 
+  // Cached web search results (Exa API, 24h TTL)
+  webSearchCache: defineTable({
+    cacheKey: v.string(), // "{query}::{site}"
+    results: v.any(),
+    cachedAt: v.number(),
+    expiresAt: v.number(),
+  })
+    .index("by_cacheKey", ["cacheKey"])
+    .index("by_expiresAt", ["expiresAt"]),
+
   // Notifications system
   notifications: defineTable({
     title: v.string(),
