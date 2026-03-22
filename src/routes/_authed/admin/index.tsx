@@ -17,18 +17,18 @@ export const Route = createFileRoute("/_authed/admin/")({
 });
 
 function AdminDashboard() {
-  const { data: guidelines } = useQuery(convexQuery(api.guidelines.listAll, {}));
-  const { data: users } = useQuery(convexQuery(api.users.listAll, {}));
+  const { data: statsData } = useQuery(
+    convexQuery(api.guidelines.getDashboardStats, {}),
+  );
   const { data: auditLogs } = useQuery(
     convexQuery(api.auditLog.getRecent, { limit: 10 }),
   );
 
   const stats = {
-    totalGuidelines: guidelines?.length ?? 0,
-    published:
-      guidelines?.filter((g: any) => g.status === "published").length ?? 0,
-    drafts: guidelines?.filter((g: any) => g.status === "draft").length ?? 0,
-    totalUsers: users?.length ?? 0,
+    totalGuidelines: statsData?.totalGuidelines ?? 0,
+    published: statsData?.published ?? 0,
+    drafts: statsData?.drafts ?? 0,
+    totalUsers: statsData?.totalUsers ?? 0,
   };
 
   return (

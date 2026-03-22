@@ -77,7 +77,9 @@ function ManageDocumentsPage() {
   const { data: documents } = useQuery(
     convexQuery(api.documents.listDocuments, {}),
   );
-  const { data: allGuidelines } = useQuery(convexQuery(api.guidelines.listAll, {}));
+  const { data: allGuidelines } = useQuery(
+    convexQuery(api.guidelines.listAllSummaries, {}),
+  );
 
   const generateUploadUrl = useConvexMutation(api.documents.generateUploadUrl);
   const saveDocument = useConvexMutation(api.documents.saveDocument);
