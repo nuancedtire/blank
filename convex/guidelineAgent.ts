@@ -181,12 +181,13 @@ const searchExternalWebTool = createTool({
 
       const exa = new Exa(apiKey);
       // Use search() — searchAndContents() is deprecated in exa-js v2.8+
+      // type:"auto" = balanced relevance + speed (~1s); highlights for compact agent context
       const exaResult = await exa.search(args.query, {
         includeDomains: domains,
         numResults: 8,
-        type: "neural",
+        type: "auto",
         contents: {
-          highlights: { numSentences: 2, maxCharacters: 400 },
+          highlights: { maxCharacters: 400 },
         },
       });
 
