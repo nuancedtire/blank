@@ -187,7 +187,7 @@ const searchExternalWebTool = createTool({
         numResults: 8,
         type: "auto",
         contents: {
-          highlights: { maxCharacters: 400 },
+          highlights: { maxCharacters: 1000 },
         },
       });
 
