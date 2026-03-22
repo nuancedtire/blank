@@ -22,6 +22,7 @@ import type * as searchAction from "../searchAction.js";
 import type * as settings from "../settings.js";
 import type * as userProfile from "../userProfile.js";
 import type * as users from "../users.js";
+import type * as webSearchCache from "../webSearchCache.js";
 
 import type {
   ApiFromModules,
@@ -44,6 +45,7 @@ declare const fullApi: ApiFromModules<{
   settings: typeof settings;
   userProfile: typeof userProfile;
   users: typeof users;
+  webSearchCache: typeof webSearchCache;
 }>;
 
 /**
