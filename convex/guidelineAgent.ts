@@ -9,6 +9,94 @@ import Exa from "exa-js";
 const MAX_KEYWORD_RESULTS = 5;
 const MAX_EXCERPT_CHARS = 900;
 
+// ─── ED Shop-Floor Search Terms ──────────────────────────────────────────────
+// Curated corpus of typical ED clinical queries grouped by area.
+// Use this to test and tune Exa parameters (numResults, highlights, text limits)
+// so that the search quality is validated against real shop-floor language.
+export const ED_SHOP_FLOOR_TERMS: Record<string, string[]> = {
+  Cardiac: [
+    "chest pain rule out ACS troponin",
+    "STEMI NSTEMI management",
+    "cardiac arrest ROSC post-resuscitation care",
+    "acute pulmonary oedema heart failure",
+    "atrial fibrillation rate control cardioversion",
+  ],
+  Respiratory: [
+    "COPD acute exacerbation NIV criteria",
+    "acute severe life-threatening asthma",
+    "pulmonary embolism PERC Wells criteria",
+    "community acquired pneumonia CURB-65",
+    "tension pneumothorax needle decompression",
+  ],
+  Neurology: [
+    "head injury CT criteria adults NICE",
+    "head injury anticoagulated patient warfarin",
+    "stroke thrombolysis alteplase criteria",
+    "TIA ABCD2 score urgent neurovascular clinic",
+    "first seizure status epilepticus management",
+    "subarachnoid haemorrhage LP xanthochromia",
+    "bacterial meningitis LP antibiotics steroids",
+  ],
+  Sepsis: [
+    "sepsis 6 bundle NEWS2 escalation criteria",
+    "septic shock vasopressors noradrenaline",
+    "neutropenic sepsis chemotherapy fever",
+  ],
+  Trauma: [
+    "major trauma team activation criteria",
+    "C-spine clearance Canadian cervical rule NEXUS",
+    "burns Parkland formula airway early intubation",
+    "elderly rib fractures analgesia regional nerve block",
+  ],
+  Paediatric: [
+    "febrile child under 5 septic screen antibiotics",
+    "febrile convulsion simple vs complex",
+    "meningococcal disease petechiae purpura rash",
+    "bronchiolitis assessment severity criteria",
+    "croup stridor dexamethasone nebulised adrenaline",
+    "PEWS paediatric early warning score",
+  ],
+  Toxicology: [
+    "paracetamol overdose treatment line nomogram NAC",
+    "opioid overdose naloxone titration dose",
+    "tricyclic antidepressant overdose sodium bicarbonate",
+    "beta blocker calcium channel blocker overdose",
+    "serotonin syndrome diagnosis management",
+  ],
+  Metabolic: [
+    "DKA fixed rate insulin infusion protocol",
+    "hyperosmolar hyperglycaemic state HONK",
+    "severe hypoglycaemia IV glucose glucagon",
+    "hyperkalaemia ECG changes treatment calcium",
+    "symptomatic hyponatraemia correction rate",
+  ],
+  Surgical: [
+    "appendicitis Alvarado score CT imaging",
+    "ectopic pregnancy ruptured beta-hCG",
+    "acute cholecystitis Murphy sign antibiotics",
+    "upper GI bleed Rockford Blatchford score",
+    "AAA rupture haemodynamically unstable",
+  ],
+  MentalHealth: [
+    "capacity assessment mental health ED",
+    "self-harm risk assessment safe discharge criteria",
+    "acute behavioural disturbance chemical restraint",
+    "Section 136 Mental Health Act ED pathway",
+  ],
+  Procedures: [
+    "RSI rapid sequence induction ketamine rocuronium",
+    "chest drain insertion seldinger technique",
+    "lumbar puncture opening pressure technique",
+    "procedural sedation ketamine midazolam monitoring",
+    "fascia iliaca nerve block hip fracture",
+  ],
+  Analgesia: [
+    "multimodal analgesia opioid sparing ED",
+    "renal colic NSAIDs analgesia",
+    "sickle cell crisis pain management protocol",
+  ],
+};
+
 const ED_GUIDELINES_SYSTEM_PROMPT = `You are an expert ED Guidelines Assistant for an Emergency Department.
 
 ## YOUR ROLE
@@ -26,6 +114,7 @@ For local uploaded guidelines, use EXACTLY this line format (all fields required
 The Slug value comes from the "slug" field returned by ragSearch or searchGuidelines tools — always include it.
 For external web guidance, use this exact line format — ONLY for URLs explicitly returned by the searchExternalWeb tool:
 🔗 **[Guidance Title]** — Source: RCEM/NICE — [URL]
+When reading searchExternalWeb results, use the highlights array to judge relevance first; read the text field only for results whose highlights confirm they are on-topic.
 CRITICAL: Never invent, guess, or recall external URLs from training knowledge. If searchExternalWeb returned no results, was not called, or returned found:false, omit the external sources section entirely. Do not cite any URL that did not appear in the tool's response.
 
 Close with: "This is a summary — always refer to the full guideline for complete clinical guidance."
@@ -180,15 +269,14 @@ const searchExternalWebTool = createTool({
       }
 
       const exa = new Exa(apiKey);
-      // Use search() — searchAndContents() is deprecated in exa-js v2.8+
-      // type:"auto" = balanced relevance + speed (~1s); highlights for compact agent context
-      const exaResult = await exa.search(args.query, {
+      // highlights = key sentences (signal, ~10x fewer tokens than full text)
+      // text = capped full body (reading depth when highlights flag relevance)
+      const exaResult = await exa.searchAndContents(args.query, {
         includeDomains: domains,
-        numResults: 8,
+        numResults: 5,
         type: "auto",
-        contents: {
-          highlights: { maxCharacters: 1000 },
-        },
+        highlights: { numSentences: 2, highlightsPerUrl: 3 },
+        text: { maxCharacters: 800 },
       });
 
       const seen = new Set<string>();
@@ -199,18 +287,21 @@ const searchExternalWebTool = createTool({
           seen.add(url);
           return true;
         })
-        .slice(0, 8)
+        .slice(0, 5)
         .map((item) => {
           const url = item.url ?? "";
           const exaItem = item as any;
-          const highlight =
-            Array.isArray(exaItem.highlights) && exaItem.highlights.length > 0
-              ? exaItem.highlights[0]
-              : exaItem.text?.slice(0, 300) ?? "";
           return {
             title: item.title ?? "Untitled",
             url,
-            snippet: highlight,
+            // highlights: key sentences for relevance signal
+            highlights: Array.isArray(exaItem.highlights)
+              ? (exaItem.highlights as string[]).slice(0, 3)
+              : [],
+            // text: fuller context to read when highlights indicate relevance
+            text: typeof exaItem.text === "string"
+              ? exaItem.text.slice(0, 800)
+              : "",
             source: url.includes("nice.org.uk")
               ? "NICE"
               : url.includes("rcem.ac.uk")
