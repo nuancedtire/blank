@@ -180,11 +180,14 @@ const searchExternalWebTool = createTool({
       }
 
       const exa = new Exa(apiKey);
-      const exaResult = await exa.searchAndContents(args.query, {
+      // Use search() — searchAndContents() is deprecated in exa-js v2.8+
+      const exaResult = await exa.search(args.query, {
         includeDomains: domains,
         numResults: 8,
         type: "neural",
-        highlights: { numSentences: 2, highlightsPerUrl: 1 },
+        contents: {
+          highlights: { numSentences: 2, maxCharacters: 400 },
+        },
       });
 
       const seen = new Set<string>();

@@ -9,7 +9,7 @@ export const getCache = internalQuery({
     const entry = await ctx.db
       .query("webSearchCache")
       .withIndex("by_cacheKey", (q) => q.eq("cacheKey", cacheKey))
-      .unique();
+      .first(); // .first() not .unique() — concurrent writes can produce duplicates
     if (!entry || entry.expiresAt < Date.now()) return null;
     return entry.results as unknown;
   },

@@ -284,15 +284,15 @@ export function AgentChat({
 
   return (
     <MotionConfig reducedMotion="user">
-    <div
-      className={cn(
-        "grid h-full min-h-0 border rounded-2xl bg-card shadow-[var(--shadow-md)] animate-in slide-in-from-top-2 fade-in duration-300 overflow-hidden",
-        historyCollapsed
-          ? "md:grid-cols-[72px_minmax(0,1fr)]"
-          : "md:grid-cols-[280px_minmax(0,1fr)]",
-        className,
-      )}
-    >
+      <div
+        className={cn(
+          "grid h-full min-h-0 border rounded-2xl bg-card shadow-[var(--shadow-md)] animate-in slide-in-from-top-2 fade-in duration-300 overflow-hidden",
+          historyCollapsed
+            ? "md:grid-cols-[72px_minmax(0,1fr)]"
+            : "md:grid-cols-[280px_minmax(0,1fr)]",
+          className,
+        )}
+      >
       {/* Desktop sidebar — hidden on mobile, visible on md+ */}
       <aside
         className={cn(
@@ -590,7 +590,7 @@ export function AgentChat({
           </p>
         </div>
       </div>
-    </div>
+      </div>
     </MotionConfig>
   );
 }
