@@ -70,6 +70,7 @@ export default defineSchema({
     .index("by_category", ["category"])
     .index("by_status", ["status"])
     .index("by_category_status", ["category", "status"])
+    .index("by_status_lastUpdated", ["status", "lastUpdated"])
     .index("by_contentHash", ["contentHash"])
     .searchIndex("search_guidelines", {
       searchField: "content",

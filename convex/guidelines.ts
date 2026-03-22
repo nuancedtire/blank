@@ -38,8 +38,35 @@ export const listPublishedSummaries = query({
     return guidelines
       .sort((a, b) => b.lastUpdated - a.lastUpdated)
       .map(
-      ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest
+        ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest
       );
+  },
+});
+
+// Efficiently fetch only the most recently updated published guidelines
+export const listRecent = query({
+  args: { limit: v.number() },
+  handler: async (ctx, { limit }) => {
+    const guidelines = await ctx.db
+      .query("guidelines")
+      .withIndex("by_status_lastUpdated", (q) => q.eq("status", "published"))
+      .order("desc")
+      .take(limit);
+
+    return guidelines.map(
+      ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest
+    );
+  },
+});
+
+// Fetch summaries for a specific set of IDs (useful for pinned items)
+export const getSummariesByIds = query({
+  args: { ids: v.array(v.id("guidelines")) },
+  handler: async (ctx, { ids }) => {
+    const results = await Promise.all(ids.map((id) => ctx.db.get(id)));
+    return results
+      .filter((g): g is NonNullable<typeof g> => !!g)
+      .map(({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest);
   },
 });
 
