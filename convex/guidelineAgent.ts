@@ -275,7 +275,10 @@ const searchExternalWebTool = createTool({
         includeDomains: domains,
         numResults: 5,
         type: "auto",
-        highlights: { numSentences: 2, highlightsPerUrl: 3 },
+        highlights: {
+          maxCharacters: 2000,
+          query: args.query, // directs which sentences are extracted toward the clinical question
+        },
         text: { maxCharacters: 800 },
       });
 
