@@ -44,7 +44,7 @@ function searchScopeInstruction(scope?: string): string {
     case "local":
       return "Search scope preference: local documents only. Do not use external web tools unless explicitly asked.";
     case "web":
-      return "Search scope preference: external web only using SearXNG with this filter: site:nice.org.uk OR site:rcem.ac.uk.";
+      return "Search scope preference: external web only — call searchExternalWeb with site 'both' (NICE + RCEM).";
     default:
       return "Search scope preference: local documents first, then external web if needed.";
   }
@@ -151,7 +151,7 @@ async function maybeGenerateThreadMetadata(
 
   try {
     const meta = await generateObject({
-      model: cerebras.chat("gpt-oss-120b"),
+      model: cerebras.chat("llama3.1-8b"),
       schema: threadMetaSchema,
       prompt: [
         "Create concise metadata for a clinical guideline support conversation.",

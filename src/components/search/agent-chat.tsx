@@ -1,4 +1,5 @@
 import * as React from "react";
+import { motion, AnimatePresence, MotionConfig } from "motion/react";
 import {
   useMutation as useConvexRawMutation,
   useQuery as useConvexRawQuery,
@@ -282,15 +283,16 @@ export function AgentChat({
   const hasPendingNoStream = !!pendingAssistantTarget && !isAgentThinking;
 
   return (
-    <div
-      className={cn(
-        "grid h-full min-h-0 border rounded-2xl bg-card shadow-[var(--shadow-md)] animate-in slide-in-from-top-2 fade-in duration-300 overflow-hidden",
-        historyCollapsed
-          ? "md:grid-cols-[72px_minmax(0,1fr)]"
-          : "md:grid-cols-[280px_minmax(0,1fr)]",
-        className,
-      )}
-    >
+    <MotionConfig reducedMotion="user">
+      <div
+        className={cn(
+          "grid h-full min-h-0 border rounded-2xl bg-card shadow-[var(--shadow-md)] animate-in slide-in-from-top-2 fade-in duration-300 overflow-hidden",
+          historyCollapsed
+            ? "md:grid-cols-[72px_minmax(0,1fr)]"
+            : "md:grid-cols-[280px_minmax(0,1fr)]",
+          className,
+        )}
+      >
       {/* Desktop sidebar — hidden on mobile, visible on md+ */}
       <aside
         className={cn(
@@ -522,24 +524,45 @@ export function AgentChat({
             </div>
           )}
 
-          {messages.results.map((msg) => (
-            <MessageBubble key={msg.key} message={msg} />
-          ))}
+          <AnimatePresence initial={false}>
+            {messages.results.map((msg) => (
+              <MessageBubble key={msg.key} message={msg} />
+            ))}
+          </AnimatePresence>
 
-          {hasPendingNoStream && (
-            <div className="flex gap-3">
-              <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center shrink-0 mt-0.5">
-                <Bot className="h-3.5 w-3.5 text-primary" />
-              </div>
-              <div className="max-w-[85%] rounded-2xl rounded-bl-md border bg-muted/25 px-4 py-3 space-y-2">
-                <div className="inline-flex items-center gap-2 text-xs rounded-lg px-2.5 py-1 bg-primary/10 text-primary border border-primary/20">
-                  <Clock3 className="h-3 w-3" />
-                  <span>{WAITING_STEPS[activeStep]}</span>
+          <AnimatePresence>
+            {hasPendingNoStream && (
+              <motion.div
+                key="thinking"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6, transition: { duration: 0.15 } }}
+                transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                className="flex gap-3"
+              >
+                <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center shrink-0 mt-0.5">
+                  <Bot className="h-3.5 w-3.5 text-primary" />
                 </div>
-                <PulsingDots />
-              </div>
-            </div>
-          )}
+                <div className="max-w-[85%] rounded-2xl rounded-bl-md border bg-muted/25 px-4 py-3 space-y-2">
+                  <div className="inline-flex items-center gap-2 text-xs rounded-lg px-2.5 py-1 bg-primary/10 text-primary border border-primary/20 overflow-hidden">
+                    <Clock3 className="h-3 w-3 shrink-0" />
+                    <AnimatePresence mode="wait">
+                      <motion.span
+                        key={activeStep}
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -5 }}
+                        transition={{ duration: 0.18 }}
+                      >
+                        {WAITING_STEPS[activeStep]}
+                      </motion.span>
+                    </AnimatePresence>
+                  </div>
+                  <PulsingDots />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <div className="border-t p-3">
@@ -567,7 +590,8 @@ export function AgentChat({
           </p>
         </div>
       </div>
-    </div>
+      </div>
+    </MotionConfig>
   );
 }
 
@@ -599,13 +623,18 @@ function ThreadItem({
   onDelete,
 }: ThreadItemProps) {
   return (
-    <div
+    <motion.div
+      layout
       className={cn(
-        "rounded-xl border transition-colors",
+        "rounded-xl border",
         isActive
           ? "bg-primary/10 border-primary/30"
           : "bg-card/60 border-border hover:bg-muted/60",
       )}
+      animate={{
+        borderColor: isActive ? "var(--color-primary)" : undefined,
+      }}
+      transition={{ duration: 0.18 }}
     >
       <div className="flex items-start gap-1 min-w-0">
         <button
@@ -674,7 +703,7 @@ function ThreadItem({
           </Button>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -700,11 +729,11 @@ const MessageBubble = React.memo(function MessageBubble({
   const isStreaming = message.status === "streaming";
 
   return (
-    <div
-      className={cn(
-        "flex gap-2 md:gap-3",
-        isUser ? "justify-end" : "justify-start",
-      )}
+    <motion.div
+      className={cn("flex gap-2 md:gap-3", isUser ? "justify-end" : "justify-start")}
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 380, damping: 30 }}
     >
       {!isUser && (
         <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center shrink-0 mt-0.5">
@@ -720,9 +749,11 @@ const MessageBubble = React.memo(function MessageBubble({
             : "",
         )}
       >
-        {toolParts?.map((tp, i) => (
-          <ToolCallChip key={i} invocation={(tp as any).toolInvocation} />
-        ))}
+        <AnimatePresence initial={false}>
+          {toolParts?.map((tp, i) => (
+            <ToolCallChip key={i} invocation={(tp as any).toolInvocation} index={i} />
+          ))}
+        </AnimatePresence>
 
         {displayText ? (
           <StreamingText
@@ -740,7 +771,7 @@ const MessageBubble = React.memo(function MessageBubble({
           <User className="h-3.5 w-3.5 text-muted-foreground" />
         </div>
       )}
-    </div>
+    </motion.div>
   );
 });
 
@@ -826,6 +857,7 @@ function extractText(children: React.ReactNode): string | null {
 
 function ToolCallChip({
   invocation,
+  index = 0,
 }: {
   invocation: {
     toolName: string;
@@ -833,6 +865,7 @@ function ToolCallChip({
     args?: Record<string, unknown>;
     result?: Record<string, unknown>;
   };
+  index?: number;
 }) {
   const isRunning = invocation.state === "call" || invocation.state === "partial-call";
   const query = (invocation.args as Record<string, string>)?.query ?? "guidelines";
@@ -842,7 +875,9 @@ function ToolCallChip({
 
   if (invocation.toolName === "ragSearch") {
     icon = isRunning ? (
-      <Loader2 className="h-3 w-3 animate-spin" />
+      <motion.span animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} className="inline-flex">
+        <Loader2 className="h-3 w-3" />
+      </motion.span>
     ) : (
       <BookOpen className="h-3 w-3" />
     );
@@ -855,24 +890,32 @@ function ToolCallChip({
     label = sourceFiles.length > 0 ? `RAG: ${sourceFiles.join(", ")}` : `RAG: "${query}"`;
   } else if (invocation.toolName === "searchGuidelines") {
     icon = isRunning ? (
-      <Loader2 className="h-3 w-3 animate-spin" />
+      <motion.span animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} className="inline-flex">
+        <Loader2 className="h-3 w-3" />
+      </motion.span>
     ) : (
       <Search className="h-3 w-3" />
     );
     label = `Local search: "${query}"`;
   } else if (invocation.toolName === "searchExternalWeb") {
     icon = isRunning ? (
-      <Loader2 className="h-3 w-3 animate-spin" />
+      <motion.span animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} className="inline-flex">
+        <Loader2 className="h-3 w-3" />
+      </motion.span>
     ) : (
       <Search className="h-3 w-3" />
     );
-    label = `Web search: "${query}"`;
+    label = `Web (Exa): "${query}"`;
   }
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, scale: 0.88, x: -8 }}
+      animate={{ opacity: 1, scale: 1, x: 0 }}
+      exit={{ opacity: 0, scale: 0.88, transition: { duration: 0.1 } }}
+      transition={{ type: "spring", stiffness: 440, damping: 32, delay: index * 0.06 }}
       className={cn(
-        "inline-flex items-center gap-2 text-xs rounded-lg px-2.5 md:px-3 py-1.5 transition-colors",
+        "inline-flex items-center gap-2 text-xs rounded-lg px-2.5 md:px-3 py-1.5",
         isRunning
           ? "bg-primary/10 text-primary border border-primary/20"
           : "bg-muted/50 text-muted-foreground",
@@ -880,22 +923,26 @@ function ToolCallChip({
     >
       {icon}
       <span className="truncate max-w-[140px] sm:max-w-[220px] md:max-w-[260px]">{label}</span>
-    </div>
+    </motion.div>
   );
 }
 
 function PulsingDots() {
   return (
     <div className="flex items-center gap-1.5 py-1">
-      <span className="w-2 h-2 rounded-full bg-primary/60 animate-pulse" />
-      <span
-        className="w-2 h-2 rounded-full bg-primary/40 animate-pulse"
-        style={{ animationDelay: "0.2s" }}
-      />
-      <span
-        className="w-2 h-2 rounded-full bg-primary/20 animate-pulse"
-        style={{ animationDelay: "0.4s" }}
-      />
+      {[0, 1, 2].map((i) => (
+        <motion.span
+          key={i}
+          className="w-2 h-2 rounded-full bg-primary"
+          animate={{ opacity: [0.25, 1, 0.25], scale: [0.75, 1.1, 0.75] }}
+          transition={{
+            duration: 1.1,
+            repeat: Infinity,
+            delay: i * 0.18,
+            ease: "easeInOut",
+          }}
+        />
+      ))}
     </div>
   );
 }
@@ -918,24 +965,30 @@ function SourceCard({
   const resolvedSlug = slug ?? lookedUpSlug ?? null;
 
   return (
-    <Link
-      to={resolvedSlug ? "/guideline/$slug" : "/browse"}
-      {...(resolvedSlug ? { params: { slug: resolvedSlug } } : {})}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex items-center gap-3 px-3 py-2.5 my-1.5 rounded-lg border bg-muted/30 hover:bg-muted/60 transition-colors group no-underline"
+    <motion.div
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ type: "spring", stiffness: 380, damping: 32 }}
     >
-      <div className="h-9 w-9 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
-        <FileText className="h-4 w-4 text-primary" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium truncate text-foreground group-hover:text-primary transition-colors">
-          {title}
-        </p>
-        <p className="text-[11px] text-muted-foreground">
-          {source.toUpperCase()} · {fileName}
-        </p>
-      </div>
-    </Link>
+      <Link
+        to={resolvedSlug ? "/guideline/$slug" : "/browse"}
+        {...(resolvedSlug ? { params: { slug: resolvedSlug } } : {})}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-3 px-3 py-2.5 my-1.5 rounded-lg border bg-muted/30 hover:bg-muted/60 transition-colors group no-underline"
+      >
+        <div className="h-9 w-9 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+          <FileText className="h-4 w-4 text-primary" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium truncate text-foreground group-hover:text-primary transition-colors">
+            {title}
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            {source.toUpperCase()} · {fileName}
+          </p>
+        </div>
+      </Link>
+    </motion.div>
   );
 }
