@@ -707,15 +707,21 @@ function ThreadItem({
   );
 }
 
-function MessageBubble({ message }: { message: UIMessage }) {
+const MessageBubble = React.memo(function MessageBubble({
+  message,
+}: {
+  message: UIMessage;
+}) {
   const isUser = message.role === "user";
 
   const textParts = message.parts?.filter(
     (p): p is { type: "text"; text: string } => p.type === "text",
   );
   const toolParts = message.parts?.filter(
-    (p): p is Extract<(typeof message.parts)[number], { type: "tool-invocation" }> =>
-      p.type === "tool-invocation",
+    (p): p is Extract<
+      (typeof message.parts)[number],
+      { type: "tool-invocation" }
+    > => p.type === "tool-invocation",
   );
 
   const fullText = textParts?.map((t) => t.text).join("") ?? "";
@@ -750,7 +756,11 @@ function MessageBubble({ message }: { message: UIMessage }) {
         </AnimatePresence>
 
         {displayText ? (
-          <StreamingText text={displayText} isStreaming={isStreaming} isUser={isUser} />
+          <StreamingText
+            text={displayText}
+            isStreaming={isStreaming}
+            isUser={isUser}
+          />
         ) : (
           isStreaming && !toolParts?.length && <PulsingDots />
         )}
@@ -763,7 +773,7 @@ function MessageBubble({ message }: { message: UIMessage }) {
       )}
     </motion.div>
   );
-}
+});
 
 function sanitizeUserPrompt(text: string): string {
   if (!text.startsWith("Search scope preference:")) {

@@ -17,6 +17,7 @@ import type * as guidelineAgent from "../guidelineAgent.js";
 import type * as guidelines from "../guidelines.js";
 import type * as http from "../http.js";
 import type * as notifications from "../notifications.js";
+import type * as playground from "../playground.js";
 import type * as rag from "../rag.js";
 import type * as searchAction from "../searchAction.js";
 import type * as settings from "../settings.js";
@@ -40,6 +41,7 @@ declare const fullApi: ApiFromModules<{
   guidelines: typeof guidelines;
   http: typeof http;
   notifications: typeof notifications;
+  playground: typeof playground;
   rag: typeof rag;
   searchAction: typeof searchAction;
   settings: typeof settings;

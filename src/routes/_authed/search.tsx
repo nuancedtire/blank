@@ -94,9 +94,13 @@ function SearchPage() {
     return () => clearTimeout(timeoutId);
   }, [query]);
 
-  // Fetch guidelines
-  const { data: allGuidelines } = useQuery(
-    convexQuery(api.guidelines.listPublishedSummaries, {}),
+  // Fetch summaries for category counts and recently updated section
+  const { data: allCategories } = useQuery(
+    convexQuery(api.guidelines.getCategories, {}),
+  );
+
+  const { data: recentGuidelines } = useQuery(
+    convexQuery(api.guidelines.listRecent, { limit: 5 }),
   );
 
   // Search (local paginated)
@@ -250,10 +254,10 @@ function SearchPage() {
 
   const pinnedIds = (currentUser as any)?.pinnedGuidelines ?? [];
 
-  const pinnedGuidelines = React.useMemo(() => {
-    if (!allGuidelines || pinnedIds.length === 0) return [];
-    return allGuidelines.filter((g: any) => pinnedIds.includes(g._id));
-  }, [allGuidelines, pinnedIds]);
+  const { data: pinnedGuidelines } = useQuery({
+    ...convexQuery(api.guidelines.getSummariesByIds, { ids: pinnedIds }),
+    enabled: pinnedIds.length > 0,
+  });
 
   const showSearchResults = !!searchQuery && !agentPanelOpen;
   const localResults = ((localSearchData as any)?.items ?? []) as Array<{
@@ -454,7 +458,7 @@ function SearchPage() {
             }).queryKey,
           });
           queryClient.invalidateQueries({
-            queryKey: convexQuery(api.guidelines.listPublishedSummaries, {}).queryKey,
+            queryKey: convexQuery(api.guidelines.listRecent, { limit: 5 }).queryKey,
           });
         } catch {
           thumbnailSyncFailedRef.current.add(guidelineId);
@@ -757,9 +761,8 @@ function SearchPage() {
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
               {CATEGORIES.map((cat) => {
-                const count =
-                  allGuidelines?.filter((g: any) => g.category === cat.name)
-                    .length ?? 0;
+                const categoryData = allCategories?.find((c) => c.name === cat.name);
+                const count = categoryData?.count ?? 0;
                 return (
                   <Link
                     key={cat.name}
@@ -789,7 +792,7 @@ function SearchPage() {
           <Separator className="bg-border" />
 
           {/* Pinned Guidelines */}
-          {pinnedGuidelines.length > 0 && (
+          {pinnedGuidelines && pinnedGuidelines.length > 0 && (
             <>
               <div>
                 <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
@@ -825,7 +828,7 @@ function SearchPage() {
               Recently Updated
             </h2>
             <div className="space-y-3">
-              {allGuidelines?.slice(0, 5).map((g: any) => (
+              {recentGuidelines?.map((g: any) => (
                 <GuidelineCard
                   key={g._id}
                   slug={g.slug}
@@ -840,8 +843,8 @@ function SearchPage() {
                   onTogglePin={() => pinMutation.mutate(g._id)}
                 />
               ))}
-              {!allGuidelines && <GuidelineCardSkeleton count={4} />}
-              {allGuidelines?.length === 0 && (
+              {!recentGuidelines && <GuidelineCardSkeleton count={4} />}
+              {recentGuidelines?.length === 0 && (
                 <Card className="p-8 text-center">
                   <p className="text-muted-foreground">
                     No guidelines yet. Check back soon.

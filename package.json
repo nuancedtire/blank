@@ -11,7 +11,8 @@
     "test": "vitest",
     "cf-typegen": "wrangler types --env-interface Env",
     "convex:dev": "npx convex dev",
-    "convex:deploy": "npx convex deploy"
+    "convex:deploy": "npx convex deploy",
+    "agent:playground": "npx @convex-dev/agent-playground"
   },
   "dependencies": {
     "@ai-sdk/cerebras": "^2.0.31",
