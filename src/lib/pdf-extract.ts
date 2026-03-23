@@ -1,4 +1,4 @@
-// @ts-expect-error - pdfjs-dist doesn't ship .d.ts for build/pdf.mjs
+// @ts-ignore - pdfjs-dist doesn't ship .d.ts for build/pdf.mjs
 import * as pdfjsLib from "pdfjs-dist/build/pdf.mjs";
 
 // Set up the worker via CDN

@@ -167,6 +167,9 @@ export default defineSchema({
       v.literal("search"),
       v.literal("auth"),
       v.literal("notification"),
+      v.literal("interpreter_session"),
+      v.literal("mh_session"),
+      v.literal("mh_alert"),
     ),
     resourceId: v.optional(v.string()),
     details: v.optional(v.string()),
@@ -185,6 +188,174 @@ export default defineSchema({
   })
     .index("by_cacheKey", ["cacheKey"])
     .index("by_expiresAt", ["expiresAt"]),
+
+  // Voice AI interpreter sessions (clinician-facing, bedside interpretation)
+  interpreterSessions: defineTable({
+    userId: v.id("users"),
+    patientLanguage: v.string(),
+    patientLanguageName: v.string(),
+    status: v.union(
+      v.literal("active"),
+      v.literal("completed"),
+      v.literal("abandoned"),
+    ),
+    scenarioTemplate: v.optional(v.string()),
+    openAiSessionId: v.optional(v.string()),
+    createdAt: v.number(),
+    completedAt: v.optional(v.number()),
+    durationSeconds: v.optional(v.number()),
+    transcriptTurns: v.optional(
+      v.array(
+        v.object({
+          speaker: v.union(v.literal("clinician"), v.literal("patient")),
+          englishText: v.string(),
+          timestamp: v.number(),
+        }),
+      ),
+    ),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"])
+    .index("by_createdAt", ["createdAt"]),
+
+  // Mental health companion sessions (patient-facing, waiting room screening)
+  mentalHealthSessions: defineTable({
+    sessionToken: v.string(),
+    bedsideId: v.optional(v.string()),
+    assignedByUserId: v.id("users"),
+    status: v.union(
+      v.literal("created"),
+      v.literal("active"),
+      v.literal("paused"),
+      v.literal("completed"),
+      v.literal("escalated"),
+      v.literal("abandoned"),
+    ),
+    consentGiven: v.boolean(),
+    preferredLanguage: v.optional(v.string()),
+    preferredLanguageName: v.optional(v.string()),
+    createdAt: v.number(),
+    activatedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+    lastActivityAt: v.optional(v.number()),
+    expiresAt: v.number(),
+    openAiSessionId: v.optional(v.string()),
+    currentRiskLevel: v.union(
+      v.literal("none"),
+      v.literal("low"),
+      v.literal("moderate"),
+      v.literal("high"),
+      v.literal("critical"),
+    ),
+    escalationTriggeredAt: v.optional(v.number()),
+    escalationAcknowledgedAt: v.optional(v.number()),
+    escalationAcknowledgedByUserId: v.optional(v.id("users")),
+    handoverDocumentText: v.optional(v.string()),
+    handoverGeneratedAt: v.optional(v.number()),
+  })
+    .index("by_sessionToken", ["sessionToken"])
+    .index("by_assignedBy", ["assignedByUserId"])
+    .index("by_status", ["status"])
+    .index("by_status_createdAt", ["status", "createdAt"])
+    .index("by_expiresAt", ["expiresAt"]),
+
+  // Mental health screening instruments (PHQ-9, C-SSRS) per session
+  mentalHealthScreenings: defineTable({
+    sessionId: v.id("mentalHealthSessions"),
+    instrument: v.union(v.literal("PHQ-9"), v.literal("C-SSRS")),
+    status: v.union(
+      v.literal("in_progress"),
+      v.literal("completed"),
+      v.literal("abandoned"),
+    ),
+    phq9Responses: v.optional(
+      v.array(
+        v.object({
+          itemIndex: v.number(),
+          question: v.string(),
+          responseText: v.string(),
+          score: v.number(),
+          scoredAt: v.number(),
+        }),
+      ),
+    ),
+    phq9TotalScore: v.optional(v.number()),
+    phq9Severity: v.optional(
+      v.union(
+        v.literal("none"),
+        v.literal("mild"),
+        v.literal("moderate"),
+        v.literal("moderately_severe"),
+        v.literal("severe"),
+      ),
+    ),
+    cssrsResponses: v.optional(
+      v.array(
+        v.object({
+          questionKey: v.string(),
+          questionText: v.string(),
+          responseText: v.string(),
+          endorsed: v.boolean(),
+          answeredAt: v.number(),
+        }),
+      ),
+    ),
+    cssrsIdeationCategory: v.optional(
+      v.union(
+        v.literal("none"),
+        v.literal("passive"),
+        v.literal("active_no_plan"),
+        v.literal("active_with_plan"),
+        v.literal("active_with_intent"),
+      ),
+    ),
+    cssrsBehaviorCategory: v.optional(
+      v.union(
+        v.literal("none"),
+        v.literal("preparatory"),
+        v.literal("aborted"),
+        v.literal("interrupted"),
+        v.literal("actual"),
+      ),
+    ),
+    cssrsHighRisk: v.optional(v.boolean()),
+    startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_session_instrument", ["sessionId", "instrument"]),
+
+  // Mental health clinical alerts (real-time escalation to nursing staff)
+  mentalHealthAlerts: defineTable({
+    sessionId: v.id("mentalHealthSessions"),
+    alertType: v.union(
+      v.literal("escalation_triggered"),
+      v.literal("session_idle"),
+      v.literal("high_phq9"),
+      v.literal("cssrs_high_risk"),
+      v.literal("connection_lost"),
+    ),
+    riskLevel: v.union(
+      v.literal("moderate"),
+      v.literal("high"),
+      v.literal("critical"),
+    ),
+    escalationNote: v.optional(v.string()),
+    status: v.union(
+      v.literal("active"),
+      v.literal("acknowledged"),
+      v.literal("resolved"),
+    ),
+    createdAt: v.number(),
+    acknowledgedAt: v.optional(v.number()),
+    acknowledgedByUserId: v.optional(v.id("users")),
+    resolvedAt: v.optional(v.number()),
+    resolvedByUserId: v.optional(v.id("users")),
+    resolutionNote: v.optional(v.string()),
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_status", ["status"])
+    .index("by_status_createdAt", ["status", "createdAt"]),
 
   // Notifications system
   notifications: defineTable({
@@ -207,4 +378,23 @@ export default defineSchema({
   })
     .index("by_isBroadcast", ["isBroadcast"])
     .index("by_createdAt", ["createdAt"]),
+
+  // Site-wide settings (singleton per key)
+  siteSettings: defineTable({
+    key: v.string(),
+    interpreterEnabled: v.boolean(),
+    mentalHealthEnabled: v.boolean(),
+    // Configurable search domains (e.g. nice.org.uk, rcem.ac.uk)
+    searchDomains: v.optional(
+      v.array(
+        v.object({
+          domain: v.string(),
+          label: v.string(),
+          enabled: v.boolean(),
+        }),
+      ),
+    ),
+    updatedAt: v.number(),
+    updatedBy: v.optional(v.id("users")),
+  }).index("by_key", ["key"]),
 });

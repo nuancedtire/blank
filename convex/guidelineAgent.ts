@@ -225,7 +225,7 @@ const ragSearchTool = createTool({
 
 const searchExternalWebTool = createTool({
   description:
-    "Search external clinical guidance via Exa neural search constrained to NICE and/or RCEM websites. Use only when local guidance is insufficient or explicitly requested. Can be called in parallel with ragSearch.",
+    "Search external clinical guidance via Exa neural search constrained to admin-configured domains (e.g. NICE, RCEM). Use only when local guidance is insufficient or explicitly requested. Can be called in parallel with ragSearch.",
   args: z.object({
     query: z
       .string()
@@ -249,14 +249,31 @@ const searchExternalWebTool = createTool({
       return cached as Record<string, unknown>;
     }
 
-    const isNiceOnly = siteKey === "nice";
-    const isRcemOnly = siteKey === "rcem";
+    // Fetch configured search domains from admin settings (fallback to defaults)
+    const defaultDomains = [
+      { domain: "nice.org.uk", label: "NICE", enabled: true },
+      { domain: "rcem.ac.uk", label: "RCEM", enabled: true },
+    ];
+    let configuredDomains: Array<{ domain: string; label: string; enabled: boolean }>;
+    try {
+      configuredDomains = await ctx.runQuery(
+        internal.siteSettings.getSearchDomainsInternal,
+        {},
+      );
+    } catch {
+      configuredDomains = defaultDomains;
+    }
 
-    const domains = isNiceOnly
-      ? ["nice.org.uk"]
-      : isRcemOnly
-        ? ["rcem.ac.uk"]
-        : ["nice.org.uk", "rcem.ac.uk"];
+    let domains: string[];
+    if (siteKey === "both") {
+      domains = configuredDomains.map((d: { domain: string }) => d.domain);
+    } else {
+      // Try to match the site key to a configured domain label (case-insensitive)
+      const matched = configuredDomains.find(
+        (d: { label: string }) => d.label.toLowerCase() === siteKey.toLowerCase(),
+      );
+      domains = matched ? [matched.domain] : configuredDomains.map((d: { domain: string }) => d.domain);
+    }
 
     try {
       const apiKey = process.env.EXA_API_KEY;
@@ -307,11 +324,9 @@ const searchExternalWebTool = createTool({
               typeof exaItem.text === "string"
                 ? exaItem.text.slice(0, 800)
                 : "",
-            source: url.includes("nice.org.uk")
-              ? "NICE"
-              : url.includes("rcem.ac.uk")
-                ? "RCEM"
-                : "External",
+            source:
+              configuredDomains.find((d: { domain: string }) => url.includes(d.domain))?.label ??
+              "External",
           };
         });
 
@@ -320,7 +335,7 @@ const searchExternalWebTool = createTool({
           found: false,
           source: "Exa",
           siteFilter: domains.join(", "),
-          message: "No external NICE/RCEM results found.",
+          message: `No external results found for configured domains.`,
         };
         await ctx.runMutation(internal.webSearchCache.setCache, {
           cacheKey,
