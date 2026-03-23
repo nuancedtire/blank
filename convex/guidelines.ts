@@ -1,6 +1,5 @@
 import { v } from "convex/values";
 import { query, mutation, internalQuery } from "./_generated/server";
-import { requireAdmin } from "./users";
 
 // Look up a guideline slug by title — used as fallback when the AI omits the slug
 export const getSlugByTitle = query({
@@ -33,30 +32,14 @@ export const listPublishedSummaries = query({
   handler: async (ctx) => {
     const guidelines = await ctx.db
       .query("guidelines")
-      .withIndex("by_status_lastUpdated", (q) => q.eq("status", "published"))
-      .order("desc")
+      .withIndex("by_status", (q) => q.eq("status", "published"))
       .collect();
 
-    return guidelines.map(
-      ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest
-    );
-  },
-});
-
-// Get aggregate stats for the admin dashboard
-export const getDashboardStats = query({
-  args: {},
-  handler: async (ctx) => {
-    await requireAdmin(ctx);
-    const guidelines = await ctx.db.query("guidelines").collect();
-    const users = await ctx.db.query("users").collect();
-
-    return {
-      totalGuidelines: guidelines.length,
-      published: guidelines.filter((g) => g.status === "published").length,
-      drafts: guidelines.filter((g) => g.status === "draft").length,
-      totalUsers: users.length,
-    };
+    return guidelines
+      .sort((a, b) => b.lastUpdated - a.lastUpdated)
+      .map(
+        ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest
+      );
   },
 });
 
@@ -92,18 +75,6 @@ export const listAll = query({
   args: {},
   handler: async (ctx) => {
     return await ctx.db.query("guidelines").collect();
-  },
-});
-
-// Get all guidelines without heavy content field (admin list view)
-export const listAllSummaries = query({
-  args: {},
-  handler: async (ctx) => {
-    await requireAdmin(ctx);
-    const guidelines = await ctx.db.query("guidelines").order("desc").collect();
-    return guidelines.map(
-      ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest
-    );
   },
 });
 

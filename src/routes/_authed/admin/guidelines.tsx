@@ -67,12 +67,9 @@ function ManageGuidelinesPage() {
   const convex = useConvex();
   const [showForm, setShowForm] = React.useState(false);
   const [editingId, setEditingId] = React.useState<string | null>(null);
-  const [fetchingFullContent, setFetchingFullContent] = React.useState<
-    string | null
-  >(null);
 
   const { data: guidelines } = useQuery(
-    convexQuery(api.guidelines.listAllSummaries, {}),
+    convexQuery(api.guidelines.listAll, {}),
   );
 
   const { data: archivedGuidelines } = useQuery(
@@ -133,30 +130,16 @@ function ManageGuidelinesPage() {
     setEditingId(null);
   };
 
-  const startEdit = async (g: any) => {
-    setFetchingFullContent(g._id);
-    try {
-      // Fetch full guideline with content only when editing
-      const fullGuideline = await convex.query(api.guidelines.getById, {
-        id: g._id as any,
-      });
-
-      if (!fullGuideline) return;
-
-      setTitle(fullGuideline.title);
-      setContent(fullGuideline.content);
-      setSummary(fullGuideline.summary ?? "");
-      setCategory(fullGuideline.category);
-      setVersion(fullGuideline.version);
-      setStatus(fullGuideline.status);
-      setKeywords(fullGuideline.keywords ?? []);
-      setEditingId(fullGuideline._id);
-      setShowForm(true);
-    } catch (error) {
-      console.error("Failed to fetch full guideline:", error);
-    } finally {
-      setFetchingFullContent(null);
-    }
+  const startEdit = (g: any) => {
+    setTitle(g.title);
+    setContent(g.content);
+    setSummary(g.summary ?? "");
+    setCategory(g.category);
+    setVersion(g.version);
+    setStatus(g.status);
+    setKeywords(g.keywords ?? []);
+    setEditingId(g._id);
+    setShowForm(true);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -458,14 +441,9 @@ function ManageGuidelinesPage() {
                         variant="ghost"
                         size="sm"
                         className="h-7 w-7 p-0"
-                        disabled={fetchingFullContent === g._id}
-                        onClick={() => void startEdit(g)}
+                        onClick={() => startEdit(g)}
                       >
-                        {fetchingFullContent === g._id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Edit className="h-3.5 w-3.5" />
-                        )}
+                        <Edit className="h-3.5 w-3.5" />
                       </Button>
                       {g.status === "published" && (
                         <Button
