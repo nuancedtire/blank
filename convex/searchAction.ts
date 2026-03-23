@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { action } from "./_generated/server";
+import Exa from "exa-js";
 
 // AI-powered search action that uses the guideline agent
 // This runs as a Convex action (can call external APIs)
@@ -18,108 +19,88 @@ export const aiSearch = action({
       query.includes("site:nice.org.uk") ||
       query.includes("site:rcem.ac.uk");
 
-    // Web search path (SearXNG) for scoped external queries.
+    // Web search path (Exa neural search) for scoped external queries.
     // Using Convex action avoids browser CORS issues from the UI.
     if (isWebScopedQuery) {
       try {
-        const hasNice = query.includes("site:nice.org.uk");
-        const hasRcem = query.includes("site:rcem.ac.uk");
-        const shouldSplitBySource = hasNice && hasRcem;
-
-        const fetchSearx = async (q: string) => {
-          const response = await fetch(
-            `https://pdfize.exe.xyz/search?format=json&pageno=${page}&q=${encodeURIComponent(q)}`,
-            {
-              headers: { Accept: "application/json" },
-              signal: AbortSignal.timeout(10000),
-            },
-          );
-          if (!response.ok) {
-            throw new Error("Web search request failed");
-          }
-          return (await response.json()) as {
-            number_of_results?: number;
-            results?: Array<{
-              title?: string;
-              url?: string;
-              content?: string;
-            }>;
-          };
-        };
-
-        const stripSiteFilter = (q: string) =>
-          q
-            .replace(/\(\s*site:nice\.org\.uk\s+OR\s+site:rcem\.ac\.uk\s*\)/gi, "")
-            .replace(/site:nice\.org\.uk/gi, "")
-            .replace(/site:rcem\.ac\.uk/gi, "")
-            .replace(/\s+/g, " ")
-            .trim();
-
-        const dataList = shouldSplitBySource
-          ? await Promise.all([
-              fetchSearx(`${stripSiteFilter(query)} site:nice.org.uk`),
-              fetchSearx(`${stripSiteFilter(query)} site:rcem.ac.uk`),
-            ])
-          : [await fetchSearx(query)];
-
-        const normalizedPerSource = dataList.map((data) => {
-          const allResults = (data.results ?? []).filter((item) => {
-            const url = item.url ?? "";
-            return url.includes("nice.org.uk") || url.includes("rcem.ac.uk");
-          });
+        const apiKey = process.env.EXA_API_KEY;
+        if (!apiKey) {
           return {
-            total:
-              typeof data.number_of_results === "number" && data.number_of_results > 0
-                ? data.number_of_results
-                : allResults.length,
-            items: allResults,
+            results: [],
+            source: "web" as const,
+            error: "EXA_API_KEY is not configured",
+            total: 0,
+            page,
+            pageSize,
           };
-        });
-
-        let merged: Array<{ title?: string; url?: string; content?: string }> = [];
-        if (shouldSplitBySource) {
-          const [nice, rcem] = normalizedPerSource;
-          const maxLen = Math.max(nice.items.length, rcem.items.length);
-          for (let i = 0; i < maxLen; i++) {
-            if (nice.items[i]) merged.push(nice.items[i]);
-            if (rcem.items[i]) merged.push(rcem.items[i]);
-          }
-        } else {
-          merged = normalizedPerSource[0].items;
         }
 
+        const hasNice = query.includes("site:nice.org.uk");
+        const hasRcem = query.includes("site:rcem.ac.uk");
+        const isPdf = query.toLowerCase().includes("filetype:pdf");
+
+        const domains =
+          hasNice && hasRcem
+            ? ["nice.org.uk", "rcem.ac.uk"]
+            : hasNice
+              ? ["nice.org.uk"]
+              : ["rcem.ac.uk"];
+
+        // Strip site: and filetype: directives — Exa uses includeDomains instead
+        const baseQuery = query
+          .replace(/\(\s*site:nice\.org\.uk\s+OR\s+site:rcem\.ac\.uk\s*\)/gi, "")
+          .replace(/site:nice\.org\.uk/gi, "")
+          .replace(/site:rcem\.ac\.uk/gi, "")
+          .replace(/filetype:pdf/gi, "")
+          .replace(/\s+/g, " ")
+          .trim();
+
+        const exa = new Exa(apiKey);
+        // Fetch enough results to cover the requested page, with extra headroom for
+        // URL-based filtering (PDF mode). Cap at 50 to stay within Exa limits.
+        const fetchCount = Math.min(pageSize * page * (isPdf ? 3 : 2), 50);
+        const exaResult = await exa.search(baseQuery, {
+          includeDomains: domains,
+          numResults: fetchCount,
+          type: "auto",
+        });
+
         const seen = new Set<string>();
-        merged = merged.filter((item) => {
+        let filtered = (exaResult.results ?? []).filter((item) => {
           const url = item.url ?? "";
           if (!url || seen.has(url)) return false;
           seen.add(url);
-          return true;
+          // For PDF mode, only keep URLs that contain "pdf" in the path
+          if (isPdf && !url.toLowerCase().includes("pdf")) return false;
+          return (
+            url.includes("nice.org.uk") || url.includes("rcem.ac.uk")
+          );
         });
 
-        const results = merged
-          .slice(0, pageSize)
-          .map((item) => {
+        const total = filtered.length;
+        const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
+
+        return {
+          results: paged.map((item) => {
             const url = item.url ?? "";
             return {
               title: item.title ?? "Untitled",
               url,
-              snippet: item.content ?? "",
+              snippet: "",
               source: url.includes("nice.org.uk") ? "NICE" : "RCEM",
             };
-          });
-
-        return {
-          results,
+          }),
           source: "web" as const,
-          total: normalizedPerSource.reduce((acc, x) => acc + x.total, 0),
+          total,
           page,
           pageSize,
         };
-      } catch {
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
         return {
           results: [],
           source: "web" as const,
-          error: "Web search unavailable",
+          error: `Web search failed: ${message}`,
           total: 0,
           page,
           pageSize,
