@@ -59,15 +59,10 @@ export const aiSearch = action({
         // Fetch enough results to cover the requested page, with extra headroom for
         // URL-based filtering (PDF mode). Cap at 50 to stay within Exa limits.
         const fetchCount = Math.min(pageSize * page * (isPdf ? 3 : 2), 50);
-        const exaResult = await exa.searchAndContents(baseQuery, {
+        const exaResult = await exa.search(baseQuery, {
           includeDomains: domains,
           numResults: fetchCount,
           type: "auto",
-          highlights: {
-            maxCharacters: 600,
-            query: baseQuery,
-          },
-          text: { maxCharacters: 500 },
         });
 
         const seen = new Set<string>();
@@ -88,22 +83,10 @@ export const aiSearch = action({
         return {
           results: paged.map((item) => {
             const url = item.url ?? "";
-            const exaItem = item as {
-              title?: string;
-              url?: string;
-              highlights?: string[];
-              text?: string;
-            };
-            const snippet =
-              Array.isArray(exaItem.highlights) && exaItem.highlights.length > 0
-                ? exaItem.highlights[0]
-                : typeof exaItem.text === "string"
-                  ? exaItem.text.slice(0, 300)
-                  : "";
             return {
               title: item.title ?? "Untitled",
               url,
-              snippet,
+              snippet: "",
               source: url.includes("nice.org.uk") ? "NICE" : "RCEM",
             };
           }),

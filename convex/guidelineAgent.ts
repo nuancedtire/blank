@@ -276,8 +276,9 @@ const searchExternalWebTool = createTool({
         numResults: 5,
         type: "auto",
         highlights: {
-          maxCharacters: 4000,
-          query: args.query, // directs which sentences are extracted toward the clinical question
+          numSentences: 3,       // Exa recommended default: 3 sentences per highlight
+          highlightsPerUrl: 3,   // Exa recommended default: 3 highlights per result
+          query: args.query,     // directs extraction toward the clinical question
         },
         text: { maxCharacters: 10000 },
       });
