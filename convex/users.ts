@@ -25,7 +25,7 @@ async function getCurrentProfile(ctx: UsersCtx): Promise<Doc<"users"> | null> {
   return await findUserProfile(ctx, authUser);
 }
 
-export async function requireAdmin(ctx: UsersCtx): Promise<Doc<"users">> {
+async function requireAdmin(ctx: UsersCtx): Promise<Doc<"users">> {
   const user = await getCurrentProfile(ctx);
   if (!user || user.role !== "admin") {
     throw new Error("Unauthorized: Admin access required");
@@ -111,7 +111,6 @@ export const listAll = query({
     return await ctx.db.query("users").collect();
   },
 });
-
 
 // Update user role (admin only)
 export const updateRole = mutation({
