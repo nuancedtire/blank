@@ -5,6 +5,15 @@ import { query, mutation, internalQuery } from "./_generated/server";
 export const getSlugByTitle = query({
   args: { title: v.string() },
   handler: async (ctx, { title }) => {
+    // Attempt an exact match first using the index (fast path)
+    const exactMatch = await ctx.db
+      .query("guidelines")
+      .withIndex("by_title_status", (q) => q.eq("title", title).eq("status", "published"))
+      .first();
+
+    if (exactMatch) return exactMatch.slug;
+
+    // Fallback to normalized scan (slow path)
     const guidelines = await ctx.db
       .query("guidelines")
       .withIndex("by_status", (q) => q.eq("status", "published"))
@@ -99,20 +108,14 @@ export const getByCategory = query({
 export const getBySlug = query({
   args: { slug: v.string() },
   handler: async (ctx, { slug }) => {
-    const matches = await ctx.db
+    // Optimized: Fetch latest published version directly using composite index
+    return await ctx.db
       .query("guidelines")
-      .withIndex("by_slug", (q) => q.eq("slug", slug))
-      .collect();
-
-    if (matches.length === 0) return null;
-
-    const published = matches
-      .filter((g) => g.status === "published")
-      .sort((a, b) => b.lastUpdated - a.lastUpdated);
-
-    if (published.length > 0) return published[0];
-
-    return null;
+      .withIndex("by_slug_status_lastUpdated", (q) =>
+        q.eq("slug", slug).eq("status", "published"),
+      )
+      .order("desc")
+      .first();
   },
 });
 
