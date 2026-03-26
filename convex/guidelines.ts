@@ -30,16 +30,16 @@ export const listPublished = query({
 export const listPublishedSummaries = query({
   args: {},
   handler: async (ctx) => {
+    // Leverage by_status_lastUpdated index to offload sorting to the database
     const guidelines = await ctx.db
       .query("guidelines")
-      .withIndex("by_status", (q) => q.eq("status", "published"))
+      .withIndex("by_status_lastUpdated", (q) => q.eq("status", "published"))
+      .order("desc")
       .collect();
 
-    return guidelines
-      .sort((a, b) => b.lastUpdated - a.lastUpdated)
-      .map(
-        ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest
-      );
+    return guidelines.map(
+      ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest
+    );
   },
 });
 
@@ -99,20 +99,14 @@ export const getByCategory = query({
 export const getBySlug = query({
   args: { slug: v.string() },
   handler: async (ctx, { slug }) => {
-    const matches = await ctx.db
+    // Optimally fetch only the latest published version using the composite index
+    return await ctx.db
       .query("guidelines")
-      .withIndex("by_slug", (q) => q.eq("slug", slug))
-      .collect();
-
-    if (matches.length === 0) return null;
-
-    const published = matches
-      .filter((g) => g.status === "published")
-      .sort((a, b) => b.lastUpdated - a.lastUpdated);
-
-    if (published.length > 0) return published[0];
-
-    return null;
+      .withIndex("by_slug_status_lastUpdated", (q) =>
+        q.eq("slug", slug).eq("status", "published")
+      )
+      .order("desc")
+      .first();
   },
 });
 

@@ -67,6 +67,7 @@ export default defineSchema({
     replacedBy: v.optional(v.id("guidelines")), // Newer version that replaced this one
   })
     .index("by_slug", ["slug"])
+    .index("by_slug_status_lastUpdated", ["slug", "status", "lastUpdated"])
     .index("by_category", ["category"])
     .index("by_status", ["status"])
     .index("by_category_status", ["category", "status"])
