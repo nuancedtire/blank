@@ -44,7 +44,7 @@ import {
   TEMPLATE_CATEGORIES,
   TEMPLATE_PHRASES,
 } from "@/lib/interpreter/templates";
-import { getInterpreterToken } from "@/lib/voice/interpreter-token";
+import { getInterpreterToken, buildInterpreterPrompt } from "@/lib/voice/interpreter-token";
 import { api } from "convex/_generated/api";
 
 export const Route = createFileRoute("/_authed/interpreter")({
@@ -772,10 +772,18 @@ function ActivePhaseWrapper({
     return () => clearInterval(interval);
   }, []);
 
+  // Instructions are built client-side so language name is injected without
+  // a server round-trip. Voice and instructions live here, NOT in the token
+  // endpoint — openaiRealtimeToken only configures the model server-side.
+  const instructions = React.useMemo(
+    () => buildInterpreterPrompt(language.name),
+    [language.name],
+  );
+
   const chat = useRealtimeChat({
-    getToken: () =>
-      getInterpreterToken({ data: { patientLanguageName: language.name } }),
+    getToken: () => getInterpreterToken(),
     adapter: openaiRealtime(),
+    instructions,
     voice: "alloy",
     vadMode: "server",
   });

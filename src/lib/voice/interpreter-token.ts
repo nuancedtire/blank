@@ -1,7 +1,20 @@
-import type { RealtimeToken } from "@tanstack/ai";
+import { realtimeToken } from "@tanstack/ai";
+import { openaiRealtimeToken } from "@tanstack/ai-openai";
 import { createServerFn } from "@tanstack/react-start";
 
-function buildInterpreterPrompt(languageName: string): string {
+export const getInterpreterToken = createServerFn({ method: "POST" }).handler(
+  async () => {
+    return realtimeToken({
+      adapter: openaiRealtimeToken({
+        model: "gpt-4o-realtime-preview",
+      }),
+    });
+  },
+);
+
+// Build the interpreter system prompt client-side so language name
+// can be injected without a round-trip
+export function buildInterpreterPrompt(languageName: string): string {
   return `You are a professional medical interpreter working in a hospital Emergency Department.
 
 Your ONLY role is to interpret accurately between English and ${languageName}. You do NOT add, remove, summarise, advise, or comment on anything said.
@@ -20,51 +33,3 @@ OPENING: Say in English first, then ${languageName}:
 
 TEMPLATE PHRASES: When you receive a message with [TEMPLATE] prefix, speak that phrase in ${languageName} only. Do not repeat it in English — the clinician already sees the English text on screen.`;
 }
-
-export const getInterpreterToken = createServerFn({ method: "POST" })
-  .inputValidator((data: { patientLanguageName: string }) => data)
-  .handler(async ({ data }): Promise<RealtimeToken> => {
-    const instructions = buildInterpreterPrompt(data.patientLanguageName);
-
-    const response = await fetch(
-      "https://api.openai.com/v1/realtime/sessions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-realtime-preview",
-          voice: "alloy",
-          instructions,
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      throw new Error(`OpenAI realtime session failed: ${response.status}`);
-    }
-
-    const session = (await response.json()) as {
-      client_secret?: { value?: string } | string;
-      expires_at?: number;
-    };
-    const secret = session.client_secret;
-    const token =
-      (typeof secret === "object" ? secret?.value : secret) ?? "";
-    const expiresAt = session.expires_at
-      ? session.expires_at * 1000
-      : Date.now() + 60_000;
-
-    return {
-      provider: "openai",
-      token,
-      expiresAt,
-      config: {
-        model: "gpt-4o-realtime-preview",
-        voice: "alloy",
-        instructions,
-      },
-    };
-  });
