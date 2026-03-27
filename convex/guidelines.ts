@@ -8,9 +8,14 @@ export const getSlugByTitle = query({
     const guidelines = await ctx.db
       .query("guidelines")
       .withIndex("by_status", (q) => q.eq("status", "published"))
-      .collect();
+      .collect()
+      .then((results) =>
+        results.map((g) => ({ title: g.title, slug: g.slug })),
+      );
     const normalized = title.toLowerCase().trim();
-    const match = guidelines.find((g) => g.title.toLowerCase().trim() === normalized);
+    const match = guidelines.find(
+      (g) => g.title.toLowerCase().trim() === normalized,
+    );
     return match?.slug ?? null;
   },
 });
@@ -30,15 +35,16 @@ export const listPublished = query({
 export const listPublishedSummaries = query({
   args: {},
   handler: async (ctx) => {
-    const guidelines = await ctx.db
+    return await ctx.db
       .query("guidelines")
       .withIndex("by_status", (q) => q.eq("status", "published"))
-      .collect();
-
-    return guidelines
-      .sort((a, b) => b.lastUpdated - a.lastUpdated)
-      .map(
-        ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest
+      .collect()
+      .then((results) =>
+        results
+          .map(
+            ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest,
+          )
+          .sort((a, b) => b.lastUpdated - a.lastUpdated),
       );
   },
 });
@@ -47,15 +53,16 @@ export const listPublishedSummaries = query({
 export const listRecent = query({
   args: { limit: v.number() },
   handler: async (ctx, { limit }) => {
-    const guidelines = await ctx.db
+    return await ctx.db
       .query("guidelines")
       .withIndex("by_status_lastUpdated", (q) => q.eq("status", "published"))
       .order("desc")
-      .take(limit);
-
-    return guidelines.map(
-      ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest
-    );
+      .take(limit)
+      .then((guidelines) =>
+        guidelines.map(
+          ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest,
+        ),
+      );
   },
 });
 
@@ -82,16 +89,17 @@ export const listAll = query({
 export const getByCategory = query({
   args: { category: v.string() },
   handler: async (ctx, { category }) => {
-    const guidelines = await ctx.db
+    return await ctx.db
       .query("guidelines")
       .withIndex("by_category_status", (q) =>
-        q.eq("category", category).eq("status", "published")
+        q.eq("category", category).eq("status", "published"),
       )
-      .collect();
-
-    return guidelines.map(
-      ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest
-    );
+      .collect()
+      .then((results) =>
+        results.map(
+          ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest,
+        ),
+      );
   },
 });
 
@@ -99,20 +107,13 @@ export const getByCategory = query({
 export const getBySlug = query({
   args: { slug: v.string() },
   handler: async (ctx, { slug }) => {
-    const matches = await ctx.db
+    return await ctx.db
       .query("guidelines")
-      .withIndex("by_slug", (q) => q.eq("slug", slug))
-      .collect();
-
-    if (matches.length === 0) return null;
-
-    const published = matches
-      .filter((g) => g.status === "published")
-      .sort((a, b) => b.lastUpdated - a.lastUpdated);
-
-    if (published.length > 0) return published[0];
-
-    return null;
+      .withIndex("by_slug_status_lastUpdated", (q) =>
+        q.eq("slug", slug).eq("status", "published"),
+      )
+      .order("desc")
+      .first();
   },
 });
 
@@ -131,7 +132,8 @@ export const getCategories = query({
     const guidelines = await ctx.db
       .query("guidelines")
       .withIndex("by_status", (q) => q.eq("status", "published"))
-      .collect();
+      .collect()
+      .then((results) => results.map((g) => ({ category: g.category })));
 
     const categoryMap = new Map<string, number>();
     for (const g of guidelines) {
@@ -151,7 +153,7 @@ export const search = query({
     category: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    let searchQuery = ctx.db
+    return await ctx.db
       .query("guidelines")
       .withSearchIndex("search_guidelines", (q) => {
         let sq = q.search("content", args.query).eq("status", "published");
@@ -159,14 +161,13 @@ export const search = query({
           sq = sq.eq("category", args.category);
         }
         return sq;
-      });
-
-    const results = await searchQuery.take(10);
-
-    // Strip heavy content field for search results
-    return results.map(
-      ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest
-    );
+      })
+      .take(10)
+      .then((results) =>
+        results.map(
+          ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest,
+        ),
+      );
   },
 });
 
@@ -192,12 +193,15 @@ export const searchPaginated = query({
         }
         return sq;
       })
-      .collect();
+      .collect()
+      .then((results) =>
+        results.map(
+          ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest,
+        ),
+      );
 
     const total = allResults.length;
-    const items = allResults.slice(start, start + pageSize).map(
-      ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest
-    );
+    const items = allResults.slice(start, start + pageSize);
 
     return {
       items,

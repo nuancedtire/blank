@@ -82,7 +82,19 @@ export const getUnreadCount = query({
     if (!user) return 0;
 
     const now = Date.now();
-    const allNotifications = await ctx.db.query("notifications").collect();
+    const allNotifications = await ctx.db
+      .query("notifications")
+      .collect()
+      .then((results) =>
+        results.map((n) => ({
+          _id: n._id,
+          expiresAt: n.expiresAt,
+          isBroadcast: n.isBroadcast,
+          targetUserIds: n.targetUserIds,
+          readBy: n.readBy,
+          dismissedBy: n.dismissedBy,
+        })),
+      );
 
     return allNotifications.filter((n) => {
       if (n.expiresAt && n.expiresAt < now) return false;
