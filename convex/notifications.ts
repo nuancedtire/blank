@@ -22,6 +22,10 @@ async function checkAdmin(ctx: QueryCtx | MutationCtx) {
   return user;
 }
 
+// Only scan notifications from the last 30 days to avoid full table scans
+// as the application grows. This keeps queries fast and predictable.
+const NOTIFICATIONS_LOOKBACK = 30 * 24 * 60 * 60 * 1000;
+
 /**
  * USER FUNCTIONS
  */
@@ -38,11 +42,13 @@ export const list = query({
 
     const now = Date.now();
 
-    // Fetch all notifications and filter in memory for efficiency/simplicity
-    // In a larger app, we might want more complex indexing
+    // Scan only recent notifications using the createdAt index.
+    // This avoids O(N) performance degradation as history grows.
     const allNotifications = await ctx.db
       .query("notifications")
-      .withIndex("by_createdAt")
+      .withIndex("by_createdAt", (q) =>
+        q.gt("createdAt", now - NOTIFICATIONS_LOOKBACK)
+      )
       .order("desc")
       .collect();
 
@@ -82,7 +88,13 @@ export const getUnreadCount = query({
     if (!user) return 0;
 
     const now = Date.now();
-    const allNotifications = await ctx.db.query("notifications").collect();
+    // Use the time-bound index scan for counting as well.
+    const allNotifications = await ctx.db
+      .query("notifications")
+      .withIndex("by_createdAt", (q) =>
+        q.gt("createdAt", now - NOTIFICATIONS_LOOKBACK)
+      )
+      .collect();
 
     return allNotifications.filter((n) => {
       if (n.expiresAt && n.expiresAt < now) return false;
@@ -120,7 +132,14 @@ export const markAllAsRead = mutation({
     if (!user) throw new Error("Not authenticated");
 
     const now = Date.now();
-    const notifications = await ctx.db.query("notifications").collect();
+    // Optimization: Only mark recent notifications as read to avoid
+    // scanning and patching ancient history.
+    const notifications = await ctx.db
+      .query("notifications")
+      .withIndex("by_createdAt", (q) =>
+        q.gt("createdAt", now - NOTIFICATIONS_LOOKBACK)
+      )
+      .collect();
 
     for (const n of notifications) {
       const isTargeted = n.isBroadcast || n.targetUserIds?.includes(user._id);

@@ -5,3 +5,7 @@
 ## 2025-05-15 - [Chat UI Re-renders]
 **Learning:** Long chat threads can suffer from performance degradation during streaming if each new chunk causes all previous message bubbles to re-render.
 **Action:** Memoize `MessageBubble` components with `React.memo` to isolate re-renders to only the active streaming message.
+
+## 2025-05-16 - [Safe Dataset Reduction for Multi-tenant Scans]
+**Learning:** Applying a simple `.take(100)` limit on a query before filtering for user-specific results (like `targetUserIds` in notifications) can lead to empty lists if the relevant items fall outside the most recent slice. This is a common performance anti-pattern.
+**Action:** Use time-based index filters (e.g., `q.gt("createdAt", timestamp)`) to safely reduce scan size without risking data loss for the end-user.
