@@ -3,6 +3,9 @@ import { query, mutation, MutationCtx, QueryCtx } from "./_generated/server";
 import { authComponent } from "./auth";
 import { findUserProfile } from "./userProfile";
 
+// Only look back 30 days for notifications to ensure performance
+const NOTIFICATIONS_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
+
 // Helper to get the current authenticated user profile
 async function getCurrentUser(ctx: QueryCtx | MutationCtx) {
   const authUser = await authComponent.safeGetAuthUser(ctx);
@@ -38,11 +41,12 @@ export const list = query({
 
     const now = Date.now();
 
-    // Fetch all notifications and filter in memory for efficiency/simplicity
-    // In a larger app, we might want more complex indexing
+    // Use an indexed range scan with a lookback to ensure efficient queries as history grows
     const allNotifications = await ctx.db
       .query("notifications")
-      .withIndex("by_createdAt")
+      .withIndex("by_createdAt", (q) =>
+        q.gt("createdAt", now - NOTIFICATIONS_LOOKBACK_MS),
+      )
       .order("desc")
       .collect();
 
@@ -82,7 +86,13 @@ export const getUnreadCount = query({
     if (!user) return 0;
 
     const now = Date.now();
-    const allNotifications = await ctx.db.query("notifications").collect();
+    // Use an indexed range scan with lookback for efficiency
+    const allNotifications = await ctx.db
+      .query("notifications")
+      .withIndex("by_createdAt", (q) =>
+        q.gt("createdAt", now - NOTIFICATIONS_LOOKBACK_MS),
+      )
+      .collect();
 
     return allNotifications.filter((n) => {
       if (n.expiresAt && n.expiresAt < now) return false;
@@ -120,7 +130,13 @@ export const markAllAsRead = mutation({
     if (!user) throw new Error("Not authenticated");
 
     const now = Date.now();
-    const notifications = await ctx.db.query("notifications").collect();
+    // Optimized range scan via by_createdAt index
+    const notifications = await ctx.db
+      .query("notifications")
+      .withIndex("by_createdAt", (q) =>
+        q.gt("createdAt", now - NOTIFICATIONS_LOOKBACK_MS),
+      )
+      .collect();
 
     for (const n of notifications) {
       const isTargeted = n.isBroadcast || n.targetUserIds?.includes(user._id);
