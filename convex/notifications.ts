@@ -3,6 +3,9 @@ import { query, mutation, MutationCtx, QueryCtx } from "./_generated/server";
 import { authComponent } from "./auth";
 import { findUserProfile } from "./userProfile";
 
+// 30 day lookback for notifications to prevent full table scans
+const NOTIFICATIONS_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
+
 // Helper to get the current authenticated user profile
 async function getCurrentUser(ctx: QueryCtx | MutationCtx) {
   const authUser = await authComponent.safeGetAuthUser(ctx);
@@ -38,11 +41,12 @@ export const list = query({
 
     const now = Date.now();
 
-    // Fetch all notifications and filter in memory for efficiency/simplicity
-    // In a larger app, we might want more complex indexing
+    // Fetch notifications within the lookback window to prevent full table scans
     const allNotifications = await ctx.db
       .query("notifications")
-      .withIndex("by_createdAt")
+      .withIndex("by_createdAt", (q) =>
+        q.gt("createdAt", now - NOTIFICATIONS_LOOKBACK_MS),
+      )
       .order("desc")
       .collect();
 
@@ -74,7 +78,7 @@ export const list = query({
   },
 });
 
-// 2. Get count of unread notifications for current user
+// 2. Get count of unread notifications for current user within lookback window
 export const getUnreadCount = query({
   args: {},
   handler: async (ctx) => {
@@ -82,7 +86,12 @@ export const getUnreadCount = query({
     if (!user) return 0;
 
     const now = Date.now();
-    const allNotifications = await ctx.db.query("notifications").collect();
+    const allNotifications = await ctx.db
+      .query("notifications")
+      .withIndex("by_createdAt", (q) =>
+        q.gt("createdAt", now - NOTIFICATIONS_LOOKBACK_MS),
+      )
+      .collect();
 
     return allNotifications.filter((n) => {
       if (n.expiresAt && n.expiresAt < now) return false;
@@ -112,7 +121,7 @@ export const markAsRead = mutation({
   },
 });
 
-// 4. Mark all user's notifications as read
+// 4. Mark all user's notifications within lookback window as read
 export const markAllAsRead = mutation({
   args: {},
   handler: async (ctx) => {
@@ -120,7 +129,12 @@ export const markAllAsRead = mutation({
     if (!user) throw new Error("Not authenticated");
 
     const now = Date.now();
-    const notifications = await ctx.db.query("notifications").collect();
+    const notifications = await ctx.db
+      .query("notifications")
+      .withIndex("by_createdAt", (q) =>
+        q.gt("createdAt", now - NOTIFICATIONS_LOOKBACK_MS),
+      )
+      .collect();
 
     for (const n of notifications) {
       const isTargeted = n.isBroadcast || n.targetUserIds?.includes(user._id);
@@ -211,18 +225,24 @@ export const listAll = query({
       .order("desc")
       .collect();
 
-    const result = [];
-    for (const n of notifications) {
-      const creator = await ctx.db.get(n.createdBy);
-      result.push({
+    // Batch fetch notification creators to avoid N+1 query problem
+    const creatorIds = [...new Set(notifications.map((n) => n.createdBy))];
+    const creators = await Promise.all(creatorIds.map((id) => ctx.db.get(id)));
+    const creatorMap = new Map(
+      creators
+        .filter((c): c is NonNullable<typeof c> => !!c)
+        .map((c) => [c._id, c]),
+    );
+
+    return notifications.map((n) => {
+      const creator = creatorMap.get(n.createdBy);
+      return {
         ...n,
         creatorName: creator?.name || "Unknown",
         creatorEmail: creator?.email || "Unknown",
         readCount: n.readBy.length,
-      });
-    }
-
-    return result;
+      };
+    });
   },
 });
 
