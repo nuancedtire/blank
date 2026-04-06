@@ -211,23 +211,26 @@ export const listAll = query({
       .order("desc")
       .collect();
 
-    // Batch-fetch creators to resolve N+1 query bottleneck
-    const creatorIds = Array.from(new Set(notifications.map((n) => n.createdBy)));
+    // BOLT OPTIMIZATION: Resolve N+1 query bottleneck by batch-fetching creators.
+    // Instead of db.get() in a loop, we collect unique IDs and fetch them all at once.
+    const uniqueCreatorIds = Array.from(new Set(notifications.map((n) => n.createdBy)));
     const creators = await Promise.all(
-      creatorIds.map((id) => ctx.db.get(id))
+      uniqueCreatorIds.map((id) => ctx.db.get(id))
     );
-    const creatorMap = new Map(
+
+    // Map creator profiles by ID for O(1) lookup during result mapping
+    const creatorLookup = new Map(
       creators
         .filter((c): c is NonNullable<typeof c> => !!c)
         .map((c) => [c._id, c])
     );
 
     return notifications.map((n) => {
-      const creator = creatorMap.get(n.createdBy);
+      const creator = creatorLookup.get(n.createdBy);
       return {
         ...n,
-        creatorName: creator?.name || "Unknown",
-        creatorEmail: creator?.email || "Unknown",
+        creatorName: creator?.name ?? "Unknown",
+        creatorEmail: creator?.email ?? "Unknown",
         readCount: n.readBy.length,
       };
     });
