@@ -5,3 +5,7 @@
 ## 2025-05-15 - [Chat UI Re-renders]
 **Learning:** Long chat threads can suffer from performance degradation during streaming if each new chunk causes all previous message bubbles to re-render.
 **Action:** Memoize `MessageBubble` components with `React.memo` to isolate re-renders to only the active streaming message.
+
+## 2025-05-15 - [Resolving N+1 Queries in Convex List Queries]
+**Learning:** The `listAll` admin query in `convex/notifications.ts` used an N+1 pattern by fetching each notification's creator in a loop. Batch-fetching with `Promise.all` and a Map is the standard pattern to resolve these bottlenecks in this architecture.
+**Action:** Always identify and resolve N+1 patterns in list queries by collecting unique IDs and batch-fetching them.
