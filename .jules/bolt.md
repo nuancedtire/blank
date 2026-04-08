@@ -5,3 +5,7 @@
 ## 2025-05-15 - [Chat UI Re-renders]
 **Learning:** Long chat threads can suffer from performance degradation during streaming if each new chunk causes all previous message bubbles to re-render.
 **Action:** Memoize `MessageBubble` components with `React.memo` to isolate re-renders to only the active streaming message.
+
+## 2026-04-07 - [Optimizing Admin List Payloads]
+**Learning:** Admin dashboards and management lists often fetch entire documents including heavy Markdown content, leading to large payload sizes.
+**Action:** Use "Summary" queries that exclude heavy fields like 'content' for list views, and implement a fetch-on-demand pattern for detail views or edit forms. Use database-level sorting via indexes instead of in-memory .sort().

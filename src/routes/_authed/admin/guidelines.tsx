@@ -67,13 +67,14 @@ function ManageGuidelinesPage() {
   const convex = useConvex();
   const [showForm, setShowForm] = React.useState(false);
   const [editingId, setEditingId] = React.useState<string | null>(null);
+  const [fetchingId, setFetchingId] = React.useState<string | null>(null);
 
   const { data: guidelines } = useQuery(
-    convexQuery(api.guidelines.listAll, {}),
+    convexQuery(api.guidelines.listAllSummaries, {}),
   );
 
   const { data: archivedGuidelines } = useQuery(
-    convexQuery(api.documents.listArchived, {}),
+    convexQuery(api.guidelines.listArchivedSummaries, {}),
   );
 
   const createGuideline = useConvexMutation(api.guidelines.create);
@@ -130,16 +131,27 @@ function ManageGuidelinesPage() {
     setEditingId(null);
   };
 
-  const startEdit = (g: any) => {
-    setTitle(g.title);
-    setContent(g.content);
-    setSummary(g.summary ?? "");
-    setCategory(g.category);
-    setVersion(g.version);
-    setStatus(g.status);
-    setKeywords(g.keywords ?? []);
-    setEditingId(g._id);
-    setShowForm(true);
+  const startEdit = async (g: any) => {
+    setFetchingId(g._id);
+    try {
+      // Guidelines from listAllSummaries don't have content, fetch it on-demand
+      const fullGuideline = await convex.query(api.guidelines.getById, {
+        id: g._id,
+      });
+      if (!fullGuideline) return;
+
+      setTitle(fullGuideline.title);
+      setContent(fullGuideline.content);
+      setSummary(fullGuideline.summary ?? "");
+      setCategory(g.category);
+      setVersion(g.version);
+      setStatus(g.status);
+      setKeywords(g.keywords ?? []);
+      setEditingId(g._id);
+      setShowForm(true);
+    } finally {
+      setFetchingId(null);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -442,8 +454,13 @@ function ManageGuidelinesPage() {
                         size="sm"
                         className="h-7 w-7 p-0"
                         onClick={() => startEdit(g)}
+                        disabled={fetchingId !== null}
                       >
-                        <Edit className="h-3.5 w-3.5" />
+                        {fetchingId === g._id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Edit className="h-3.5 w-3.5" />
+                        )}
                       </Button>
                       {g.status === "published" && (
                         <Button
