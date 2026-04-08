@@ -17,7 +17,9 @@ export const Route = createFileRoute("/_authed/admin/")({
 });
 
 function AdminDashboard() {
-  const { data: guidelines } = useQuery(convexQuery(api.guidelines.listAll, {}));
+  const { data: guidelines } = useQuery(
+    convexQuery(api.guidelines.listAllSummaries, {}),
+  );
   const { data: users } = useQuery(convexQuery(api.users.listAll, {}));
   const { data: auditLogs } = useQuery(
     convexQuery(api.auditLog.getRecent, { limit: 10 }),
