@@ -211,18 +211,25 @@ export const listAll = query({
       .order("desc")
       .collect();
 
-    const result = [];
-    for (const n of notifications) {
-      const creator = await ctx.db.get(n.createdBy);
-      result.push({
+    // BOLT OPTIMIZATION: Resolve N+1 query bottleneck by batch-fetching notification creators.
+    // This reduces the number of database roundtrips from O(N) to O(1) plus the initial query.
+    const creatorIds = Array.from(new Set(notifications.map((n) => n.createdBy)));
+    const creators = await Promise.all(creatorIds.map((id) => ctx.db.get(id)));
+    const creatorMap = new Map(
+      creators
+        .filter((c): c is NonNullable<typeof c> => !!c)
+        .map((c) => [c._id, c]),
+    );
+
+    return notifications.map((n) => {
+      const creator = creatorMap.get(n.createdBy);
+      return {
         ...n,
         creatorName: creator?.name || "Unknown",
         creatorEmail: creator?.email || "Unknown",
         readCount: n.readBy.length,
-      });
-    }
-
-    return result;
+      };
+    });
   },
 });
 
