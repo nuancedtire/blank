@@ -5,10 +5,27 @@ import { handler as authHandler } from "./lib/auth-server";
 
 console.log("[server-entry]: using custom server entry in 'src/server.ts'");
 
-const ALLOWED_PDF_HOST_SUFFIXES = ["nice.org.uk", "rcem.ac.uk"];
+// PDF proxy domain allowlist — configurable via ALLOWED_PDF_DOMAINS env var
+// Format: comma-separated domain suffixes, e.g. "nice.org.uk,rcem.ac.uk,bsaci.org"
+const DEFAULT_PDF_DOMAINS = ["nice.org.uk", "rcem.ac.uk"];
+
+function getAllowedPdfDomains(): string[] {
+  const envDomains =
+    typeof process !== "undefined"
+      ? process.env.ALLOWED_PDF_DOMAINS
+      : undefined;
+  if (envDomains) {
+    return envDomains
+      .split(",")
+      .map((d) => d.trim())
+      .filter(Boolean);
+  }
+  return DEFAULT_PDF_DOMAINS;
+}
 
 function isAllowedPdfHost(hostname: string): boolean {
-  return ALLOWED_PDF_HOST_SUFFIXES.some(
+  const allowed = getAllowedPdfDomains();
+  return allowed.some(
     (suffix) => hostname === suffix || hostname.endsWith(`.${suffix}`),
   );
 }

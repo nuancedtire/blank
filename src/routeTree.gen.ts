@@ -12,18 +12,24 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CompanionSessionTokenRouteImport } from './routes/companion/$sessionToken'
 import { Route as AuthedSettingsRouteImport } from './routes/_authed/settings'
 import { Route as AuthedSearchRouteImport } from './routes/_authed/search'
+import { Route as AuthedInterpreterRouteImport } from './routes/_authed/interpreter'
 import { Route as AuthedHistoryRouteImport } from './routes/_authed/history'
 import { Route as AuthedAdminRouteImport } from './routes/_authed/admin'
+import { Route as AuthedMentalHealthIndexRouteImport } from './routes/_authed/mental-health/index'
 import { Route as AuthedBrowseIndexRouteImport } from './routes/_authed/browse/index'
 import { Route as AuthedAdminIndexRouteImport } from './routes/_authed/admin/index'
+import { Route as AuthedMentalHealthSessionIdRouteImport } from './routes/_authed/mental-health/$sessionId'
 import { Route as AuthedGuidelineSlugRouteImport } from './routes/_authed/guideline/$slug'
 import { Route as AuthedBrowseCategoryRouteImport } from './routes/_authed/browse/$category'
 import { Route as AuthedAdminUsersRouteImport } from './routes/_authed/admin/users'
 import { Route as AuthedAdminNotificationsRouteImport } from './routes/_authed/admin/notifications'
 import { Route as AuthedAdminGuidelinesRouteImport } from './routes/_authed/admin/guidelines'
+import { Route as AuthedAdminFeaturesRouteImport } from './routes/_authed/admin/features'
 import { Route as AuthedAdminDocumentsRouteImport } from './routes/_authed/admin/documents'
+import { Route as AuthedAdminEvaluationIndexRouteImport } from './routes/_authed/admin/evaluation/index'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -39,6 +45,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CompanionSessionTokenRoute = CompanionSessionTokenRouteImport.update({
+  id: '/companion/$sessionToken',
+  path: '/companion/$sessionToken',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthedSettingsRoute = AuthedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -47,6 +58,11 @@ const AuthedSettingsRoute = AuthedSettingsRouteImport.update({
 const AuthedSearchRoute = AuthedSearchRouteImport.update({
   id: '/search',
   path: '/search',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedInterpreterRoute = AuthedInterpreterRouteImport.update({
+  id: '/interpreter',
+  path: '/interpreter',
   getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedHistoryRoute = AuthedHistoryRouteImport.update({
@@ -59,6 +75,11 @@ const AuthedAdminRoute = AuthedAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedMentalHealthIndexRoute = AuthedMentalHealthIndexRouteImport.update({
+  id: '/mental-health/',
+  path: '/mental-health/',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedBrowseIndexRoute = AuthedBrowseIndexRouteImport.update({
   id: '/browse/',
   path: '/browse/',
@@ -69,6 +90,12 @@ const AuthedAdminIndexRoute = AuthedAdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthedAdminRoute,
 } as any)
+const AuthedMentalHealthSessionIdRoute =
+  AuthedMentalHealthSessionIdRouteImport.update({
+    id: '/mental-health/$sessionId',
+    path: '/mental-health/$sessionId',
+    getParentRoute: () => AuthedRoute,
+  } as any)
 const AuthedGuidelineSlugRoute = AuthedGuidelineSlugRouteImport.update({
   id: '/guideline/$slug',
   path: '/guideline/$slug',
@@ -95,42 +122,65 @@ const AuthedAdminGuidelinesRoute = AuthedAdminGuidelinesRouteImport.update({
   path: '/guidelines',
   getParentRoute: () => AuthedAdminRoute,
 } as any)
+const AuthedAdminFeaturesRoute = AuthedAdminFeaturesRouteImport.update({
+  id: '/features',
+  path: '/features',
+  getParentRoute: () => AuthedAdminRoute,
+} as any)
 const AuthedAdminDocumentsRoute = AuthedAdminDocumentsRouteImport.update({
   id: '/documents',
   path: '/documents',
   getParentRoute: () => AuthedAdminRoute,
 } as any)
+const AuthedAdminEvaluationIndexRoute =
+  AuthedAdminEvaluationIndexRouteImport.update({
+    id: '/evaluation/',
+    path: '/evaluation/',
+    getParentRoute: () => AuthedAdminRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/admin': typeof AuthedAdminRouteWithChildren
   '/history': typeof AuthedHistoryRoute
+  '/interpreter': typeof AuthedInterpreterRoute
   '/search': typeof AuthedSearchRoute
   '/settings': typeof AuthedSettingsRoute
+  '/companion/$sessionToken': typeof CompanionSessionTokenRoute
   '/admin/documents': typeof AuthedAdminDocumentsRoute
+  '/admin/features': typeof AuthedAdminFeaturesRoute
   '/admin/guidelines': typeof AuthedAdminGuidelinesRoute
   '/admin/notifications': typeof AuthedAdminNotificationsRoute
   '/admin/users': typeof AuthedAdminUsersRoute
   '/browse/$category': typeof AuthedBrowseCategoryRoute
   '/guideline/$slug': typeof AuthedGuidelineSlugRoute
+  '/mental-health/$sessionId': typeof AuthedMentalHealthSessionIdRoute
   '/admin/': typeof AuthedAdminIndexRoute
-  '/browse': typeof AuthedBrowseIndexRoute
+  '/browse/': typeof AuthedBrowseIndexRoute
+  '/mental-health/': typeof AuthedMentalHealthIndexRoute
+  '/admin/evaluation/': typeof AuthedAdminEvaluationIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/history': typeof AuthedHistoryRoute
+  '/interpreter': typeof AuthedInterpreterRoute
   '/search': typeof AuthedSearchRoute
   '/settings': typeof AuthedSettingsRoute
+  '/companion/$sessionToken': typeof CompanionSessionTokenRoute
   '/admin/documents': typeof AuthedAdminDocumentsRoute
+  '/admin/features': typeof AuthedAdminFeaturesRoute
   '/admin/guidelines': typeof AuthedAdminGuidelinesRoute
   '/admin/notifications': typeof AuthedAdminNotificationsRoute
   '/admin/users': typeof AuthedAdminUsersRoute
   '/browse/$category': typeof AuthedBrowseCategoryRoute
   '/guideline/$slug': typeof AuthedGuidelineSlugRoute
+  '/mental-health/$sessionId': typeof AuthedMentalHealthSessionIdRoute
   '/admin': typeof AuthedAdminIndexRoute
   '/browse': typeof AuthedBrowseIndexRoute
+  '/mental-health': typeof AuthedMentalHealthIndexRoute
+  '/admin/evaluation': typeof AuthedAdminEvaluationIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -139,16 +189,22 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_authed/admin': typeof AuthedAdminRouteWithChildren
   '/_authed/history': typeof AuthedHistoryRoute
+  '/_authed/interpreter': typeof AuthedInterpreterRoute
   '/_authed/search': typeof AuthedSearchRoute
   '/_authed/settings': typeof AuthedSettingsRoute
+  '/companion/$sessionToken': typeof CompanionSessionTokenRoute
   '/_authed/admin/documents': typeof AuthedAdminDocumentsRoute
+  '/_authed/admin/features': typeof AuthedAdminFeaturesRoute
   '/_authed/admin/guidelines': typeof AuthedAdminGuidelinesRoute
   '/_authed/admin/notifications': typeof AuthedAdminNotificationsRoute
   '/_authed/admin/users': typeof AuthedAdminUsersRoute
   '/_authed/browse/$category': typeof AuthedBrowseCategoryRoute
   '/_authed/guideline/$slug': typeof AuthedGuidelineSlugRoute
+  '/_authed/mental-health/$sessionId': typeof AuthedMentalHealthSessionIdRoute
   '/_authed/admin/': typeof AuthedAdminIndexRoute
   '/_authed/browse/': typeof AuthedBrowseIndexRoute
+  '/_authed/mental-health/': typeof AuthedMentalHealthIndexRoute
+  '/_authed/admin/evaluation/': typeof AuthedAdminEvaluationIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -157,31 +213,43 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin'
     | '/history'
+    | '/interpreter'
     | '/search'
     | '/settings'
+    | '/companion/$sessionToken'
     | '/admin/documents'
+    | '/admin/features'
     | '/admin/guidelines'
     | '/admin/notifications'
     | '/admin/users'
     | '/browse/$category'
     | '/guideline/$slug'
+    | '/mental-health/$sessionId'
     | '/admin/'
-    | '/browse'
+    | '/browse/'
+    | '/mental-health/'
+    | '/admin/evaluation/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
     | '/history'
+    | '/interpreter'
     | '/search'
     | '/settings'
+    | '/companion/$sessionToken'
     | '/admin/documents'
+    | '/admin/features'
     | '/admin/guidelines'
     | '/admin/notifications'
     | '/admin/users'
     | '/browse/$category'
     | '/guideline/$slug'
+    | '/mental-health/$sessionId'
     | '/admin'
     | '/browse'
+    | '/mental-health'
+    | '/admin/evaluation'
   id:
     | '__root__'
     | '/'
@@ -189,22 +257,29 @@ export interface FileRouteTypes {
     | '/login'
     | '/_authed/admin'
     | '/_authed/history'
+    | '/_authed/interpreter'
     | '/_authed/search'
     | '/_authed/settings'
+    | '/companion/$sessionToken'
     | '/_authed/admin/documents'
+    | '/_authed/admin/features'
     | '/_authed/admin/guidelines'
     | '/_authed/admin/notifications'
     | '/_authed/admin/users'
     | '/_authed/browse/$category'
     | '/_authed/guideline/$slug'
+    | '/_authed/mental-health/$sessionId'
     | '/_authed/admin/'
     | '/_authed/browse/'
+    | '/_authed/mental-health/'
+    | '/_authed/admin/evaluation/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthedRoute: typeof AuthedRouteWithChildren
   LoginRoute: typeof LoginRoute
+  CompanionSessionTokenRoute: typeof CompanionSessionTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -219,7 +294,7 @@ declare module '@tanstack/react-router' {
     '/_authed': {
       id: '/_authed'
       path: ''
-      fullPath: ''
+      fullPath: '/'
       preLoaderRoute: typeof AuthedRouteImport
       parentRoute: typeof rootRouteImport
     }
@@ -228,6 +303,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/companion/$sessionToken': {
+      id: '/companion/$sessionToken'
+      path: '/companion/$sessionToken'
+      fullPath: '/companion/$sessionToken'
+      preLoaderRoute: typeof CompanionSessionTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authed/settings': {
@@ -244,6 +326,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedSearchRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/interpreter': {
+      id: '/_authed/interpreter'
+      path: '/interpreter'
+      fullPath: '/interpreter'
+      preLoaderRoute: typeof AuthedInterpreterRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/history': {
       id: '/_authed/history'
       path: '/history'
@@ -258,10 +347,17 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAdminRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/mental-health/': {
+      id: '/_authed/mental-health/'
+      path: '/mental-health'
+      fullPath: '/mental-health/'
+      preLoaderRoute: typeof AuthedMentalHealthIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/browse/': {
       id: '/_authed/browse/'
       path: '/browse'
-      fullPath: '/browse'
+      fullPath: '/browse/'
       preLoaderRoute: typeof AuthedBrowseIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
@@ -271,6 +367,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/'
       preLoaderRoute: typeof AuthedAdminIndexRouteImport
       parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/mental-health/$sessionId': {
+      id: '/_authed/mental-health/$sessionId'
+      path: '/mental-health/$sessionId'
+      fullPath: '/mental-health/$sessionId'
+      preLoaderRoute: typeof AuthedMentalHealthSessionIdRouteImport
+      parentRoute: typeof AuthedRoute
     }
     '/_authed/guideline/$slug': {
       id: '/_authed/guideline/$slug'
@@ -307,6 +410,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAdminGuidelinesRouteImport
       parentRoute: typeof AuthedAdminRoute
     }
+    '/_authed/admin/features': {
+      id: '/_authed/admin/features'
+      path: '/features'
+      fullPath: '/admin/features'
+      preLoaderRoute: typeof AuthedAdminFeaturesRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
     '/_authed/admin/documents': {
       id: '/_authed/admin/documents'
       path: '/documents'
@@ -314,23 +424,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAdminDocumentsRouteImport
       parentRoute: typeof AuthedAdminRoute
     }
+    '/_authed/admin/evaluation/': {
+      id: '/_authed/admin/evaluation/'
+      path: '/evaluation'
+      fullPath: '/admin/evaluation/'
+      preLoaderRoute: typeof AuthedAdminEvaluationIndexRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
   }
 }
 
 interface AuthedAdminRouteChildren {
   AuthedAdminDocumentsRoute: typeof AuthedAdminDocumentsRoute
+  AuthedAdminFeaturesRoute: typeof AuthedAdminFeaturesRoute
   AuthedAdminGuidelinesRoute: typeof AuthedAdminGuidelinesRoute
   AuthedAdminNotificationsRoute: typeof AuthedAdminNotificationsRoute
   AuthedAdminUsersRoute: typeof AuthedAdminUsersRoute
   AuthedAdminIndexRoute: typeof AuthedAdminIndexRoute
+  AuthedAdminEvaluationIndexRoute: typeof AuthedAdminEvaluationIndexRoute
 }
 
 const AuthedAdminRouteChildren: AuthedAdminRouteChildren = {
   AuthedAdminDocumentsRoute: AuthedAdminDocumentsRoute,
+  AuthedAdminFeaturesRoute: AuthedAdminFeaturesRoute,
   AuthedAdminGuidelinesRoute: AuthedAdminGuidelinesRoute,
   AuthedAdminNotificationsRoute: AuthedAdminNotificationsRoute,
   AuthedAdminUsersRoute: AuthedAdminUsersRoute,
   AuthedAdminIndexRoute: AuthedAdminIndexRoute,
+  AuthedAdminEvaluationIndexRoute: AuthedAdminEvaluationIndexRoute,
 }
 
 const AuthedAdminRouteWithChildren = AuthedAdminRoute._addFileChildren(
@@ -340,21 +461,27 @@ const AuthedAdminRouteWithChildren = AuthedAdminRoute._addFileChildren(
 interface AuthedRouteChildren {
   AuthedAdminRoute: typeof AuthedAdminRouteWithChildren
   AuthedHistoryRoute: typeof AuthedHistoryRoute
+  AuthedInterpreterRoute: typeof AuthedInterpreterRoute
   AuthedSearchRoute: typeof AuthedSearchRoute
   AuthedSettingsRoute: typeof AuthedSettingsRoute
   AuthedBrowseCategoryRoute: typeof AuthedBrowseCategoryRoute
   AuthedGuidelineSlugRoute: typeof AuthedGuidelineSlugRoute
+  AuthedMentalHealthSessionIdRoute: typeof AuthedMentalHealthSessionIdRoute
   AuthedBrowseIndexRoute: typeof AuthedBrowseIndexRoute
+  AuthedMentalHealthIndexRoute: typeof AuthedMentalHealthIndexRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedAdminRoute: AuthedAdminRouteWithChildren,
   AuthedHistoryRoute: AuthedHistoryRoute,
+  AuthedInterpreterRoute: AuthedInterpreterRoute,
   AuthedSearchRoute: AuthedSearchRoute,
   AuthedSettingsRoute: AuthedSettingsRoute,
   AuthedBrowseCategoryRoute: AuthedBrowseCategoryRoute,
   AuthedGuidelineSlugRoute: AuthedGuidelineSlugRoute,
+  AuthedMentalHealthSessionIdRoute: AuthedMentalHealthSessionIdRoute,
   AuthedBrowseIndexRoute: AuthedBrowseIndexRoute,
+  AuthedMentalHealthIndexRoute: AuthedMentalHealthIndexRoute,
 }
 
 const AuthedRouteWithChildren =
@@ -364,6 +491,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthedRoute: AuthedRouteWithChildren,
   LoginRoute: LoginRoute,
+  CompanionSessionTokenRoute: CompanionSessionTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

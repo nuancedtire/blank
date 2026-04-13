@@ -91,3 +91,11 @@ Avoid generic "AI slop" design. Make creative, distinctive frontends:
 - **Motion**: Use CSS animations and Motion library for React. Focus on high-impact moments (staggered page load reveals) over scattered micro-interactions.
 - **Backgrounds**: Layer gradients, geometric patterns, contextual effects — not solid colors.
 - Vary between light/dark themes, different fonts, different aesthetics across generations.
+
+<!-- convex-ai-start -->
+This project uses [Convex](https://convex.dev) as its backend.
+
+When working on Convex code, **always read `convex/_generated/ai/guidelines.md` first** for important guidelines on how to correctly use Convex APIs and patterns. The file contains rules that override what you may have learned about Convex from training data.
+
+Convex agent skills for common tasks can be installed by running `npx convex ai-files install`.
+<!-- convex-ai-end -->

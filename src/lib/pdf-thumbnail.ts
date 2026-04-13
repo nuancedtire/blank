@@ -1,3 +1,5 @@
+import { PDFJS_WORKER_SRC } from "@/lib/pdfjs";
+
 /**
  * Render page 1 of a PDF file into a JPEG thumbnail blob.
  * Uses dynamic import so pdf.js only loads in browser contexts.
@@ -25,8 +27,7 @@ export async function generatePdfThumbnailBlob(
       };
     };
 
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      "https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.624/build/pdf.worker.min.mjs";
+    pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_SRC;
 
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     const page = await pdf.getPage(1);
@@ -71,8 +72,7 @@ export async function generatePdfThumbnailBlobFromUrl(
       };
     };
 
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      "https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.624/build/pdf.worker.min.mjs";
+    pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_SRC;
 
     const pdf = await pdfjsLib.getDocument({ url }).promise;
     const page = await pdf.getPage(1);

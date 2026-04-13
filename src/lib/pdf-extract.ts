@@ -1,9 +1,8 @@
-// @ts-expect-error - pdfjs-dist doesn't ship .d.ts for build/pdf.mjs
+// @ts-ignore - pdfjs-dist doesn't ship .d.ts for build/pdf.mjs
 import * as pdfjsLib from "pdfjs-dist/build/pdf.mjs";
+import { PDFJS_WORKER_SRC } from "@/lib/pdfjs";
 
-// Set up the worker via CDN
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  "https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.624/build/pdf.worker.min.mjs";
+pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_SRC;
 
 /**
  * Extract all text content from a PDF file.
@@ -11,7 +10,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
  */
 export async function extractTextFromPdf(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+  const pdf = await loadingTask.promise;
 
   const pages: string[] = [];
 
@@ -21,8 +21,9 @@ export async function extractTextFromPdf(file: File): Promise<string> {
     const pageText = textContent.items
       .map((item: any) => item.str)
       .join(" ");
-    if (pageText.trim()) {
-      pages.push(pageText.trim());
+    const trimmedText = pageText.trim();
+    if (trimmedText) {
+      pages.push(trimmedText);
     }
   }
 

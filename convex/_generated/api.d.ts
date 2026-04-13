@@ -12,15 +12,25 @@ import type * as agentActions from "../agentActions.js";
 import type * as auditLog from "../auditLog.js";
 import type * as auth from "../auth.js";
 import type * as chat from "../chat.js";
+import type * as crons from "../crons.js";
 import type * as documents from "../documents.js";
+import type * as evaluation_metrics from "../evaluation/metrics.js";
 import type * as guidelineAgent from "../guidelineAgent.js";
 import type * as guidelines from "../guidelines.js";
 import type * as http from "../http.js";
+import type * as interpreter_realtimeRelay from "../interpreter/realtimeRelay.js";
+import type * as interpreter_sessions from "../interpreter/sessions.js";
+import type * as mentalHealth_alerts from "../mentalHealth/alerts.js";
+import type * as mentalHealth_documents from "../mentalHealth/documents.js";
+import type * as mentalHealth_realtimeRelay from "../mentalHealth/realtimeRelay.js";
+import type * as mentalHealth_screenings from "../mentalHealth/screenings.js";
+import type * as mentalHealth_sessions from "../mentalHealth/sessions.js";
 import type * as notifications from "../notifications.js";
 import type * as playground from "../playground.js";
 import type * as rag from "../rag.js";
 import type * as searchAction from "../searchAction.js";
 import type * as settings from "../settings.js";
+import type * as siteSettings from "../siteSettings.js";
 import type * as userProfile from "../userProfile.js";
 import type * as users from "../users.js";
 import type * as webSearchCache from "../webSearchCache.js";
@@ -36,15 +46,25 @@ declare const fullApi: ApiFromModules<{
   auditLog: typeof auditLog;
   auth: typeof auth;
   chat: typeof chat;
+  crons: typeof crons;
   documents: typeof documents;
+  "evaluation/metrics": typeof evaluation_metrics;
   guidelineAgent: typeof guidelineAgent;
   guidelines: typeof guidelines;
   http: typeof http;
+  "interpreter/realtimeRelay": typeof interpreter_realtimeRelay;
+  "interpreter/sessions": typeof interpreter_sessions;
+  "mentalHealth/alerts": typeof mentalHealth_alerts;
+  "mentalHealth/documents": typeof mentalHealth_documents;
+  "mentalHealth/realtimeRelay": typeof mentalHealth_realtimeRelay;
+  "mentalHealth/screenings": typeof mentalHealth_screenings;
+  "mentalHealth/sessions": typeof mentalHealth_sessions;
   notifications: typeof notifications;
   playground: typeof playground;
   rag: typeof rag;
   searchAction: typeof searchAction;
   settings: typeof settings;
+  siteSettings: typeof siteSettings;
   userProfile: typeof userProfile;
   users: typeof users;
   webSearchCache: typeof webSearchCache;
@@ -2420,12 +2440,17 @@ export declare const components: {
         "internal",
         {
           chunkContext?: { after: number; before: number };
-          embedding: Array<number>;
+          dimension?: number;
+          embedding?: Array<number>;
           filters: Array<{ name: string; value: any }>;
           limit: number;
           modelId: string;
           namespace: string;
+          searchType?: "vector" | "text" | "hybrid";
+          textQuery?: string;
+          textWeight?: number;
           vectorScoreThreshold?: number;
+          vectorWeight?: number;
         },
         {
           entries: Array<{

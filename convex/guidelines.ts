@@ -27,19 +27,19 @@ export const listPublished = query({
 });
 
 // Get published guidelines without heavy content field (for lists/cards)
+// Optimized to use by_status_lastUpdated index for database-level sorting
 export const listPublishedSummaries = query({
   args: {},
   handler: async (ctx) => {
     const guidelines = await ctx.db
       .query("guidelines")
-      .withIndex("by_status", (q) => q.eq("status", "published"))
+      .withIndex("by_status_lastUpdated", (q) => q.eq("status", "published"))
+      .order("desc")
       .collect();
 
-    return guidelines
-      .sort((a, b) => b.lastUpdated - a.lastUpdated)
-      .map(
-        ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest
-      );
+    return guidelines.map(
+      ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest
+    );
   },
 });
 
@@ -75,6 +75,23 @@ export const listAll = query({
   args: {},
   handler: async (ctx) => {
     return await ctx.db.query("guidelines").collect();
+  },
+});
+
+// Get all guidelines without heavy content field (for admin list views)
+// Optimized to use by_lastUpdated index for database-level sorting
+export const listAllSummaries = query({
+  args: {},
+  handler: async (ctx) => {
+    const guidelines = await ctx.db
+      .query("guidelines")
+      .withIndex("by_lastUpdated")
+      .order("desc")
+      .collect();
+
+    return guidelines.map(
+      ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest
+    );
   },
 });
 
@@ -340,6 +357,23 @@ export const remove = mutation({
       details: `Deleted guideline: ${existing.title}`,
       timestamp: Date.now(),
     });
+  },
+});
+
+// Get archived guidelines without heavy content field (for admin list views)
+// Optimized to use by_status_lastUpdated index for database-level sorting
+export const listArchivedSummaries = query({
+  args: {},
+  handler: async (ctx) => {
+    const guidelines = await ctx.db
+      .query("guidelines")
+      .withIndex("by_status_lastUpdated", (q) => q.eq("status", "archived"))
+      .order("desc")
+      .collect();
+
+    return guidelines.map(
+      ({ content, fileKey, createdBy, lastUpdatedBy, ...rest }) => rest
+    );
   },
 });
 

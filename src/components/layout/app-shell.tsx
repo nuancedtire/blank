@@ -11,6 +11,8 @@ import {
   AlertTriangle,
   Megaphone,
   X,
+  Languages,
+  HeartPulse,
 } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
@@ -39,11 +41,16 @@ import {
 } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-const baseNavItems = [
+const coreNavItems = [
   { label: "Search", icon: Search, href: "/search" },
   { label: "Browse", icon: FolderOpen, href: "/browse" },
   { label: "History", icon: History, href: "/history" },
 ] as const;
+
+const featureNavItems = {
+  interpreter: { label: "Interpreter", icon: Languages, href: "/interpreter" },
+  mentalHealth: { label: "Mental Health", icon: HeartPulse, href: "/mental-health" },
+} as const;
 
 const adminNavItem = {
   label: "Admin",
@@ -280,8 +287,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { data: aiStatus } = useQuery(
     convexQuery((api as any).agentActions.getAiRuntimeStatus, {}),
   );
+  const { data: mhAlerts = [] } = useQuery(
+    convexQuery(api.mentalHealth.alerts.listActiveAlerts, {}),
+  );
+  const { data: featureFlags } = useQuery(
+    convexQuery(api.siteSettings.getFeatureFlags, {}),
+  );
+  const mhAlertCount = (mhAlerts as any[]).length;
   const isAdmin = user?.role === "admin";
-  const navItems = isAdmin ? [...baseNavItems, adminNavItem] : baseNavItems;
+
+  // Build nav items based on feature flags
+  const navItems = [
+    ...coreNavItems,
+    ...(featureFlags?.interpreterEnabled ? [featureNavItems.interpreter] : []),
+    ...(featureFlags?.mentalHealthEnabled ? [featureNavItems.mentalHealth] : []),
+    ...(isAdmin ? [adminNavItem] : []),
+  ];
   const badgeStyles = aiBadgeClasses(aiStatus?.state);
   const badgeLabel = aiStatus?.label ?? "Checking AI";
   const badgeTitle = aiStatus?.detail ?? "Checking assistant runtime health.";
@@ -321,12 +342,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {navItems.map((item) => {
               const isActive =
                 pathname === item.href || pathname.startsWith(item.href + "/");
+              const isMentalHealth = item.href === "/mental-health";
+              const showAlertBadge = isMentalHealth && mhAlertCount > 0;
               return (
                 <Link
                   key={item.href}
                   to={item.href}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                    "relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
                     isActive
                       ? "bg-primary/10 text-primary"
                       : "text-muted-foreground hover:text-primary hover:bg-primary/5",
@@ -334,6 +357,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 >
                   <item.icon className="w-4 h-4" />
                   {item.label}
+                  {showAlertBadge && (
+                    <span className="ml-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-[10px] font-bold text-white grid place-items-center animate-pulse">
+                      {mhAlertCount > 9 ? "9+" : mhAlertCount}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -415,20 +443,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {navItems.map((item) => {
             const isActive =
               pathname === item.href || pathname.startsWith(item.href + "/");
+            const isMentalHealth = item.href === "/mental-health";
+            const showAlertBadge = isMentalHealth && mhAlertCount > 0;
             return (
               <Link
                 key={item.href}
                 to={item.href}
                 className={cn(
-                  "flex flex-1 flex-col items-center justify-center gap-1 py-2 rounded-xl transition-all duration-200",
+                  "relative flex flex-1 flex-col items-center justify-center gap-1 py-2 rounded-xl transition-all duration-200",
                   isActive
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-primary/5",
                 )}
               >
-                <item.icon
-                  className={cn("w-5 h-5", isActive && "text-primary")}
-                />
+                <div className="relative">
+                  <item.icon
+                    className={cn("w-5 h-5", isActive && "text-primary")}
+                  />
+                  {showAlertBadge && (
+                    <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-0.5 rounded-full bg-rose-500 text-[9px] font-bold text-white grid place-items-center animate-pulse">
+                      {mhAlertCount > 9 ? "9+" : mhAlertCount}
+                    </span>
+                  )}
+                </div>
                 <span
                   className={cn(
                     "text-xs font-medium",
