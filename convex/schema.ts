@@ -81,11 +81,14 @@ export default defineSchema({
   uploadedDocuments: defineTable({
     storageId: v.id("_storage"),
     thumbnailStorageId: v.optional(v.id("_storage")),
+    extractedTextStorageId: v.optional(v.id("_storage")),
     fileName: v.string(),
     fileType: v.string(),
     source: v.literal("local"),
     status: v.union(
       v.literal("pending"),
+      v.literal("extracting"),
+      v.literal("queued"),
       v.literal("indexing"),
       v.literal("indexed"),
       v.literal("error"),

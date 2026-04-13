@@ -6,13 +6,17 @@ import {
   internalMutation,
   internalQuery,
   internalAction,
+  type QueryCtx,
+  type MutationCtx,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import rag from "./rag";
-import { generateObject } from "ai";
+import { generateObject, RetryError } from "ai";
 import { cerebras } from "@ai-sdk/cerebras";
 import { z } from "zod";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
+import { authComponent } from "./auth";
+import { findUserProfile } from "./userProfile";
 
 async function sha256Hex(input: string): Promise<string> {
   const bytes = new TextEncoder().encode(input);
@@ -32,10 +36,92 @@ function normalizeExternalPdfUrl(input: string): string {
   }
 }
 
+const documentStatusValidator = v.union(
+  v.literal("pending"),
+  v.literal("extracting"),
+  v.literal("queued"),
+  v.literal("indexing"),
+  v.literal("indexed"),
+  v.literal("error"),
+);
+
+const INDEX_RETRY_DELAYS_MS = [15_000, 45_000, 120_000];
+const MAX_INDEX_RETRIES = INDEX_RETRY_DELAYS_MS.length;
+
+type DocumentsGuardCtx = QueryCtx | MutationCtx;
+
+function accessError(message: string) {
+  return new ConvexError({
+    code: "UNAUTHORIZED",
+    message,
+  });
+}
+
+async function requireCurrentUser(
+  ctx: DocumentsGuardCtx,
+): Promise<Doc<"users">> {
+  const authUser = await authComponent.safeGetAuthUser(ctx);
+  if (!authUser) {
+    throw accessError("Not authenticated");
+  }
+
+  const profile = await findUserProfile(ctx, authUser);
+  if (!profile) {
+    throw accessError("User profile not found");
+  }
+  if (profile.isBanned) {
+    throw accessError("Account is banned");
+  }
+
+  return profile;
+}
+
+async function requireAdmin(ctx: DocumentsGuardCtx): Promise<Doc<"users">> {
+  const profile = await requireCurrentUser(ctx);
+  if (profile.role !== "admin") {
+    throw accessError("Admin access required");
+  }
+  return profile;
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+
+function isTransientIndexingError(error: unknown): boolean {
+  if (RetryError.isInstance(error)) {
+    return true;
+  }
+
+  const message = getErrorMessage(error).toLowerCase();
+  return (
+    message.includes("high traffic") ||
+    message.includes("rate limit") ||
+    message.includes("overloaded") ||
+    message.includes("timeout") ||
+    message.includes("temporarily unavailable") ||
+    message.includes("try again soon")
+  );
+}
+
 // Generate upload URL for file storage
 export const generateUploadUrl = mutation({
   args: {},
+  returns: v.string(),
   handler: async (ctx) => {
+    await requireCurrentUser(ctx);
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+export const generateDocumentUploadUrl = mutation({
+  args: {},
+  returns: v.string(),
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -48,7 +134,9 @@ export const saveDocument = mutation({
     fileName: v.string(),
     fileType: v.string(),
   },
+  returns: v.id("uploadedDocuments"),
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
     const id = await ctx.db.insert("uploadedDocuments", {
       storageId: args.storageId,
       thumbnailStorageId: args.thumbnailStorageId,
@@ -62,31 +150,107 @@ export const saveDocument = mutation({
   },
 });
 
-// Index document: LLM-process → RAG index → create browsable guideline
-export const indexDocument = action({
+export const markDocumentExtracting = mutation({
   args: {
     documentId: v.id("uploadedDocuments"),
-    content: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, { documentId }) => {
+    await requireAdmin(ctx);
+    await ctx.db.patch(documentId, {
+      status: "extracting",
+    });
+    return null;
+  },
+});
+
+export const markExtractionFailed = mutation({
+  args: {
+    documentId: v.id("uploadedDocuments"),
+    errorMessage: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, { documentId, errorMessage }) => {
+    await requireAdmin(ctx);
+    await ctx.db.patch(documentId, {
+      status: "error",
+      errorMessage,
+    });
+    return null;
+  },
+});
+
+export const queueDocumentIndexing = mutation({
+  args: {
+    documentId: v.id("uploadedDocuments"),
+    extractedTextStorageId: v.id("_storage"),
     title: v.string(),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
-    // Set status to indexing
+    await requireAdmin(ctx);
+
+    const doc = await ctx.db.get(args.documentId);
+    if (!doc) {
+      throw new ConvexError({
+        code: "DOCUMENT_NOT_FOUND",
+        message: "Document not found",
+      });
+    }
+
+    await ctx.db.patch(args.documentId, {
+      status: "queued",
+      extractedTextStorageId: args.extractedTextStorageId,
+      errorMessage: undefined,
+    });
+
+    await ctx.scheduler.runAfter(0, internal.documents.indexQueuedDocument, {
+      documentId: args.documentId,
+      title: args.title,
+      attempt: 0,
+    });
+    return null;
+  },
+});
+
+// Index document: LLM-process → RAG index → create browsable guideline
+export const indexQueuedDocument = internalAction({
+  args: {
+    documentId: v.id("uploadedDocuments"),
+    title: v.string(),
+    attempt: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
     await ctx.runMutation(internal.documents.updateStatus, {
       documentId: args.documentId,
       status: "indexing",
     });
 
     let createdGuidelineId: Id<"guidelines"> | null = null;
+    let extractedTextStorageId: Id<"_storage"> | undefined;
+    let shouldDeleteExtractedText = true;
+    const attempt = args.attempt ?? 0;
 
     try {
-      // Get the document metadata
       const doc = await ctx.runQuery(internal.documents.getDocument, {
         documentId: args.documentId,
       });
       if (!doc) throw new Error("Document not found");
+      if (!doc.extractedTextStorageId) {
+        throw new Error("Extracted text artifact not found");
+      }
+      extractedTextStorageId = doc.extractedTextStorageId;
 
-      // Step 0: SHA256 hash check — reject exact duplicates before any LLM cost
-      const contentHash = await sha256Hex(args.content);
+      const extractedTextBlob = await ctx.storage.get(doc.extractedTextStorageId);
+      if (!extractedTextBlob) {
+        throw new Error("Extracted text artifact could not be read");
+      }
+      const content = await extractedTextBlob.text();
+      if (content.trim().length < 50) {
+        throw new Error("The uploaded file did not contain enough text to index.");
+      }
+
+      const contentHash = await sha256Hex(content);
       const duplicate = await ctx.runQuery(
         internal.documents.checkContentHash,
         {
@@ -103,7 +267,7 @@ export const indexDocument = action({
       const llmResult = await ctx.runAction(
         internal.documents.processDocumentWithLLM,
         {
-          rawText: args.content,
+          rawText: content,
           fileName: doc.fileName,
         },
       );
@@ -123,7 +287,8 @@ export const indexDocument = action({
       );
 
       // Step 3: Create a guideline entry with LLM-enriched metadata
-      const slug = llmResult.title
+      const effectiveTitle = llmResult.title.trim() || args.title;
+      const slug = effectiveTitle
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "");
@@ -132,7 +297,7 @@ export const indexDocument = action({
       const guidelineId = await ctx.runMutation(
         internal.documents.createGuidelineFromDocument,
         {
-          title: llmResult.title,
+          title: effectiveTitle,
           slug: slugWithTimestamp,
           content: llmResult.cleanedContent,
           summary: llmResult.summary,
@@ -153,7 +318,7 @@ export const indexDocument = action({
         namespace: "guidelines",
         key: args.documentId,
         text: llmResult.cleanedContent,
-        title: llmResult.title,
+        title: effectiveTitle,
         metadata: {
           fileName: doc.fileName,
           source: "local",
@@ -194,11 +359,49 @@ export const indexDocument = action({
         }
       }
 
+      if (isTransientIndexingError(e) && attempt < MAX_INDEX_RETRIES) {
+        const retryDelay = INDEX_RETRY_DELAYS_MS[attempt];
+        const retryNumber = attempt + 1;
+        const message = `AI provider was busy. Retry ${retryNumber} of ${MAX_INDEX_RETRIES} scheduled in ${Math.round(retryDelay / 1000)}s.`;
+
+        await ctx.runMutation(internal.documents.markRetryQueued, {
+          documentId: args.documentId,
+          errorMessage: message,
+        });
+        await ctx.scheduler.runAfter(retryDelay, internal.documents.indexQueuedDocument, {
+          documentId: args.documentId,
+          title: args.title,
+          attempt: retryNumber,
+        });
+
+        shouldDeleteExtractedText = false;
+        return;
+      }
+
       await ctx.runMutation(internal.documents.updateStatusWithError, {
         documentId: args.documentId,
-        errorMessage: e instanceof Error ? e.message : "Unknown indexing error",
+        errorMessage: getErrorMessage(e) || "Unknown indexing error",
       });
       throw e;
+    } finally {
+      if (extractedTextStorageId && shouldDeleteExtractedText) {
+        try {
+          await ctx.storage.delete(extractedTextStorageId);
+        } catch (cleanupError) {
+          console.error("Extracted text cleanup failed:", cleanupError);
+        }
+
+        try {
+          await ctx.runMutation(
+            internal.documents.clearExtractedTextStorageReference,
+            {
+              documentId: args.documentId,
+            },
+          );
+        } catch (cleanupError) {
+          console.error("Extracted text reference cleanup failed:", cleanupError);
+        }
+      }
     }
   },
 });
@@ -347,15 +550,17 @@ export const createGuidelineFromDocument = internalMutation({
 export const updateStatus = internalMutation({
   args: {
     documentId: v.id("uploadedDocuments"),
-    status: v.union(
-      v.literal("pending"),
-      v.literal("indexing"),
-      v.literal("indexed"),
-      v.literal("error"),
-    ),
+    status: documentStatusValidator,
   },
   handler: async (ctx, { documentId, status }) => {
-    await ctx.db.patch(documentId, { status });
+    await ctx.db.patch(documentId, {
+      status,
+      ...(status === "queued"
+        ? {}
+        : {
+            errorMessage: undefined,
+          }),
+    });
   },
 });
 
@@ -369,7 +574,23 @@ export const markIndexed = internalMutation({
     await ctx.db.patch(documentId, {
       status: "indexed" as const,
       guidelineId,
+      errorMessage: undefined,
     });
+  },
+});
+
+export const markRetryQueued = internalMutation({
+  args: {
+    documentId: v.id("uploadedDocuments"),
+    errorMessage: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, { documentId, errorMessage }) => {
+    await ctx.db.patch(documentId, {
+      status: "queued",
+      errorMessage,
+    });
+    return null;
   },
 });
 
@@ -391,6 +612,7 @@ export const updateStatusWithError = internalMutation({
 export const listDocuments = query({
   args: {},
   handler: async (ctx) => {
+    await requireAdmin(ctx);
     return await ctx.db.query("uploadedDocuments").order("desc").collect();
   },
 });
@@ -399,6 +621,7 @@ export const listDocuments = query({
 export const getFileUrl = query({
   args: { storageId: v.optional(v.id("_storage")) },
   handler: async (ctx, { storageId }) => {
+    await requireCurrentUser(ctx);
     if (!storageId) return null;
     return await ctx.storage.getUrl(storageId);
   },
@@ -411,6 +634,7 @@ export const setGuidelineThumbnail = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { guidelineId, thumbnailStorageId }) => {
+    await requireCurrentUser(ctx);
     const guideline = await ctx.db.get(guidelineId);
     if (!guideline) return null;
 
@@ -443,6 +667,7 @@ export const listWebPdfThumbnails = query({
     }),
   ),
   handler: async (ctx, { urls }) => {
+    await requireCurrentUser(ctx);
     if (urls.length > 60) {
       throw new ConvexError({
         code: "TOO_MANY_URLS",
@@ -493,6 +718,7 @@ export const upsertWebPdfThumbnail = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireCurrentUser(ctx);
     const url = normalizeExternalPdfUrl(args.url);
     const now = Date.now();
 
@@ -536,6 +762,7 @@ export const upsertWebPdfThumbnail = mutation({
 export const deleteDocument = action({
   args: { documentId: v.id("uploadedDocuments") },
   handler: async (ctx, { documentId }) => {
+    await ctx.runQuery(internal.documents.assertAdminAccess, {});
     const doc = await ctx.runQuery(internal.documents.getDocument, {
       documentId,
     });
@@ -564,6 +791,9 @@ export const deleteDocument = action({
     if (doc.thumbnailStorageId) {
       await ctx.storage.delete(doc.thumbnailStorageId);
     }
+    if (doc.extractedTextStorageId) {
+      await ctx.storage.delete(doc.extractedTextStorageId);
+    }
 
     // Delete document record
     await ctx.runMutation(internal.documents.removeDocument, { documentId });
@@ -582,6 +812,7 @@ export const purgeNonLocalContent = action({
     errors: v.array(v.string()),
   }),
   handler: async (ctx) => {
+    await ctx.runQuery(internal.documents.assertAdminAccess, {});
     const report = {
       deletedDocuments: 0,
       deletedDocumentFiles: 0,
@@ -699,6 +930,15 @@ export const getDocument = internalQuery({
   args: { documentId: v.id("uploadedDocuments") },
   handler: async (ctx, { documentId }) => {
     return await ctx.db.get(documentId);
+  },
+});
+
+export const assertAdminAccess = internalQuery({
+  args: {},
+  returns: v.id("users"),
+  handler: async (ctx) => {
+    const admin = await requireAdmin(ctx);
+    return admin._id;
   },
 });
 
@@ -842,6 +1082,7 @@ export const archiveGuideline = mutation({
   args: { guidelineId: v.id("guidelines") },
   returns: v.null(),
   handler: async (ctx, { guidelineId }) => {
+    await requireAdmin(ctx);
     const guideline = await ctx.db.get(guidelineId);
     if (!guideline) throw new Error("Guideline not found");
 
@@ -871,6 +1112,7 @@ export const restoreGuideline = action({
   args: { guidelineId: v.id("guidelines") },
   returns: v.null(),
   handler: async (ctx, { guidelineId }) => {
+    await ctx.runQuery(internal.documents.assertAdminAccess, {});
     const guideline = await ctx.runQuery(
       internal.documents.getGuidelineForRAG,
       {
@@ -922,6 +1164,7 @@ export const replaceGuideline = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { oldGuidelineId, newGuidelineId }) => {
+    await requireAdmin(ctx);
     const oldGuideline = await ctx.db.get(oldGuidelineId);
     const newGuideline = await ctx.db.get(newGuidelineId);
     if (!oldGuideline || !newGuideline) throw new Error("Guideline not found");
@@ -993,6 +1236,7 @@ export const listArchived = query({
   args: {},
   returns: v.array(v.any()),
   handler: async (ctx) => {
+    await requireAdmin(ctx);
     return await ctx.db
       .query("guidelines")
       .withIndex("by_status", (q) => q.eq("status", "archived"))
@@ -1033,6 +1277,24 @@ export const deleteGuidelineCascade = internalMutation({
   },
 });
 
+export const clearExtractedTextStorageReference = internalMutation({
+  args: { documentId: v.id("uploadedDocuments") },
+  returns: v.null(),
+  handler: async (ctx, { documentId }) => {
+    const doc = await ctx.db.get(documentId);
+    if (!doc || !doc.extractedTextStorageId) {
+      return null;
+    }
+
+    const { _id, _creationTime, extractedTextStorageId, ...rest } = doc;
+    void _id;
+    void _creationTime;
+    void extractedTextStorageId;
+    await ctx.db.replace(documentId, rest);
+    return null;
+  },
+});
+
 // Approve and publish a draft guideline (with optional metadata overrides)
 export const publishGuideline = mutation({
   args: {
@@ -1043,6 +1305,7 @@ export const publishGuideline = mutation({
     keywords: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
+    await requireAdmin(ctx);
     const existing = await ctx.db.get(args.guidelineId);
     if (!existing) throw new Error("Guideline not found");
 
@@ -1074,6 +1337,7 @@ export const publishGuideline = mutation({
 export const getLinkedGuideline = query({
   args: { guidelineId: v.id("guidelines") },
   handler: async (ctx, { guidelineId }) => {
+    await requireAdmin(ctx);
     return await ctx.db.get(guidelineId);
   },
 });

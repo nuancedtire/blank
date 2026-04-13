@@ -53,6 +53,7 @@ import { generatePdfThumbnailBlob } from "@/lib/pdf-thumbnail";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "motion/react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authed/admin/documents")({
   component: ManageDocumentsPage,
@@ -72,6 +73,7 @@ function ManageDocumentsPage() {
   const queryClient = useQueryClient();
   const [isUploading, setIsUploading] = React.useState(false);
   const [uploadProgress, setUploadProgress] = React.useState("");
+  const [uploadErrors, setUploadErrors] = React.useState<string[]>([]);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const { data: documents } = useQuery(
@@ -79,8 +81,42 @@ function ManageDocumentsPage() {
   );
   const { data: allGuidelines } = useQuery(convexQuery(api.guidelines.listAll, {}));
 
-  const generateUploadUrl = useConvexMutation(api.documents.generateUploadUrl);
+  const generateDocumentUploadUrl = useConvexMutation(
+    api.documents.generateDocumentUploadUrl,
+  );
   const saveDocument = useConvexMutation(api.documents.saveDocument);
+  const markDocumentExtracting = useConvexMutation(
+    api.documents.markDocumentExtracting,
+  );
+  const markExtractionFailed = useConvexMutation(
+    api.documents.markExtractionFailed,
+  );
+  const queueDocumentIndexing = useConvexMutation(
+    api.documents.queueDocumentIndexing,
+  );
+
+  const uploadBlob = React.useCallback(
+    async (blob: Blob, contentType: string) => {
+      const uploadUrl = await generateDocumentUploadUrl({});
+      const result = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": contentType },
+        body: blob,
+      });
+
+      if (!result.ok) {
+        throw new Error(`Upload failed (${result.status} ${result.statusText})`);
+      }
+
+      const json = (await result.json()) as { storageId?: string };
+      if (!json.storageId) {
+        throw new Error("Upload response missing storageId");
+      }
+
+      return json.storageId;
+    },
+    [generateDocumentUploadUrl],
+  );
 
   const handleFileUpload = async (
     event: React.ChangeEvent<HTMLInputElement>,
@@ -89,79 +125,111 @@ function ManageDocumentsPage() {
     if (!files || files.length === 0) return;
 
     setIsUploading(true);
+    setUploadErrors([]);
 
     try {
+      const nextUploadErrors: string[] = [];
+      let queuedCount = 0;
+
       for (const file of Array.from(files)) {
-        setUploadProgress(`Uploading ${file.name}...`);
+        let documentId: string | null = null;
 
-        // Step 1: Get upload URL
-        const uploadUrl = await generateUploadUrl({});
-
-        // Step 2: Upload file to Convex storage
-        const result = await fetch(uploadUrl, {
-          method: "POST",
-          headers: { "Content-Type": file.type },
-          body: file,
-        });
-        const json = await result.json();
-        const storageId = (json as any).storageId;
-        let thumbnailStorageId: string | undefined;
-
-        // Optional: generate and upload page-1 thumbnail for PDFs.
-        if (
-          file.type === "application/pdf" ||
-          file.name.toLowerCase().endsWith(".pdf")
-        ) {
-          setUploadProgress(`Generating thumbnail for ${file.name}...`);
-          const thumbnailBlob = await generatePdfThumbnailBlob(file);
-          if (thumbnailBlob) {
-            const thumbnailUploadUrl = await generateUploadUrl({});
-            const thumbnailUploadResult = await fetch(thumbnailUploadUrl, {
-              method: "POST",
-              headers: { "Content-Type": "image/jpeg" },
-              body: thumbnailBlob,
-            });
-            const thumbnailJson = await thumbnailUploadResult.json();
-            thumbnailStorageId = (thumbnailJson as any).storageId;
-          }
-        }
-
-        // Step 3: Save document metadata (no category — LLM will infer)
-        const documentId = await saveDocument({
-          storageId,
-          thumbnailStorageId: thumbnailStorageId as any,
-          fileName: file.name,
-          fileType: file.type,
-        } as any);
-
-        // Step 4: Extract text
-        setUploadProgress(`Extracting text from ${file.name}...`);
-        const text = await extractText(file);
-
-        if (text && text.length > 50) {
-          // Step 5: LLM-process + RAG index + create draft guideline
-          setUploadProgress(`Processing ${file.name} with AI...`);
-          const title = file.name.replace(/\.[^/.]+$/, "");
-          convex
-            .action(api.documents.indexDocument, {
-              documentId,
-              content: text,
-              title,
-            })
-            .catch((e) => console.error("Indexing error:", e));
-        } else {
-          console.warn(
-            `Could not extract enough text from ${file.name}. File may be image-based.`,
+        try {
+          setUploadProgress(`Uploading ${file.name}...`);
+          const storageId = await uploadBlob(
+            file,
+            file.type || "application/octet-stream",
           );
+
+          let thumbnailStorageId: string | undefined;
+
+          if (
+            file.type === "application/pdf" ||
+            file.name.toLowerCase().endsWith(".pdf")
+          ) {
+            setUploadProgress(`Generating thumbnail for ${file.name}...`);
+            const thumbnailBlob = await generatePdfThumbnailBlob(file);
+            if (thumbnailBlob) {
+              thumbnailStorageId = await uploadBlob(
+                thumbnailBlob,
+                "image/jpeg",
+              );
+            }
+          }
+
+          documentId = await saveDocument({
+            storageId: storageId as any,
+            thumbnailStorageId: thumbnailStorageId as any,
+            fileName: file.name,
+            fileType: file.type,
+          } as any);
+
+          await markDocumentExtracting({
+            documentId: documentId as any,
+          });
+
+          setUploadProgress(`Extracting text from ${file.name}...`);
+          const extraction = await extractText(file);
+          if (!extraction.text || extraction.text.trim().length < 50) {
+            const errorMessage =
+              extraction.errorMessage ??
+              "The uploaded file did not contain enough text to index.";
+            await markExtractionFailed({
+              documentId: documentId as any,
+              errorMessage,
+            });
+            nextUploadErrors.push(`${file.name}: ${errorMessage}`);
+            toast.error(`${file.name}: ${errorMessage}`);
+            continue;
+          }
+
+          setUploadProgress(`Queueing ${file.name} for indexing...`);
+          const extractedTextStorageId = await uploadBlob(
+            new Blob([extraction.text], {
+              type: "text/plain;charset=utf-8",
+            }),
+            "text/plain;charset=utf-8",
+          );
+          const title = file.name.replace(/\.[^/.]+$/, "");
+          await queueDocumentIndexing({
+            documentId: documentId as any,
+            extractedTextStorageId: extractedTextStorageId as any,
+            title,
+          });
+          queuedCount += 1;
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : "Upload failed";
+          console.error("Upload error:", error);
+          if (documentId) {
+            try {
+              await markExtractionFailed({
+                documentId: documentId as any,
+                errorMessage,
+              });
+            } catch (markError) {
+              console.error("Failed to update document error state:", markError);
+            }
+          }
+          nextUploadErrors.push(`${file.name}: ${errorMessage}`);
+          toast.error(`${file.name}: ${errorMessage}`);
         }
       }
 
+      setUploadErrors(nextUploadErrors);
+      if (queuedCount > 0) {
+        toast.success(
+          `${queuedCount} document${queuedCount === 1 ? "" : "s"} queued for indexing`,
+        );
+      }
+
       // Refresh lists
-      queryClient.invalidateQueries({
+      await queryClient.invalidateQueries({
         queryKey: convexQuery(api.documents.listDocuments, {}).queryKey,
       });
     } catch (e) {
       console.error("Upload error:", e);
+      toast.error("Upload failed");
     } finally {
       setIsUploading(false);
       setUploadProgress("");
@@ -192,6 +260,8 @@ function ManageDocumentsPage() {
       case "error":
         return <XCircle className="h-4 w-4 text-destructive" />;
       case "indexing":
+      case "extracting":
+      case "queued":
         return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
       default:
         return <Clock className="h-4 w-4 text-muted-foreground" />;
@@ -265,6 +335,21 @@ function ManageDocumentsPage() {
                 </div>
               )}
             </div>
+
+            {uploadErrors.length > 0 ? (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3">
+                <p className="text-xs font-semibold text-destructive">
+                  Some files could not be queued
+                </p>
+                <div className="mt-1.5 space-y-1">
+                  {uploadErrors.map((message) => (
+                    <p key={message} className="text-xs text-muted-foreground">
+                      {message}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         </CardContent>
       </Card>
@@ -921,7 +1006,10 @@ function MetadataEditor({
 }
 
 // Extract text from any supported file type
-async function extractText(file: File): Promise<string | null> {
+async function extractText(file: File): Promise<{
+  text: string | null;
+  errorMessage: string | null;
+}> {
   const type = file.type;
   const name = file.name.toLowerCase();
 
@@ -932,7 +1020,10 @@ async function extractText(file: File): Promise<string | null> {
     name.endsWith(".md") ||
     name.endsWith(".txt")
   ) {
-    return await file.text();
+    return {
+      text: await file.text(),
+      errorMessage: null,
+    };
   }
 
   // PDF files - use pdf.js for proper extraction
@@ -940,17 +1031,25 @@ async function extractText(file: File): Promise<string | null> {
     try {
       const text = await extractTextFromPdf(file);
       if (text && text.trim().length > 50) {
-        return text;
+        return { text, errorMessage: null };
       }
-      console.warn(
-        `PDF ${file.name} appears to be image-based or has very little text.`,
-      );
-      return null;
+      return {
+        text: null,
+        errorMessage:
+          "This PDF has no extractable text layer. OCR is not enabled yet.",
+      };
     } catch (e) {
       console.error(`Failed to parse PDF ${file.name}:`, e);
-      return null;
+      return {
+        text: null,
+        errorMessage:
+          "Failed to parse this PDF. Please try another file or re-export it as a text-based PDF.",
+      };
     }
   }
 
-  return null;
+  return {
+    text: null,
+    errorMessage: "This file type is not supported for document indexing.",
+  };
 }
