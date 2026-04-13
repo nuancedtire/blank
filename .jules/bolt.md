@@ -5,3 +5,11 @@
 ## 2025-05-15 - [Chat UI Re-renders]
 **Learning:** Long chat threads can suffer from performance degradation during streaming if each new chunk causes all previous message bubbles to re-render.
 **Action:** Memoize `MessageBubble` components with `React.memo` to isolate re-renders to only the active streaming message.
+
+## 2025-05-15 - [N+1 Query Resolution in Convex]
+**Learning:** Performing database lookups () inside a loop for every item in a list is a major performance bottleneck (N+1 query problem). Convex handlers execute serially, but database fetches can be parallelized.
+**Action:** Resolve N+1 issues by collecting unique IDs and batch-fetching them with `Promise.all(ids.map(id => ctx.db.get(id)))`, then mapping results back to the original objects via a Map.
+
+## 2025-05-15 - [N+1 Query Resolution in Convex]
+**Learning:** Performing database lookups (ctx.db.get) inside a loop for every item in a list is a major performance bottleneck (N+1 query problem). Convex handlers execute serially, but database fetches can be parallelized.
+**Action:** Resolve N+1 issues by collecting unique IDs and batch-fetching them with `Promise.all(ids.map(id => ctx.db.get(id)))`, then mapping results back to the original objects via a Map.

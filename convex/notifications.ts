@@ -211,18 +211,22 @@ export const listAll = query({
       .order("desc")
       .collect();
 
-    const result = [];
-    for (const n of notifications) {
-      const creator = await ctx.db.get(n.createdBy);
-      result.push({
+    // Batch fetch creators to avoid N+1 queries
+    const creatorIds = Array.from(new Set(notifications.map((n) => n.createdBy)));
+    const creators = await Promise.all(creatorIds.map((id) => ctx.db.get(id)));
+    const creatorMap = new Map(
+      creatorIds.map((id, index) => [id, creators[index]]),
+    );
+
+    return notifications.map((n) => {
+      const creator = creatorMap.get(n.createdBy);
+      return {
         ...n,
         creatorName: creator?.name || "Unknown",
         creatorEmail: creator?.email || "Unknown",
         readCount: n.readBy.length,
-      });
-    }
-
-    return result;
+      };
+    });
   },
 });
 
