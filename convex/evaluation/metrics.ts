@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query, type QueryCtx, type MutationCtx } from "../_generated/server";
 import type { Doc } from "../_generated/dataModel";
+import { components } from "../_generated/api";
 import { authComponent } from "../auth";
 import { findUserProfile } from "../userProfile";
 
@@ -13,6 +14,131 @@ async function requireAdmin(
   if (!profile) throw new Error("User profile not found");
   if (profile.role !== "admin") throw new Error("Admin access required");
   return profile;
+}
+
+const GUIDELINE_CATEGORIES = [
+  "Medical",
+  "Trauma",
+  "Resuscitation",
+  "Paediatrics",
+  "Policies",
+  "Other",
+] as const;
+
+type AgentMessageRow = {
+  _creationTime: number;
+  message?: {
+    role?: string;
+    content?: unknown;
+  } | null;
+  status: "pending" | "success" | "failed";
+};
+
+type AssistantThreadSnapshot = {
+  _id: string;
+  userId: string;
+  title?: string;
+  status: "active" | "archived";
+  messages: AgentMessageRow[];
+};
+
+function messageContentToText(content: unknown): string {
+  if (typeof content === "string") return content.trim();
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((part) => {
+      if (!part || typeof part !== "object") return "";
+      const candidate = part as { type?: string; text?: string };
+      return candidate.type === "text" && typeof candidate.text === "string"
+        ? candidate.text
+        : "";
+    })
+    .join("\n")
+    .trim();
+}
+
+function startOfDay(timestamp: number) {
+  const day = new Date(timestamp);
+  day.setHours(0, 0, 0, 0);
+  return day;
+}
+
+function toDayKey(timestamp: number) {
+  return startOfDay(timestamp).toISOString().split("T")[0];
+}
+
+function startOfWeek(timestamp: number) {
+  const date = startOfDay(timestamp);
+  const day = date.getDay();
+  const delta = (day + 6) % 7;
+  date.setDate(date.getDate() - delta);
+  return date;
+}
+
+function toWeekKey(timestamp: number) {
+  return startOfWeek(timestamp).toISOString().split("T")[0];
+}
+
+function parseLocalGuidelineCitations(text: string) {
+  const matches = text.matchAll(
+    /📄\s*\*\*([^*]+)\*\*\s*[—-]+\s*Source:\s*local\s*[—-]+\s*File:\s*([^\n]+?)(?:\s*[—-]+\s*Slug:\s*([\w-]+))?\s*$/gmu,
+  );
+
+  const citations = new Map<string, { key: string; title: string; slug: string | null }>();
+  for (const match of matches) {
+    const title = match[1]?.trim() || "Untitled";
+    const slug = match[3]?.trim() || null;
+    const key = slug || title.toLowerCase();
+    citations.set(key, { key, title, slug });
+  }
+  return Array.from(citations.values());
+}
+
+async function getAssistantThreadSnapshots(
+  ctx: QueryCtx,
+): Promise<AssistantThreadSnapshot[]> {
+  const users = await ctx.db.query("users").collect();
+
+  const threadPages = await Promise.all(
+    users.map((user) =>
+      ctx.runQuery(components.agent.threads.listThreadsByUserId, {
+        userId: user._id,
+        order: "desc",
+        paginationOpts: { cursor: null, numItems: 100 },
+      }),
+    ),
+  );
+
+  const threadOwners = threadPages.flatMap((page, index) =>
+    page.page.map((thread) => ({
+      thread,
+      userId: users[index]._id,
+    })),
+  );
+
+  const messagePages = await Promise.all(
+    threadOwners.map(({ thread }) =>
+      ctx.runQuery(components.agent.messages.listMessagesByThreadId, {
+        threadId: thread._id,
+        order: "asc",
+        excludeToolMessages: true,
+        statuses: ["success"],
+        paginationOpts: { cursor: null, numItems: 200 },
+      }),
+    ),
+  );
+
+  return threadOwners.map(({ thread, userId }, index) => ({
+    _id: thread._id,
+    userId,
+    title: thread.title,
+    status: thread.status,
+    messages: messagePages[index].page.map((row) => ({
+      _creationTime: row._creationTime,
+      status: row.status,
+      message: row.message,
+    })),
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -275,6 +401,133 @@ export const getMentalHealthMetrics = query({
       phq9SeverityDistribution,
       cssrsIdeationDistribution,
       sessionsPerDay,
+    };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Assistant metrics
+// ---------------------------------------------------------------------------
+
+export const getAssistantMetrics = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+
+    const [threads, feedback, guidelines] = await Promise.all([
+      getAssistantThreadSnapshots(ctx),
+      ctx.db.query("assistantFeedback").withIndex("by_createdAt").order("desc").collect(),
+      ctx.db.query("guidelines").collect(),
+    ]);
+
+    const userMessages = threads.flatMap((thread) =>
+      thread.messages
+        .filter((row) => row.message?.role === "user")
+        .map((row) => ({
+          userId: thread.userId,
+          createdAt: row._creationTime,
+        })),
+    );
+
+    const assistantMessages = threads.flatMap((thread) =>
+      thread.messages
+        .filter((row) => row.message?.role === "assistant")
+        .map((row) => ({
+          createdAt: row._creationTime,
+          text: messageContentToText(row.message?.content),
+        })),
+    );
+
+    const uniqueUsers = new Set(userMessages.map((message) => message.userId)).size;
+
+    const queryDayCounts = new Map<string, number>();
+    for (const message of userMessages) {
+      const key = toDayKey(message.createdAt);
+      queryDayCounts.set(key, (queryDayCounts.get(key) ?? 0) + 1);
+    }
+
+    const queriesPerDay: { date: string; count: number }[] = [];
+    const now = Date.now();
+    for (let i = 29; i >= 0; i--) {
+      const timestamp = now - i * 86400000;
+      const date = toDayKey(timestamp);
+      queriesPerDay.push({
+        date,
+        count: queryDayCounts.get(date) ?? 0,
+      });
+    }
+
+    const queryWeekCounts = new Map<string, number>();
+    for (const message of userMessages) {
+      const key = toWeekKey(message.createdAt);
+      queryWeekCounts.set(key, (queryWeekCounts.get(key) ?? 0) + 1);
+    }
+
+    const queriesPerWeek: { weekStart: string; count: number }[] = [];
+    for (let i = 7; i >= 0; i--) {
+      const timestamp = now - i * 7 * 86400000;
+      const weekStart = toWeekKey(timestamp);
+      if (!queriesPerWeek.some((item) => item.weekStart === weekStart)) {
+        queriesPerWeek.push({
+          weekStart,
+          count: queryWeekCounts.get(weekStart) ?? 0,
+        });
+      }
+    }
+
+    const guidelineCounts = new Map<string, { title: string; slug: string | null; count: number }>();
+    for (const message of assistantMessages) {
+      for (const citation of parseLocalGuidelineCitations(message.text)) {
+        const existing = guidelineCounts.get(citation.key);
+        if (existing) {
+          existing.count += 1;
+        } else {
+          guidelineCounts.set(citation.key, {
+            title: citation.title,
+            slug: citation.slug,
+            count: 1,
+          });
+        }
+      }
+    }
+    const mostAccessedGuidelines = Array.from(guidelineCounts.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+
+    const helpfulCount = feedback.filter((item) => item.wasHelpful).length;
+    const notHelpfulCount = feedback.length - helpfulCount;
+    const averageFeedbackRating = feedback.length > 0 ? helpfulCount / feedback.length : 0;
+
+    const publishedGuidelines = guidelines.filter((guideline) => guideline.status === "published");
+    const categoryCounts = new Map<string, number>();
+    for (const guideline of publishedGuidelines) {
+      categoryCounts.set(guideline.category, (categoryCounts.get(guideline.category) ?? 0) + 1);
+    }
+    const guidelineCoverage = Array.from(
+      new Set([...GUIDELINE_CATEGORIES, ...publishedGuidelines.map((g) => g.category)]),
+    )
+      .map((category) => ({
+        category,
+        count: categoryCounts.get(category) ?? 0,
+        hasCoverage: (categoryCounts.get(category) ?? 0) > 0,
+      }))
+      .sort((a, b) => a.category.localeCompare(b.category));
+
+    return {
+      totalQueries: userMessages.length,
+      totalResponses: assistantMessages.length,
+      totalThreads: threads.length,
+      uniqueUsers,
+      averageFeedbackRating,
+      feedbackCount: feedback.length,
+      feedbackDistribution: {
+        helpful: helpfulCount,
+        notHelpful: notHelpfulCount,
+      },
+      queriesPerDay,
+      queriesPerWeek,
+      mostAccessedGuidelines,
+      guidelineCoverage,
     };
   },
 });

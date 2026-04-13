@@ -1,3 +1,4 @@
+import * as React from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { convexQuery } from "@convex-dev/react-query";
@@ -14,6 +15,10 @@ import {
   AlertTriangle,
   BarChart3,
   TrendingUp,
+  MessagesSquare,
+  ThumbsDown,
+  ThumbsUp,
+  BookOpen,
 } from "lucide-react";
 import {
   BarChart,
@@ -92,6 +97,10 @@ function formatDuration(ms: number): string {
 
 function formatPercent(rate: number): string {
   return `${(rate * 100).toFixed(1)}%`;
+}
+
+function formatWeekLabel(weekStart: string): string {
+  return weekStart.slice(5);
 }
 
 function InterpreterPanel() {
@@ -382,6 +391,232 @@ function MentalHealthPanel() {
   );
 }
 
+function AssistantPanel() {
+  const { data: metrics } = useQuery(
+    convexQuery((api as any).evaluation.metrics.getAssistantMetrics, {}),
+  );
+
+  if (!metrics) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        Loading metrics...
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard
+          label="Total Queries"
+          value={metrics.totalQueries}
+          icon={MessagesSquare}
+        />
+        <StatCard
+          label="Unique Users"
+          value={metrics.uniqueUsers}
+          icon={Users}
+        />
+        <StatCard
+          label="Helpful Rating"
+          value={formatPercent(metrics.averageFeedbackRating)}
+          icon={TrendingUp}
+          description="Based on clinician feedback"
+        />
+        <StatCard
+          label="Feedback Entries"
+          value={metrics.feedbackCount}
+          icon={BarChart3}
+        />
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Queries Per Day</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={240}>
+              <LineChart data={metrics.queriesPerDay}>
+                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 10 }}
+                  tickFormatter={(d) => d.slice(5)}
+                />
+                <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                <Tooltip />
+                <Line
+                  type="monotone"
+                  dataKey="count"
+                  stroke="#2563eb"
+                  strokeWidth={2}
+                  dot={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Queries Per Week</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={metrics.queriesPerWeek}>
+                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                <XAxis
+                  dataKey="weekStart"
+                  tick={{ fontSize: 10 }}
+                  tickFormatter={formatWeekLabel}
+                />
+                <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                <Tooltip labelFormatter={(value) => `Week of ${value}`} />
+                <Bar dataKey="count" fill="#0f766e" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">
+              Most Accessed Guidelines
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Derived from local guideline citations in assistant responses
+            </p>
+          </CardHeader>
+          <CardContent>
+            {metrics.mostAccessedGuidelines.length > 0 ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart
+                  data={metrics.mostAccessedGuidelines}
+                  layout="vertical"
+                  margin={{ left: 8, right: 12 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                  <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
+                  <YAxis
+                    type="category"
+                    dataKey="title"
+                    tick={{ fontSize: 11 }}
+                    width={120}
+                  />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#7c3aed" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[260px] grid place-items-center text-sm text-muted-foreground">
+                No cited local guidelines yet.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Feedback Distribution</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {metrics.feedbackCount > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie
+                    data={[
+                      {
+                        label: "Helpful",
+                        count: metrics.feedbackDistribution.helpful,
+                      },
+                      {
+                        label: "Not helpful",
+                        count: metrics.feedbackDistribution.notHelpful,
+                      },
+                    ]}
+                    dataKey="count"
+                    nameKey="label"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    label={((props: { label?: string; count?: number }) =>
+                      `${props.label}: ${props.count}`
+                    ) as unknown as boolean}
+                  >
+                    <Cell fill="#16a34a" />
+                    <Cell fill="#dc2626" />
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[220px] grid place-items-center text-sm text-muted-foreground">
+                No response feedback submitted yet.
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <ThumbsUp className="h-3.5 w-3.5 text-emerald-600" />
+                  Helpful
+                </p>
+                <p className="mt-1 text-lg font-semibold">
+                  {metrics.feedbackDistribution.helpful}
+                </p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <ThumbsDown className="h-3.5 w-3.5 text-rose-600" />
+                  Not helpful
+                </p>
+                <p className="mt-1 text-lg font-semibold">
+                  {metrics.feedbackDistribution.notHelpful}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">Guideline Coverage</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Published local guideline coverage by category
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {metrics.guidelineCoverage.map((item) => (
+              <div
+                key={item.category}
+                className="rounded-lg border px-4 py-3 flex items-center justify-between gap-3"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium flex items-center gap-2">
+                    <BookOpen className="h-3.5 w-3.5 text-primary" />
+                    <span className="truncate">{item.category}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {item.hasCoverage ? "Coverage available" : "Gap identified"}
+                  </p>
+                </div>
+                <Badge variant={item.hasCoverage ? "secondary" : "outline"}>
+                  {item.count}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function EvaluationDashboard() {
   const { data: overview } = useQuery(
     convexQuery(api.evaluation.metrics.getCombinedOverview, {}),
@@ -440,6 +675,10 @@ function EvaluationDashboard() {
             <Languages className="h-4 w-4 mr-2" />
             Interpreter
           </TabsTrigger>
+          <TabsTrigger value="assistant">
+            <MessagesSquare className="h-4 w-4 mr-2" />
+            Assistant
+          </TabsTrigger>
           <TabsTrigger value="mental-health">
             <HeartPulse className="h-4 w-4 mr-2" />
             Mental Health
@@ -447,6 +686,9 @@ function EvaluationDashboard() {
         </TabsList>
         <TabsContent value="interpreter" className="mt-6">
           <InterpreterPanel />
+        </TabsContent>
+        <TabsContent value="assistant" className="mt-6">
+          <AssistantPanel />
         </TabsContent>
         <TabsContent value="mental-health" className="mt-6">
           <MentalHealthPanel />

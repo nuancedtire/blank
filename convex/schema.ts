@@ -139,6 +139,24 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_thread", ["threadId"]),
 
+  // Per-response clinician feedback for the assistant chat experience
+  assistantFeedback: defineTable({
+    userId: v.id("users"),
+    threadId: v.string(),
+    assistantMessageId: v.string(),
+    wasHelpful: v.boolean(),
+    comment: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_threadId", ["threadId"])
+    .index("by_createdAt", ["createdAt"])
+    .index("by_assistantMessageId", ["assistantMessageId"])
+    .index("by_userId_and_threadId", ["userId", "threadId"])
+    .index("by_threadId_and_createdAt", ["threadId", "createdAt"])
+    .index("by_userId_and_assistantMessageId", ["userId", "assistantMessageId"]),
+
   // Curated long-term user memory for cross-thread recall
   userMemories: defineTable({
     userId: v.id("users"),

@@ -9,6 +9,34 @@ import Exa from "exa-js";
 const MAX_KEYWORD_RESULTS = 5;
 const MAX_EXCERPT_CHARS = 2000;
 
+type ConfidenceLevel = "high" | "moderate" | "lower";
+
+function getLocalConfidence(score: number): {
+  level: ConfidenceLevel;
+  label: string;
+  summary: string;
+} {
+  if (score >= 0.85) {
+    return {
+      level: "high",
+      label: "High confidence",
+      summary: "Based on a strong match in local guidelines.",
+    };
+  }
+  if (score >= 0.7) {
+    return {
+      level: "moderate",
+      label: "Moderate confidence",
+      summary: "Based on a partial match in local guidelines.",
+    };
+  }
+  return {
+    level: "lower",
+    label: "Lower confidence",
+    summary: "Only a weak match was found in local guidelines. Verify independently.",
+  };
+}
+
 // ─── ED Shop-Floor Search Terms ──────────────────────────────────────────────
 // Curated corpus of typical ED clinical queries grouped by area.
 // Use this to test and tune Exa parameters (numResults, highlights, text limits)
@@ -149,6 +177,12 @@ const searchGuidelinesTool = createTool({
     return {
       found: true,
       count: Math.min(results.length, MAX_KEYWORD_RESULTS),
+      confidence: {
+        level: "moderate",
+        label: "Moderate confidence",
+        summary: "Based on keyword matches in local guidelines.",
+        sourceLabel: "Local guidelines",
+      },
       guidelines: results.slice(0, MAX_KEYWORD_RESULTS).map((g: any) => ({
         title: g.title,
         version: g.version,
@@ -183,9 +217,11 @@ const ragSearchTool = createTool({
       };
     }
 
-    const sources = await Promise.all(
-      results.entries.map(async (entry) => {
+    const scoredSources = await Promise.all(
+      results.entries.map(async (entry, index) => {
         const metadata = entry.metadata as Record<string, string | undefined>;
+        const rawResult = (results.results as Array<{ _score?: number; score?: number }>)[index];
+        const score = rawResult?._score ?? rawResult?.score ?? 0;
         const guidelineId = metadata?.guidelineId ?? null;
 
         let slug = metadata?.slug ?? null;
@@ -210,14 +246,25 @@ const ragSearchTool = createTool({
           guidelineId,
           slug,
           textChunk: entry.text,
+          score,
         };
       }),
     );
+    const topScore = scoredSources.reduce(
+      (highest, source) => Math.max(highest, source.score),
+      0,
+    );
+    const confidence = getLocalConfidence(topScore);
 
     return {
       found: true,
       count: results.entries.length,
-      sources,
+      confidence: {
+        ...confidence,
+        sourceLabel: "Local guidelines",
+        topScore,
+      },
+      sources: scoredSources,
       combinedText: results.text,
     };
   },
@@ -349,6 +396,12 @@ const searchExternalWebTool = createTool({
         source: "Exa",
         siteFilter: domains.join(", "),
         count: filteredResults.length,
+        confidence: {
+          level: "lower",
+          label: "Lower confidence",
+          summary: "Based on external NICE/RCEM guidance. Verify against the source.",
+          sourceLabel: "External NICE/RCEM guidance",
+        },
         results: filteredResults,
       };
 
