@@ -116,7 +116,7 @@ export function AgentChat({
   const renameThread = useConvexRawMutation(api.agentActions.renameThread);
   const deleteThread = useConvexRawMutation(api.agentActions.deleteThread);
   const feedbackEntries = useConvexRawQuery(
-    (api as any).assistantFeedback.listMineForThread,
+    api.assistantFeedback.listMineForThread,
     threadId ? { threadId } : "skip",
   ) as AssistantFeedbackRecord[] | undefined;
   const recentThreads = useConvexRawQuery(api.agentActions.listMyThreads, {
@@ -859,7 +859,7 @@ const MessageBubble = React.memo(function MessageBubble({
   feedback?: AssistantFeedbackRecord;
 }) {
   const isUser = message.role === "user";
-  const submitFeedback = useConvexRawMutation((api as any).assistantFeedback.submit);
+  const submitFeedback = useConvexRawMutation(api.assistantFeedback.submit);
   const [draftRating, setDraftRating] = React.useState<boolean | null>(null);
   const [draftComment, setDraftComment] = React.useState("");
   const [isSubmittingFeedback, setIsSubmittingFeedback] = React.useState(false);

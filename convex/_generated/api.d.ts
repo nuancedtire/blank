@@ -9,6 +9,7 @@
  */
 
 import type * as agentActions from "../agentActions.js";
+import type * as assistantFeedback from "../assistantFeedback.js";
 import type * as auditLog from "../auditLog.js";
 import type * as auth from "../auth.js";
 import type * as chat from "../chat.js";
@@ -43,6 +44,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   agentActions: typeof agentActions;
+  assistantFeedback: typeof assistantFeedback;
   auditLog: typeof auditLog;
   auth: typeof auth;
   chat: typeof chat;

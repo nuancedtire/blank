@@ -393,7 +393,7 @@ function MentalHealthPanel() {
 
 function AssistantPanel() {
   const { data: metrics } = useQuery(
-    convexQuery((api as any).evaluation.metrics.getAssistantMetrics, {}),
+    convexQuery(api.evaluation.metrics.getAssistantMetrics, {}),
   );
 
   if (!metrics) {
