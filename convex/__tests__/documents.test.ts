@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
+import { GUIDELINE_CATEGORIES } from "../guidelineCategories";
 
 /**
  * Tests for document processing logic from documents.ts.
@@ -57,21 +58,12 @@ describe("generateSlug", () => {
 // DocumentMetadataSchema validation (mirrors documents.ts schema)
 // ---------------------------------------------------------------------------
 
-const VALID_CATEGORIES = [
-  "Medical",
-  "Trauma",
-  "Resuscitation",
-  "Paediatrics",
-  "Policies",
-  "Other",
-] as const;
-
 const DocumentMetadataSchema = z.object({
   hasUsableContent: z.boolean(),
   errorReason: z.string(),
   title: z.string(),
   summary: z.string(),
-  category: z.enum(VALID_CATEGORIES),
+  category: z.enum(GUIDELINE_CATEGORIES),
   tags: z.array(z.string()),
   cleanedContent: z.string(),
 });
@@ -82,7 +74,7 @@ describe("DocumentMetadataSchema", () => {
     errorReason: "",
     title: "Adult Sepsis Pathway",
     summary: "Sepsis recognition and management for adults in ED.",
-    category: "Medical" as const,
+    category: "Sepsis" as const,
     tags: ["sepsis", "antibiotics", "lactate"],
     cleanedContent: "# Adult Sepsis Pathway\n\n...",
   };
@@ -108,7 +100,7 @@ describe("DocumentMetadataSchema", () => {
   });
 
   it("accepts all valid categories", () => {
-    for (const category of VALID_CATEGORIES) {
+    for (const category of GUIDELINE_CATEGORIES) {
       const result = DocumentMetadataSchema.safeParse({
         ...validPayload,
         category,
@@ -160,16 +152,19 @@ describe("DocumentMetadataSchema", () => {
 // ---------------------------------------------------------------------------
 
 describe("VALID_CATEGORIES", () => {
-  it("contains exactly 6 categories", () => {
-    expect(VALID_CATEGORIES).toHaveLength(6);
+  it("contains an expanded ED taxonomy", () => {
+    expect(GUIDELINE_CATEGORIES.length).toBeGreaterThanOrEqual(12);
   });
 
   it("includes the expected clinical categories", () => {
-    expect(VALID_CATEGORIES).toContain("Medical");
-    expect(VALID_CATEGORIES).toContain("Trauma");
-    expect(VALID_CATEGORIES).toContain("Resuscitation");
-    expect(VALID_CATEGORIES).toContain("Paediatrics");
-    expect(VALID_CATEGORIES).toContain("Policies");
-    expect(VALID_CATEGORIES).toContain("Other");
+    expect(GUIDELINE_CATEGORIES).toContain("Cardiology");
+    expect(GUIDELINE_CATEGORIES).toContain("Respiratory");
+    expect(GUIDELINE_CATEGORIES).toContain("Neurology");
+    expect(GUIDELINE_CATEGORIES).toContain("Sepsis");
+    expect(GUIDELINE_CATEGORIES).toContain("Trauma");
+    expect(GUIDELINE_CATEGORIES).toContain("Paediatrics");
+    expect(GUIDELINE_CATEGORIES).toContain("Mental Health");
+    expect(GUIDELINE_CATEGORIES).toContain("Policies");
+    expect(GUIDELINE_CATEGORIES).toContain("Other");
   });
 });

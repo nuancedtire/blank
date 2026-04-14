@@ -52,21 +52,13 @@ import { extractTextFromPdf } from "@/lib/pdf-extract";
 import { generatePdfThumbnailBlob } from "@/lib/pdf-thumbnail";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { GUIDELINE_CATEGORIES } from "@/lib/guideline-categories";
 import { AnimatePresence, motion } from "motion/react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authed/admin/documents")({
   component: ManageDocumentsPage,
 });
-
-const CATEGORIES = [
-  "Medical",
-  "Trauma",
-  "Resuscitation",
-  "Paediatrics",
-  "Policies",
-  "Other",
-];
 
 function ManageDocumentsPage() {
   const convex = useConvex();
@@ -81,6 +73,16 @@ function ManageDocumentsPage() {
   );
   const { data: allGuidelines } = useQuery(
     convexQuery(api.guidelines.listAllSummaries, {}),
+  );
+  const CATEGORIES = React.useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...GUIDELINE_CATEGORIES,
+          ...(allGuidelines?.map((guideline: any) => guideline.category) ?? []),
+        ]),
+      ),
+    [allGuidelines],
   );
 
   const generateDocumentUploadUrl = useConvexMutation(

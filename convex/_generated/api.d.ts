@@ -17,6 +17,7 @@ import type * as crons from "../crons.js";
 import type * as documents from "../documents.js";
 import type * as evaluation_metrics from "../evaluation/metrics.js";
 import type * as guidelineAgent from "../guidelineAgent.js";
+import type * as guidelineCategories from "../guidelineCategories.js";
 import type * as guidelines from "../guidelines.js";
 import type * as http from "../http.js";
 import type * as interpreter_realtimeRelay from "../interpreter/realtimeRelay.js";
@@ -52,6 +53,7 @@ declare const fullApi: ApiFromModules<{
   documents: typeof documents;
   "evaluation/metrics": typeof evaluation_metrics;
   guidelineAgent: typeof guidelineAgent;
+  guidelineCategories: typeof guidelineCategories;
   guidelines: typeof guidelines;
   http: typeof http;
   "interpreter/realtimeRelay": typeof interpreter_realtimeRelay;

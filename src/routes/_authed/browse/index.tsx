@@ -5,33 +5,11 @@ import { api } from "convex/_generated/api";
 import { CardInteractive } from "@/components/ui/card";
 import { FolderOpen, ChevronRight } from "lucide-react";
 import { CategoryCardSkeleton } from "@/components/guidelines/guideline-card-skeleton";
+import { GUIDELINE_CATEGORY_META } from "@/lib/guideline-categories";
 
 export const Route = createFileRoute("/_authed/browse/")({
   component: BrowsePage,
 });
-
-const CATEGORY_META: Record<string, { icon: string; description: string }> = {
-  Resuscitation: {
-    icon: "🫀",
-    description: "Cardiac arrest, anaphylaxis, and emergency protocols",
-  },
-  Trauma: {
-    icon: "🦴",
-    description: "Major trauma, head injury, and assessment pathways",
-  },
-  Medical: {
-    icon: "🩺",
-    description: "Sepsis, chest pain, stroke, and acute medical pathways",
-  },
-  Paediatrics: {
-    icon: "👶",
-    description: "Febrile child, paediatric wheeze, and neonatal guidelines",
-  },
-  Policies: {
-    icon: "📋",
-    description: "CT protocols, admission criteria, and department policies",
-  },
-};
 
 function BrowsePage() {
   const { data: categories } = useQuery(
@@ -50,7 +28,7 @@ function BrowsePage() {
       </div>
 
       {categories?.map((cat: { name: string; count: number }) => {
-        const meta = CATEGORY_META[cat.name];
+        const meta = GUIDELINE_CATEGORY_META[cat.name as keyof typeof GUIDELINE_CATEGORY_META];
         return (
           <Link
             key={cat.name}

@@ -28,7 +28,7 @@ const config = defineConfig({
     noExternal: ["@convex-dev/better-auth"],
   },
   server: {
-    allowedHosts: ["blank.exe.xyz", "ed-test.fazeen.dev"],
+    allowedHosts: ["ocode.exe.xyz", "ed-test.fazeen.dev"],
   },
 });
 

@@ -4,6 +4,8 @@ import type { Doc } from "../_generated/dataModel";
 import { components } from "../_generated/api";
 import { authComponent } from "../auth";
 import { findUserProfile } from "../userProfile";
+import rag from "../rag";
+import { GUIDELINE_CATEGORIES } from "../guidelineCategories";
 
 async function requireAdmin(
   ctx: QueryCtx | MutationCtx,
@@ -16,17 +18,15 @@ async function requireAdmin(
   return profile;
 }
 
-const GUIDELINE_CATEGORIES = [
-  "Medical",
-  "Trauma",
-  "Resuscitation",
-  "Paediatrics",
-  "Policies",
-  "Other",
-] as const;
+const ASSISTANT_CONFIDENCE_LEVELS = ["high", "moderate", "lower"] as const;
+
+type ConfidenceLevel = (typeof ASSISTANT_CONFIDENCE_LEVELS)[number];
 
 type AgentMessageRow = {
+  _id: string;
   _creationTime: number;
+  order: number;
+  stepOrder: number;
   message?: {
     role?: string;
     content?: unknown;
@@ -94,6 +94,113 @@ function parseLocalGuidelineCitations(text: string) {
   return Array.from(citations.values());
 }
 
+function normalizeTitle(title: string) {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function monthsSince(timestamp: number, now = Date.now()) {
+  return Math.max(0, Math.floor((now - timestamp) / (1000 * 60 * 60 * 24 * 30.4375)));
+}
+
+function classifyCoverage(count: number) {
+  if (count === 0) return "gap" as const;
+  if (count <= 2) return "limited" as const;
+  return "covered" as const;
+}
+
+function classifyFreshness(monthsOld: number) {
+  if (monthsOld >= 24) return "overdue" as const;
+  if (monthsOld >= 12) return "due" as const;
+  return "current" as const;
+}
+
+function readToolConfidence(result: unknown): ConfidenceLevel | null {
+  if (!result || typeof result !== "object") return null;
+  const confidence = (result as { confidence?: { level?: string } }).confidence;
+  if (!confidence?.level) return null;
+  if (ASSISTANT_CONFIDENCE_LEVELS.includes(confidence.level as ConfidenceLevel)) {
+    return confidence.level as ConfidenceLevel;
+  }
+  return null;
+}
+
+function unwrapToolResult(part: Record<string, unknown>) {
+  if (part.result !== undefined) return part.result;
+  const output = part.output;
+  if (!output || typeof output !== "object") return undefined;
+  const candidate = output as { type?: string; value?: unknown };
+  if (candidate.type === "json" || candidate.type === "error-json") {
+    return candidate.value;
+  }
+  return undefined;
+}
+
+function extractConfidenceSignals(content: unknown) {
+  if (!Array.isArray(content)) return [] as Array<{ toolName: string; level: ConfidenceLevel }>;
+
+  const signals: Array<{ toolName: string; level: ConfidenceLevel }> = [];
+  for (const part of content) {
+    if (!part || typeof part !== "object") continue;
+    const candidate = part as Record<string, unknown>;
+    if (candidate.type !== "tool-result" || typeof candidate.toolName !== "string") {
+      continue;
+    }
+    const level = readToolConfidence(unwrapToolResult(candidate));
+    if (level) {
+      signals.push({ toolName: candidate.toolName, level });
+    }
+  }
+  return signals;
+}
+
+function selectConfidenceLevel(
+  signals: Array<{ toolName: string; level: ConfidenceLevel }>,
+): ConfidenceLevel {
+  const rag = signals.find((signal) => signal.toolName === "ragSearch");
+  if (rag) return rag.level;
+
+  const keyword = signals.find((signal) => signal.toolName === "searchGuidelines");
+  if (keyword) return keyword.level;
+
+  const external = signals.find((signal) => signal.toolName === "searchExternalWeb");
+  if (external) return external.level;
+
+  return "lower";
+}
+
+function addCounts(
+  buckets: Map<string, number>,
+  key: string,
+  amount = 1,
+) {
+  buckets.set(key, (buckets.get(key) ?? 0) + amount);
+}
+
+function buildDailySeries(counts: Map<string, number>, days: number, now: number) {
+  return Array.from({ length: days }, (_, index) => {
+    const timestamp = now - (days - 1 - index) * 86400000;
+    const date = toDayKey(timestamp);
+    return {
+      date,
+      count: counts.get(date) ?? 0,
+    };
+  });
+}
+
+function buildWeeklySeries(counts: Map<string, number>, weeks: number, now: number) {
+  const result: Array<{ weekStart: string; count: number }> = [];
+  for (let i = weeks - 1; i >= 0; i--) {
+    const weekStart = toWeekKey(now - i * 7 * 86400000);
+    if (!result.some((item) => item.weekStart === weekStart)) {
+      result.push({
+        weekStart,
+        count: counts.get(weekStart) ?? 0,
+      });
+    }
+  }
+  return result;
+}
+
 async function getAssistantThreadSnapshots(
   ctx: QueryCtx,
 ): Promise<AssistantThreadSnapshot[]> {
@@ -121,9 +228,9 @@ async function getAssistantThreadSnapshots(
       ctx.runQuery(components.agent.messages.listMessagesByThreadId, {
         threadId: thread._id,
         order: "asc",
-        excludeToolMessages: true,
+        excludeToolMessages: false,
         statuses: ["success"],
-        paginationOpts: { cursor: null, numItems: 200 },
+        paginationOpts: { cursor: null, numItems: 400 },
       }),
     ),
   );
@@ -134,7 +241,10 @@ async function getAssistantThreadSnapshots(
     title: thread.title,
     status: thread.status,
     messages: messagePages[index].page.map((row) => ({
+      _id: row._id,
       _creationTime: row._creationTime,
+      order: row.order,
+      stepOrder: row.stepOrder,
       status: row.status,
       message: row.message,
     })),
@@ -414,10 +524,9 @@ export const getAssistantMetrics = query({
   handler: async (ctx) => {
     await requireAdmin(ctx);
 
-    const [threads, feedback, guidelines] = await Promise.all([
+    const [threads, feedback] = await Promise.all([
       getAssistantThreadSnapshots(ctx),
       ctx.db.query("assistantFeedback").withIndex("by_createdAt").order("desc").collect(),
-      ctx.db.query("guidelines").collect(),
     ]);
 
     const userMessages = threads.flatMap((thread) =>
@@ -429,54 +538,64 @@ export const getAssistantMetrics = query({
         })),
     );
 
-    const assistantMessages = threads.flatMap((thread) =>
-      thread.messages
-        .filter((row) => row.message?.role === "assistant")
-        .map((row) => ({
-          createdAt: row._creationTime,
-          text: messageContentToText(row.message?.content),
-        })),
-    );
+    const assistantResponses: Array<{
+      createdAt: number;
+      text: string;
+      confidenceLevel: ConfidenceLevel;
+    }> = [];
 
-    const uniqueUsers = new Set(userMessages.map((message) => message.userId)).size;
+    for (const thread of threads) {
+      let responseSignals: Array<{ toolName: string; level: ConfidenceLevel }> = [];
 
-    const queryDayCounts = new Map<string, number>();
-    for (const message of userMessages) {
-      const key = toDayKey(message.createdAt);
-      queryDayCounts.set(key, (queryDayCounts.get(key) ?? 0) + 1);
-    }
+      for (const row of thread.messages) {
+        const role = row.message?.role;
+        if (role === "user") {
+          responseSignals = [];
+          continue;
+        }
 
-    const queriesPerDay: { date: string; count: number }[] = [];
-    const now = Date.now();
-    for (let i = 29; i >= 0; i--) {
-      const timestamp = now - i * 86400000;
-      const date = toDayKey(timestamp);
-      queriesPerDay.push({
-        date,
-        count: queryDayCounts.get(date) ?? 0,
-      });
-    }
+        responseSignals.push(...extractConfidenceSignals(row.message?.content));
 
-    const queryWeekCounts = new Map<string, number>();
-    for (const message of userMessages) {
-      const key = toWeekKey(message.createdAt);
-      queryWeekCounts.set(key, (queryWeekCounts.get(key) ?? 0) + 1);
-    }
+        if (role === "assistant") {
+          const text = messageContentToText(row.message?.content);
+          if (!text) continue;
 
-    const queriesPerWeek: { weekStart: string; count: number }[] = [];
-    for (let i = 7; i >= 0; i--) {
-      const timestamp = now - i * 7 * 86400000;
-      const weekStart = toWeekKey(timestamp);
-      if (!queriesPerWeek.some((item) => item.weekStart === weekStart)) {
-        queriesPerWeek.push({
-          weekStart,
-          count: queryWeekCounts.get(weekStart) ?? 0,
-        });
+          assistantResponses.push({
+            createdAt: row._creationTime,
+            text,
+            confidenceLevel: selectConfidenceLevel(responseSignals),
+          });
+          responseSignals = [];
+        }
       }
     }
 
+    const uniqueUsers = new Set(userMessages.map((message) => message.userId)).size;
+    const now = Date.now();
+
+    const queryDayCounts = new Map<string, number>();
+    for (const message of userMessages) {
+      addCounts(queryDayCounts, toDayKey(message.createdAt));
+    }
+
+    const queriesPerDay = buildDailySeries(queryDayCounts, 30, now);
+    let runningQueryTotal = 0;
+    const totalQueriesOverTime = queriesPerDay.map((point) => {
+      runningQueryTotal += point.count;
+      return {
+        date: point.date,
+        totalQueries: runningQueryTotal,
+      };
+    });
+
+    const queryWeekCounts = new Map<string, number>();
+    for (const message of userMessages) {
+      addCounts(queryWeekCounts, toWeekKey(message.createdAt));
+    }
+    const queriesPerWeek = buildWeeklySeries(queryWeekCounts, 8, now);
+
     const guidelineCounts = new Map<string, { title: string; slug: string | null; count: number }>();
-    for (const message of assistantMessages) {
+    for (const message of assistantResponses) {
       for (const citation of parseLocalGuidelineCitations(message.text)) {
         const existing = guidelineCounts.get(citation.key);
         if (existing) {
@@ -498,24 +617,20 @@ export const getAssistantMetrics = query({
     const notHelpfulCount = feedback.length - helpfulCount;
     const averageFeedbackRating = feedback.length > 0 ? helpfulCount / feedback.length : 0;
 
-    const publishedGuidelines = guidelines.filter((guideline) => guideline.status === "published");
-    const categoryCounts = new Map<string, number>();
-    for (const guideline of publishedGuidelines) {
-      categoryCounts.set(guideline.category, (categoryCounts.get(guideline.category) ?? 0) + 1);
+    const confidenceCounts = new Map<ConfidenceLevel, number>(
+      ASSISTANT_CONFIDENCE_LEVELS.map((level) => [level, 0]),
+    );
+    for (const response of assistantResponses) {
+      addCounts(confidenceCounts as Map<string, number>, response.confidenceLevel);
     }
-    const guidelineCoverage = Array.from(
-      new Set([...GUIDELINE_CATEGORIES, ...publishedGuidelines.map((g) => g.category)]),
-    )
-      .map((category) => ({
-        category,
-        count: categoryCounts.get(category) ?? 0,
-        hasCoverage: (categoryCounts.get(category) ?? 0) > 0,
-      }))
-      .sort((a, b) => a.category.localeCompare(b.category));
+    const confidenceDistribution = ASSISTANT_CONFIDENCE_LEVELS.map((level) => ({
+      level,
+      count: confidenceCounts.get(level) ?? 0,
+    }));
 
     return {
       totalQueries: userMessages.length,
-      totalResponses: assistantMessages.length,
+      totalResponses: assistantResponses.length,
       totalThreads: threads.length,
       uniqueUsers,
       averageFeedbackRating,
@@ -524,10 +639,228 @@ export const getAssistantMetrics = query({
         helpful: helpfulCount,
         notHelpful: notHelpfulCount,
       },
+      totalQueriesOverTime,
       queriesPerDay,
       queriesPerWeek,
       mostAccessedGuidelines,
-      guidelineCoverage,
+      confidenceDistribution,
+    };
+  },
+});
+
+export const getGuidelineAuditMetrics = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+
+    const now = Date.now();
+    const [guidelines, uploadedDocuments, namespace] = await Promise.all([
+      ctx.db.query("guidelines").collect(),
+      ctx.db.query("uploadedDocuments").collect(),
+      rag.getNamespace(ctx, { namespace: "guidelines" }),
+    ]);
+
+    const activeGuidelines = guidelines.filter((guideline) => guideline.status !== "archived");
+    const publishedGuidelines = guidelines.filter((guideline) => guideline.status === "published");
+    const allCategories = Array.from(
+      new Set([...GUIDELINE_CATEGORIES, ...activeGuidelines.map((guideline) => guideline.category)]),
+    );
+
+    const activeCategoryCounts = new Map<string, number>();
+    const publishedCategoryCounts = new Map<string, number>();
+    for (const guideline of activeGuidelines) {
+      addCounts(activeCategoryCounts, guideline.category);
+    }
+    for (const guideline of publishedGuidelines) {
+      addCounts(publishedCategoryCounts, guideline.category);
+    }
+
+    const guidelinesByCategory = allCategories
+      .map((category) => {
+        const activeCount = activeCategoryCounts.get(category) ?? 0;
+        const publishedCount = publishedCategoryCounts.get(category) ?? 0;
+        return {
+          category,
+          activeCount,
+          publishedCount,
+          gapSeverity: classifyCoverage(publishedCount),
+        };
+      })
+      .sort((a, b) => b.publishedCount - a.publishedCount || a.category.localeCompare(b.category));
+
+    const freshness = publishedGuidelines
+      .map((guideline) => {
+        const monthsOld = monthsSince(guideline.lastUpdated, now);
+        return {
+          id: String(guideline._id),
+          title: guideline.title,
+          slug: guideline.slug,
+          category: guideline.category,
+          status: classifyFreshness(monthsOld),
+          monthsOld,
+          lastUpdated: guideline.lastUpdated,
+        };
+      })
+      .sort((a, b) => b.monthsOld - a.monthsOld);
+
+    const freshnessSummary = freshness.reduce(
+      (summary, item) => {
+        summary[item.status] += 1;
+        return summary;
+      },
+      { current: 0, due: 0, overdue: 0 },
+    );
+
+    const guidelineById = new Map(guidelines.map((guideline) => [String(guideline._id), guideline]));
+    const duplicateCandidates: Array<{
+      key: string;
+      type: "exact" | "version" | "potential" | "title";
+      severity: "high" | "medium" | "low";
+      titles: string[];
+      reason: string;
+    }> = [];
+    const duplicateKeys = new Set<string>();
+
+    const pushDuplicate = (
+      type: "exact" | "version" | "potential" | "title",
+      severity: "high" | "medium" | "low",
+      titles: string[],
+      reason: string,
+    ) => {
+      const key = `${type}:${titles.map((title) => normalizeTitle(title)).sort().join("|")}`;
+      if (duplicateKeys.has(key)) return;
+      duplicateKeys.add(key);
+      duplicateCandidates.push({ key, type, severity, titles, reason });
+    };
+
+    const contentHashGroups = new Map<string, string[]>();
+    for (const guideline of activeGuidelines) {
+      if (!guideline.contentHash) continue;
+      const group = contentHashGroups.get(guideline.contentHash) ?? [];
+      group.push(guideline.title);
+      contentHashGroups.set(guideline.contentHash, group);
+    }
+    for (const titles of contentHashGroups.values()) {
+      if (titles.length > 1) {
+        pushDuplicate("exact", "high", titles, "Shared content hash across active guidelines.");
+      }
+    }
+
+    for (const guideline of activeGuidelines) {
+      if (guideline.likelyVersionOf) {
+        const related = guidelineById.get(String(guideline.likelyVersionOf));
+        if (related) {
+          pushDuplicate(
+            "version",
+            "medium",
+            [guideline.title, related.title],
+            "High-confidence semantic overlap suggests a versioned replacement.",
+          );
+        }
+      }
+
+      for (const candidateId of guideline.potentialDuplicateOf ?? []) {
+        const related = guidelineById.get(String(candidateId));
+        if (related) {
+          pushDuplicate(
+            "potential",
+            "medium",
+            [guideline.title, related.title],
+            "Potential duplicate flagged from content similarity during ingestion.",
+          );
+        }
+      }
+    }
+
+    const titleGroups = new Map<string, string[]>();
+    for (const guideline of activeGuidelines) {
+      const key = normalizeTitle(guideline.title);
+      if (!key) continue;
+      const group = titleGroups.get(key) ?? [];
+      group.push(guideline.title);
+      titleGroups.set(key, group);
+    }
+    for (const titles of titleGroups.values()) {
+      if (titles.length > 1) {
+        pushDuplicate("title", "low", titles, "Similar normalized titles detected.");
+      }
+    }
+
+    duplicateCandidates.sort((a, b) => {
+      const severityRank = { high: 0, medium: 1, low: 2 };
+      return severityRank[a.severity] - severityRank[b.severity] || a.titles[0].localeCompare(b.titles[0]);
+    });
+
+    const uploadCounts = new Map<string, number>();
+    for (const document of uploadedDocuments) {
+      addCounts(uploadCounts, toWeekKey(document.uploadedAt));
+    }
+    const updateCounts = new Map<string, number>();
+    for (const guideline of activeGuidelines) {
+      addCounts(updateCounts, toWeekKey(guideline.lastUpdated));
+    }
+    const uploadActivity = buildWeeklySeries(uploadCounts, 12, now).map((week) => ({
+      weekStart: week.weekStart,
+      uploads: week.count,
+      updates: updateCounts.get(week.weekStart) ?? 0,
+    }));
+
+    const documentStatusBreakdown = ["pending", "extracting", "queued", "indexing", "indexed", "error"].map(
+      (status) => ({
+        status,
+        count: uploadedDocuments.filter((document) => document.status === status).length,
+      }),
+    );
+
+    let totalRagEntries = 0;
+    let totalRagChunks = 0;
+    if (namespace) {
+      const entries = await ctx.runQuery(components.rag.entries.list, {
+        namespaceId: namespace.namespaceId,
+        order: "desc",
+        status: "ready",
+        paginationOpts: { cursor: null, numItems: 5000 },
+      });
+      totalRagEntries = entries.page.length;
+
+      const chunkPages = await Promise.all(
+        entries.page.map((entry) =>
+          ctx.runQuery(components.rag.chunks.list, {
+            entryId: entry.entryId,
+            order: "asc",
+            paginationOpts: { cursor: null, numItems: 5000 },
+          }),
+        ),
+      );
+      totalRagChunks = chunkPages.reduce((sum, page) => sum + page.page.length, 0);
+    }
+
+    const categoriesCovered = guidelinesByCategory.filter((item) => item.publishedCount > 0).length;
+
+    return {
+      guidelinesByCategory,
+      coverageSummary: {
+        covered: guidelinesByCategory.filter((item) => item.gapSeverity === "covered").length,
+        limited: guidelinesByCategory.filter((item) => item.gapSeverity === "limited").length,
+        gaps: guidelinesByCategory.filter((item) => item.gapSeverity === "gap").length,
+      },
+      freshnessSummary,
+      staleGuidelines: freshness.filter((item) => item.status !== "current").slice(0, 12),
+      duplicateCandidates: duplicateCandidates.slice(0, 12),
+      uploadActivity,
+      indexedContent: {
+        totalDocuments: uploadedDocuments.length,
+        indexedDocuments: uploadedDocuments.filter((document) => document.status === "indexed").length,
+        totalGuidelines: activeGuidelines.length,
+        publishedGuidelines: publishedGuidelines.length,
+        totalRagEntries,
+        totalRagChunks,
+        categoriesCovered,
+        expectedCategories: GUIDELINE_CATEGORIES.length,
+        coveragePercent:
+          GUIDELINE_CATEGORIES.length > 0 ? categoriesCovered / GUIDELINE_CATEGORIES.length : 0,
+      },
+      documentStatusBreakdown,
     };
   },
 });
