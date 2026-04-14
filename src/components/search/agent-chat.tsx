@@ -30,8 +30,13 @@ import {
   Trash2,
   Check,
   History,
+  AlertTriangle,
+  ThumbsUp,
+  ThumbsDown,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -42,6 +47,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
 
 interface AgentChatProps {
   initialQuery: string;
@@ -69,6 +75,13 @@ const WAITING_STEPS = [
   "Scanning guideline excerpts",
   "Composing answer",
 ];
+
+type AssistantFeedbackRecord = {
+  _id: string;
+  assistantMessageId: string;
+  wasHelpful: boolean;
+  comment?: string;
+};
 
 export function AgentChat({
   initialQuery,
@@ -102,6 +115,10 @@ export function AgentChat({
   );
   const renameThread = useConvexRawMutation(api.agentActions.renameThread);
   const deleteThread = useConvexRawMutation(api.agentActions.deleteThread);
+  const feedbackEntries = useConvexRawQuery(
+    api.assistantFeedback.listMineForThread,
+    threadId ? { threadId } : "skip",
+  ) as AssistantFeedbackRecord[] | undefined;
   const recentThreads = useConvexRawQuery(api.agentActions.listMyThreads, {
     limit: 20,
     includeArchived: false,
@@ -116,6 +133,13 @@ export function AgentChat({
   const assistantCount = React.useMemo(
     () => messages.results.filter((m) => m.role === "assistant").length,
     [messages.results],
+  );
+  const feedbackByMessageId = React.useMemo(
+    () =>
+      new Map(
+        (feedbackEntries ?? []).map((entry) => [entry.assistantMessageId, entry]),
+      ),
+    [feedbackEntries],
   );
   const isAgentThinking = messages.results.some(
     (m) => m.role === "assistant" && m.status === "streaming",
@@ -420,7 +444,7 @@ export function AgentChat({
 
       {/* Mobile history drawer */}
       <Sheet open={mobileHistoryOpen} onOpenChange={setMobileHistoryOpen}>
-        <SheetContent side="left" className="w-[300px] p-0 flex flex-col">
+        <SheetContent side="left" className="w-[85vw] max-w-[300px] p-0 flex flex-col">
           <SheetHeader className="px-3 py-3 border-b">
             <SheetTitle className="text-xs uppercase tracking-wide text-muted-foreground flex items-center gap-2 font-normal">
               <MessagesSquare className="h-3.5 w-3.5" />
@@ -524,11 +548,16 @@ export function AgentChat({
             </div>
           )}
 
-          <AnimatePresence initial={false}>
-            {messages.results.map((msg) => (
-              <MessageBubble key={msg.key} message={msg} />
-            ))}
-          </AnimatePresence>
+            <AnimatePresence initial={false}>
+              {messages.results.map((msg) => (
+                <MessageBubble
+                  key={msg.key}
+                  message={msg}
+                  threadId={threadId}
+                  feedback={feedbackByMessageId.get(String(msg.key))}
+                />
+              ))}
+            </AnimatePresence>
 
           <AnimatePresence>
             {hasPendingNoStream && (
@@ -565,7 +594,7 @@ export function AgentChat({
           </AnimatePresence>
         </div>
 
-        <div className="border-t p-3">
+        <div className="border-t p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
           <div className="flex items-end gap-2">
             <textarea
               ref={inputRef}
@@ -707,12 +736,133 @@ function ThreadItem({
   );
 }
 
+type ResponseTransparency = {
+  level: "high" | "moderate" | "lower";
+  label: string;
+  summary: string;
+  sourceLabel: string;
+  topScore?: number;
+};
+
+function getTransparencyTone(level: ResponseTransparency["level"]) {
+  switch (level) {
+    case "high":
+      return {
+        badge: "bg-emerald-500/10 text-emerald-700 border-emerald-500/20 dark:text-emerald-300",
+        source: "bg-emerald-500/5 text-emerald-700 border-emerald-500/15 dark:text-emerald-300",
+      };
+    case "moderate":
+      return {
+        badge: "bg-amber-500/10 text-amber-700 border-amber-500/20 dark:text-amber-300",
+        source: "bg-amber-500/5 text-amber-700 border-amber-500/15 dark:text-amber-300",
+      };
+    default:
+      return {
+        badge: "bg-rose-500/10 text-rose-700 border-rose-500/20 dark:text-rose-300",
+        source: "bg-rose-500/5 text-rose-700 border-rose-500/15 dark:text-rose-300",
+      };
+  }
+}
+
+function readConfidence(
+  result?: Record<string, unknown>,
+): ResponseTransparency | null {
+  const confidence = result?.confidence;
+  if (!confidence || typeof confidence !== "object") return null;
+
+  const candidate = confidence as {
+    level?: ResponseTransparency["level"];
+    label?: string;
+    summary?: string;
+    sourceLabel?: string;
+    topScore?: number;
+  };
+  if (!candidate.level || !candidate.label || !candidate.summary) {
+    return null;
+  }
+
+  return {
+    level: candidate.level,
+    label: candidate.label,
+    summary: candidate.summary,
+    sourceLabel: candidate.sourceLabel ?? "Unverified",
+    topScore: candidate.topScore,
+  };
+}
+
+function getResponseTransparency(
+  invocations: Array<{
+    toolName: string;
+    result?: Record<string, unknown>;
+  }>,
+): ResponseTransparency {
+  const rag = invocations.find(
+    (invocation) => invocation.toolName === "ragSearch" && invocation.result?.found,
+  );
+  const keyword = invocations.find(
+    (invocation) =>
+      invocation.toolName === "searchGuidelines" && invocation.result?.found,
+  );
+  const external = invocations.find(
+    (invocation) =>
+      invocation.toolName === "searchExternalWeb" && invocation.result?.found,
+  );
+
+  const ragConfidence = readConfidence(rag?.result);
+  const keywordConfidence = readConfidence(keyword?.result);
+  const externalConfidence = readConfidence(external?.result);
+
+  if (ragConfidence) {
+    return {
+      ...ragConfidence,
+      sourceLabel: externalConfidence
+        ? "Local guidelines + external NICE/RCEM"
+        : ragConfidence.sourceLabel,
+      summary: externalConfidence
+        ? `${ragConfidence.summary} External NICE/RCEM guidance was also consulted.`
+        : ragConfidence.summary,
+    };
+  }
+
+  if (keywordConfidence) {
+    return {
+      ...keywordConfidence,
+      sourceLabel: externalConfidence
+        ? "Local guidelines + external NICE/RCEM"
+        : keywordConfidence.sourceLabel,
+      summary: externalConfidence
+        ? `${keywordConfidence.summary} External NICE/RCEM guidance was also consulted.`
+        : keywordConfidence.summary,
+    };
+  }
+
+  if (externalConfidence) {
+    return externalConfidence;
+  }
+
+  return {
+    level: "lower",
+    label: "Unverified provenance",
+    summary:
+      "No structured retrieval evidence was captured for this response. Verify directly against the source guideline.",
+    sourceLabel: "Unverified",
+  };
+}
+
 const MessageBubble = React.memo(function MessageBubble({
   message,
+  threadId,
+  feedback,
 }: {
   message: UIMessage;
+  threadId: string | null;
+  feedback?: AssistantFeedbackRecord;
 }) {
   const isUser = message.role === "user";
+  const submitFeedback = useConvexRawMutation(api.assistantFeedback.submit);
+  const [draftRating, setDraftRating] = React.useState<boolean | null>(null);
+  const [draftComment, setDraftComment] = React.useState("");
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = React.useState(false);
 
   const textParts = message.parts?.filter(
     (p): p is { type: "text"; text: string } => p.type === "text",
@@ -727,6 +877,35 @@ const MessageBubble = React.memo(function MessageBubble({
   const fullText = textParts?.map((t) => t.text).join("") ?? "";
   const displayText = isUser ? sanitizeUserPrompt(fullText) : fullText;
   const isStreaming = message.status === "streaming";
+  const toolInvocations =
+    toolParts?.map((part) => (part as any).toolInvocation).filter(Boolean) ?? [];
+  const transparency = !isUser && !isStreaming
+    ? getResponseTransparency(toolInvocations)
+    : null;
+
+  React.useEffect(() => {
+    if (!feedback) return;
+    setDraftRating(null);
+    setDraftComment(feedback.comment ?? "");
+  }, [feedback]);
+
+  const handleSubmitFeedback = async (comment?: string) => {
+    if (!threadId || isUser) return;
+    try {
+      setIsSubmittingFeedback(true);
+      await submitFeedback({
+        threadId,
+        assistantMessageId: String(message.key),
+        wasHelpful: draftRating ?? false,
+        comment,
+      });
+      setDraftRating(null);
+    } catch (error) {
+      console.error("Failed to submit feedback:", error);
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
+  };
 
   return (
     <motion.div
@@ -743,10 +922,10 @@ const MessageBubble = React.memo(function MessageBubble({
 
       <div
         className={cn(
-          "max-w-[88%] md:max-w-[85%] space-y-2",
+          "space-y-2 min-w-0",
           isUser
-            ? "bg-primary text-primary-foreground rounded-2xl rounded-br-md px-3 md:px-4 py-2.5"
-            : "",
+            ? "max-w-[90%] sm:max-w-[88%] md:max-w-[85%] bg-primary text-primary-foreground rounded-2xl rounded-br-md px-3 md:px-4 py-2.5"
+            : "w-full max-w-full sm:max-w-[92%] md:max-w-[85%]",
         )}
       >
         <AnimatePresence initial={false}>
@@ -763,6 +942,31 @@ const MessageBubble = React.memo(function MessageBubble({
           />
         ) : (
           isStreaming && !toolParts?.length && <PulsingDots />
+        )}
+
+        {!isUser && !isStreaming && transparency && (
+          <ResponseMeta transparency={transparency} />
+        )}
+
+        {!isUser && !isStreaming && (
+          <ClinicalSafetyDisclaimer />
+        )}
+
+        {!isUser && !isStreaming && threadId && (
+          <AssistantFeedbackPanel
+            feedback={feedback}
+            draftRating={draftRating}
+            draftComment={draftComment}
+            isSubmitting={isSubmittingFeedback}
+            onSelectRating={(value) => setDraftRating(value)}
+            onCommentChange={setDraftComment}
+            onCancel={() => {
+              setDraftRating(null);
+              setDraftComment(feedback?.comment ?? "");
+            }}
+            onSubmit={() => void handleSubmitFeedback(draftComment.trim() || undefined)}
+            onSkipComment={() => void handleSubmitFeedback(undefined)}
+          />
         )}
       </div>
 
@@ -785,6 +989,176 @@ function sanitizeUserPrompt(text: string): string {
     return text;
   }
   return text.slice(markerIndex + marker.length).trim();
+}
+
+function ResponseMeta({ transparency }: { transparency: ResponseTransparency }) {
+  const tone = getTransparencyTone(transparency.level);
+
+  return (
+    <div className="rounded-xl border border-border/70 bg-muted/25 px-3 py-2.5 space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="outline" className={tone.badge}>
+          <ShieldCheck className="h-3 w-3" />
+          {transparency.label}
+        </Badge>
+        <Badge variant="outline" className={tone.source}>
+          {transparency.sourceLabel}
+        </Badge>
+        {typeof transparency.topScore === "number" && (
+          <Badge variant="outline" className="text-muted-foreground">
+            Top match {(transparency.topScore * 100).toFixed(0)}%
+          </Badge>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">{transparency.summary}</p>
+    </div>
+  );
+}
+
+function ClinicalSafetyDisclaimer() {
+  return (
+    <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 px-3 py-2.5 text-xs text-foreground/90">
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+        <p className="leading-relaxed">
+          <span className="font-semibold">AI-generated response</span>
+          {" — "}
+          for clinical decision support only. Always verify against the source
+          guideline and apply clinical judgement. This tool does not replace
+          clinical assessment. Report concerns using the feedback buttons below.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function AssistantFeedbackPanel({
+  feedback,
+  draftRating,
+  draftComment,
+  isSubmitting,
+  onSelectRating,
+  onCommentChange,
+  onCancel,
+  onSubmit,
+  onSkipComment,
+}: {
+  feedback?: AssistantFeedbackRecord;
+  draftRating: boolean | null;
+  draftComment: string;
+  isSubmitting: boolean;
+  onSelectRating: (value: boolean) => void;
+  onCommentChange: (value: string) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+  onSkipComment: () => void;
+}) {
+  if (feedback) {
+    return (
+      <div className="rounded-xl border border-border/70 bg-background/70 px-3 py-2.5 space-y-2">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <Badge variant={feedback.wasHelpful ? "secondary" : "outline"}>
+            {feedback.wasHelpful ? (
+              <ThumbsUp className="h-3 w-3 text-emerald-600" />
+            ) : (
+              <ThumbsDown className="h-3 w-3 text-rose-600" />
+            )}
+            {feedback.wasHelpful ? "Marked helpful" : "Marked not helpful"}
+          </Badge>
+          <span>Feedback saved for this response.</span>
+        </div>
+        {feedback.comment && (
+          <p className="text-xs text-muted-foreground rounded-lg border border-border/70 bg-muted/20 px-2.5 py-2 whitespace-pre-wrap">
+            {feedback.comment}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-border/70 bg-background/70 px-3 py-2.5 space-y-3">
+      <div className="flex flex-wrap items-center gap-2 justify-between">
+        <p className="text-xs font-medium text-foreground/90">
+          Was this response helpful?
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant={draftRating === true ? "default" : "outline"}
+            size="sm"
+            className="h-8 gap-1.5"
+            onClick={() => onSelectRating(true)}
+            disabled={isSubmitting}
+          >
+            <ThumbsUp className="h-3.5 w-3.5" />
+            Helpful
+          </Button>
+          <Button
+            type="button"
+            variant={draftRating === false ? "default" : "outline"}
+            size="sm"
+            className="h-8 gap-1.5"
+            onClick={() => onSelectRating(false)}
+            disabled={isSubmitting}
+          >
+            <ThumbsDown className="h-3.5 w-3.5" />
+            Not helpful
+          </Button>
+        </div>
+      </div>
+
+      {draftRating !== null && (
+        <div className="space-y-2">
+          <label className="text-xs text-muted-foreground block">
+            What could be improved? Optional.
+          </label>
+          <Textarea
+            value={draftComment}
+            onChange={(event) => onCommentChange(event.target.value)}
+            placeholder="Add optional feedback for evaluation and safety monitoring..."
+            className="min-h-[84px] resize-y text-sm bg-background"
+            maxLength={2000}
+            disabled={isSubmitting}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              className="h-8"
+              onClick={onSubmit}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : null}
+              Submit feedback
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={onSkipComment}
+              disabled={isSubmitting}
+            >
+              Save without comment
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8"
+              onClick={onCancel}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function StreamingText({

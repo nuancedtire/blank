@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Users, Activity, Plus, Upload, Megaphone, ToggleLeft } from "lucide-react";
+import { FileText, Users, Activity, Plus, Upload, Megaphone, ToggleLeft, BarChart3 } from "lucide-react";
 
 export const Route = createFileRoute("/_authed/admin/")({
   component: AdminDashboard,
@@ -168,6 +168,20 @@ function AdminDashboard() {
                 </CardTitle>
                 <CardDescription className="text-xs">
                   Enable or disable Interpreter and Mental Health modules
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link to="/admin/evaluation">
+            <Card className="hover:bg-accent/50 transition-colors cursor-pointer">
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4" />
+                  Evaluation Dashboard
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Review assistant, interpreter, and mental health analytics
                 </CardDescription>
               </CardHeader>
             </Card>

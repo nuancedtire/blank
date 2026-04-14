@@ -17,6 +17,10 @@ import { z } from "zod";
 import type { Doc, Id } from "./_generated/dataModel";
 import { authComponent } from "./auth";
 import { findUserProfile } from "./userProfile";
+import {
+  GUIDELINE_CATEGORIES,
+  GUIDELINE_CATEGORY_PROMPT,
+} from "./guidelineCategories";
 
 async function sha256Hex(input: string): Promise<string> {
   const bytes = new TextEncoder().encode(input);
@@ -406,16 +410,6 @@ export const indexQueuedDocument = internalAction({
   },
 });
 
-// Valid categories for classification
-const VALID_CATEGORIES = [
-  "Medical",
-  "Trauma",
-  "Resuscitation",
-  "Paediatrics",
-  "Policies",
-  "Other",
-] as const;
-
 // Schema for the LLM's structured output
 const DocumentMetadataSchema = z.object({
   hasUsableContent: z
@@ -439,9 +433,9 @@ const DocumentMetadataSchema = z.object({
       "A 1-2 sentence clinical summary of what this guideline covers, suitable for display in search results.",
     ),
   category: z
-    .enum(VALID_CATEGORIES)
+    .enum(GUIDELINE_CATEGORIES)
     .describe(
-      "The most appropriate category: Medical (general medical conditions), Trauma (injuries, fractures, wounds), Resuscitation (cardiac arrest, anaphylaxis, critical care), Paediatrics (children & neonates), Policies (protocols, SOPs, administrative), Other (if none fit).",
+      `The most appropriate category for this ED guideline. Choose exactly one from: ${GUIDELINE_CATEGORY_PROMPT}`,
     ),
   tags: z
     .array(z.string())
@@ -478,8 +472,8 @@ IMPORTANT:
 - NEVER invent clinical information. Only clean and restructure what's already there.
 - Fix common OCR issues: broken words, stray characters, misread numbers in dosages
 - Preserve tables, dosage information, and clinical criteria exactly
-- Classify into the most appropriate category based on content`,
-      prompt: `Process this uploaded document.
+- Classify into the single best-fit category from this ED taxonomy: ${GUIDELINE_CATEGORY_PROMPT}`,
+       prompt: `Process this uploaded document.
 
 Filename: ${fileName}
 Category: (please infer from content)

@@ -38,6 +38,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { TagInput } from "@/components/ui/tag-input";
+import { GUIDELINE_CATEGORIES } from "@/lib/guideline-categories";
 import {
   ArrowLeft,
   Plus,
@@ -103,7 +104,7 @@ function ManageGuidelinesPage() {
   const [title, setTitle] = React.useState("");
   const [content, setContent] = React.useState("");
   const [summary, setSummary] = React.useState("");
-  const [category, setCategory] = React.useState("Medical");
+  const [category, setCategory] = React.useState(GUIDELINE_CATEGORIES[0]);
   const [version, setVersion] = React.useState("1.0");
   const [status, setStatus] = React.useState<
     "draft" | "published" | "archived"
@@ -111,20 +112,23 @@ function ManageGuidelinesPage() {
   const [keywords, setKeywords] = React.useState<string[]>([]);
   const [categoryOpen, setCategoryOpen] = React.useState(false);
 
-  const CATEGORIES = [
-    "Medical",
-    "Trauma",
-    "Resuscitation",
-    "Paediatrics",
-    "Policies",
-    "Other",
-  ];
+  const CATEGORIES = React.useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...GUIDELINE_CATEGORIES,
+          ...(guidelines?.map((guideline: any) => guideline.category) ?? []),
+          ...(archivedGuidelines?.map((guideline: any) => guideline.category) ?? []),
+        ]),
+      ),
+    [archivedGuidelines, guidelines],
+  );
 
   const resetForm = () => {
     setTitle("");
     setContent("");
     setSummary("");
-    setCategory("Medical");
+    setCategory(GUIDELINE_CATEGORIES[0]);
     setVersion("1.0");
     setStatus("published");
     setKeywords([]);

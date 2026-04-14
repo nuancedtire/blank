@@ -21,12 +21,12 @@ import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import {
+  GUIDELINE_CATEGORIES,
+  GUIDELINE_CATEGORY_META,
+} from "@/lib/guideline-categories";
+import {
   TrendingUp,
   Clock,
-  Activity,
-  Stethoscope,
-  Shield,
-  Brain,
   FileText,
   ExternalLink,
 } from "lucide-react";
@@ -36,18 +36,6 @@ export const Route = createFileRoute("/_authed/search")({
   }),
   component: SearchPage,
 });
-
-const CATEGORIES = [
-  {
-    name: "Resuscitation",
-    icon: Activity,
-    color: "from-primary to-secondary",
-  },
-  { name: "Trauma", icon: Shield, color: "from-destructive to-destructive/70" },
-  { name: "Medical", icon: Stethoscope, color: "from-accent to-accent/70" },
-  { name: "Paediatrics", icon: Brain, color: "from-warning to-warning/70" },
-  { name: "Policies", icon: FileText, color: "from-primary to-primary/70" },
-];
 
 const DEFAULT_WEB_SEARCH_DOMAINS = [
   { domain: "nice.org.uk", label: "NICE", enabled: true },
@@ -135,6 +123,16 @@ function SearchPage() {
   const { data: recentGuidelines } = useQuery(
     convexQuery(api.guidelines.listRecent, { limit: 5 }),
   );
+
+  const browseCategories = React.useMemo(() => {
+    if (!allCategories || allCategories.length === 0) {
+      return GUIDELINE_CATEGORIES.map((name) => ({ name, count: 0 }));
+    }
+
+    return [...allCategories].sort(
+      (a, b) => b.count - a.count || a.name.localeCompare(b.name),
+    );
+  }, [allCategories]);
 
   // Search (local paginated)
   const { data: localSearchData, isLoading: isSearching } = useQuery({
@@ -817,27 +815,30 @@ function SearchPage() {
               <TrendingUp className="w-5 h-5 text-primary" />
               Browse by Category
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-              {CATEGORIES.map((cat) => {
-                const categoryData = allCategories?.find((c) => c.name === cat.name);
-                const count = categoryData?.count ?? 0;
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+              {browseCategories.map(({ name, count }) => {
+                const meta = GUIDELINE_CATEGORY_META[name] ?? GUIDELINE_CATEGORY_META.Other;
+                const Icon = meta.icon;
                 return (
                   <Link
-                    key={cat.name}
+                    key={name}
                     to="/browse/$category"
-                    params={{ category: cat.name }}
+                    params={{ category: name }}
                     className="group"
                   >
                     <Card className="p-4 hover:shadow-lg hover:shadow-primary/5 hover:border-primary/30 transition-all duration-200 cursor-pointer h-full">
                       <div
-                        className={`w-10 h-10 rounded-lg bg-gradient-to-br ${cat.color} flex items-center justify-center mb-3 shadow-md group-hover:scale-110 transition-transform`}
+                        className={`w-10 h-10 rounded-lg bg-gradient-to-br ${meta.color} flex items-center justify-center mb-3 shadow-md group-hover:scale-110 transition-transform`}
                       >
-                        <cat.icon className="w-5 h-5 text-white dark:text-black" />
+                        <Icon className="w-5 h-5 text-white dark:text-black" />
                       </div>
                       <p className="font-semibold text-foreground text-sm">
-                        {cat.name}
+                        {name}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-1">
+                      <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2 min-h-[2rem]">
+                        {meta.description}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-2">
                         {count} guidelines
                       </p>
                     </Card>
