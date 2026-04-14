@@ -27,6 +27,7 @@ async function checkAdmin(ctx: QueryCtx | MutationCtx) {
  */
 
 // 1. List user's notifications
+// Optimized to use async iteration with early-exit logic to avoid full table scans
 export const list = query({
   args: {
     limit: v.optional(v.number()),
@@ -37,40 +38,39 @@ export const list = query({
     if (!user) return [];
 
     const now = Date.now();
+    const limit = args.limit ?? Infinity;
+    if (limit <= 0) return [];
 
-    // Fetch all notifications and filter in memory for efficiency/simplicity
-    // In a larger app, we might want more complex indexing
-    const allNotifications = await ctx.db
+    const results = [];
+
+    const notificationQuery = ctx.db
       .query("notifications")
       .withIndex("by_createdAt")
-      .order("desc")
-      .collect();
+      .order("desc");
 
-    let filtered = allNotifications.filter((n) => {
+    for await (const n of notificationQuery) {
       // Filter out expired
-      if (n.expiresAt && n.expiresAt < now) return false;
+      if (n.expiresAt && n.expiresAt < now) continue;
 
       // Filter by broadcast OR targetUserIds
       const isTargeted = n.isBroadcast || n.targetUserIds?.includes(user._id);
-      if (!isTargeted) return false;
+      if (!isTargeted) continue;
 
       // Filter out if dismissed by user
-      if (n.dismissedBy.includes(user._id)) return false;
+      if (n.dismissedBy.includes(user._id)) continue;
 
       // Filter unread only if requested
-      if (args.unreadOnly && n.readBy.includes(user._id)) return false;
+      if (args.unreadOnly && n.readBy.includes(user._id)) continue;
 
-      return true;
-    });
+      results.push({
+        ...n,
+        isRead: n.readBy.includes(user._id),
+      });
 
-    if (args.limit) {
-      filtered = filtered.slice(0, args.limit);
+      if (results.length >= limit) break;
     }
 
-    return filtered.map((n) => ({
-      ...n,
-      isRead: n.readBy.includes(user._id),
-    }));
+    return results;
   },
 });
 
