@@ -1,6 +1,10 @@
 import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMutation as useConvexRawMutation, useQuery as useConvexRawQuery } from "convex/react";
+import {
+  useConvexAuth,
+  useMutation as useConvexRawMutation,
+  useQuery as useConvexRawQuery,
+} from "convex/react";
 import { api } from "convex/_generated/api";
 import {
   History,
@@ -21,15 +25,21 @@ export const Route = createFileRoute("/_authed/history")({
 });
 
 function HistoryPage() {
+  const { isAuthenticated } = useConvexAuth();
   const [filter, setFilter] = React.useState("");
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [titleDraft, setTitleDraft] = React.useState("");
   const [busyId, setBusyId] = React.useState<string | null>(null);
 
-  const threads = useConvexRawQuery(api.agentActions.listMyThreads, {
-    limit: 250,
-    includeArchived: true,
-  });
+  const threads = useConvexRawQuery(
+    api.agentActions.listMyThreads,
+    isAuthenticated
+      ? {
+          limit: 250,
+          includeArchived: true,
+        }
+      : "skip",
+  );
   const renameThread = useConvexRawMutation(api.agentActions.renameThread);
   const deleteThread = useConvexRawMutation(api.agentActions.deleteThread);
   const restoreThread = useConvexRawMutation(api.agentActions.restoreThread);

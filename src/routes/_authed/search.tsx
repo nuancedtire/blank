@@ -1,6 +1,6 @@
 import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useAction } from "convex/react";
+import { useAction, useConvexAuth } from "convex/react";
 import {
   useQuery,
   useMutation,
@@ -231,8 +231,13 @@ function SearchPage() {
     searchDomains,
   ]);
 
+  const { isAuthenticated } = useConvexAuth();
+
   // Get user
-  const { data: currentUser } = useQuery(convexQuery(api.users.me, {}));
+  const { data: currentUser } = useQuery({
+    ...convexQuery(api.users.me, {}),
+    enabled: isAuthenticated,
+  });
 
   const togglePin = useConvexMutation(api.users.togglePin);
   const recordSearchMemory = useConvexMutation(api.agentActions.recordSearchMemory);

@@ -2,6 +2,7 @@ import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
+import { useConvexAuth } from "convex/react";
 import { api } from "convex/_generated/api";
 import { GuidelineContent } from "@/components/guidelines/guideline-content";
 import { Button } from "@/components/ui/button";
@@ -249,6 +250,7 @@ function GuidelineDetailPage() {
   const { slug } = Route.useParams();
   const { resolvedTheme } = useTheme();
   const queryClient = useQueryClient();
+  const { isAuthenticated } = useConvexAuth();
   const viewerRef = React.useRef<PDFViewerRef>(null);
   const [viewMode, setViewMode] = React.useState<"pdf" | "text">("pdf");
   const viewerThemePreference = resolvedTheme === "dark" ? "dark" : "light";
@@ -264,7 +266,10 @@ function GuidelineDetailPage() {
     convexQuery(api.guidelines.getBySlug, { slug }),
   );
 
-  const { data: currentUser } = useQuery(convexQuery(api.users.me, {}));
+  const { data: currentUser } = useQuery({
+    ...convexQuery(api.users.me, {}),
+    enabled: isAuthenticated,
+  });
 
   // Get file URL if this guideline has an associated PDF
   const storageId = (guideline as any)?.storageId;

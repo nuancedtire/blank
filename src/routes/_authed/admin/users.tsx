@@ -2,6 +2,7 @@ import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
+import { useConvexAuth } from "convex/react";
 import { api } from "convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,9 +15,16 @@ export const Route = createFileRoute("/_authed/admin/users")({
 });
 
 function AdminUsersPage() {
+  const { isAuthenticated } = useConvexAuth();
   const { toast } = useToast();
-  const { data: users } = useQuery(convexQuery(api.users.listAll, {}));
-  const { data: me } = useQuery(convexQuery(api.users.me, {}));
+  const { data: users } = useQuery({
+    ...convexQuery(api.users.listAll, {}),
+    enabled: isAuthenticated,
+  });
+  const { data: me } = useQuery({
+    ...convexQuery(api.users.me, {}),
+    enabled: isAuthenticated,
+  });
   const updateRole = useConvexMutation(api.users.updateRole);
   const setBanStatus = useConvexMutation(api.users.setBanStatus);
   const [banReasonByUser, setBanReasonByUser] = React.useState<Record<string, string>>({});

@@ -1,6 +1,7 @@
 import * as React from "react";
 import { motion, AnimatePresence, MotionConfig } from "motion/react";
 import {
+  useConvexAuth,
   useMutation as useConvexRawMutation,
   useQuery as useConvexRawQuery,
 } from "convex/react";
@@ -91,6 +92,7 @@ export function AgentChat({
   className,
   onClose,
 }: AgentChatProps) {
+  const { isAuthenticated } = useConvexAuth();
   const [threadId, setThreadId] = React.useState<string | null>(initialThreadId);
   const [historyCollapsed, setHistoryCollapsed] = React.useState(false);
   const [mobileHistoryOpen, setMobileHistoryOpen] = React.useState(false);
@@ -119,10 +121,15 @@ export function AgentChat({
     api.assistantFeedback.listMineForThread,
     threadId ? { threadId } : "skip",
   ) as AssistantFeedbackRecord[] | undefined;
-  const recentThreads = useConvexRawQuery(api.agentActions.listMyThreads, {
-    limit: 20,
-    includeArchived: false,
-  });
+  const recentThreads = useConvexRawQuery(
+    api.agentActions.listMyThreads,
+    isAuthenticated
+      ? {
+          limit: 20,
+          includeArchived: false,
+        }
+      : "skip",
+  );
 
   const messages = useUIMessages(
     api.agentActions.listThreadMessages,
