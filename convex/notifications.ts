@@ -36,41 +36,46 @@ export const list = query({
     const user = await getCurrentUser(ctx);
     if (!user) return [];
 
-    const now = Date.now();
+    // Early exit for zero or negative limit to save resources
+    if (args.limit !== undefined && args.limit <= 0) return [];
 
-    // Fetch all notifications and filter in memory for efficiency/simplicity
-    // In a larger app, we might want more complex indexing
-    const allNotifications = await ctx.db
+    const now = Date.now();
+    const results = [];
+
+    // Performance optimization: use async iteration instead of .collect()
+    // This allows early exit once the limit is reached, preventing full table scans
+    // and reducing memory usage for large notification history.
+    const query = ctx.db
       .query("notifications")
       .withIndex("by_createdAt")
-      .order("desc")
-      .collect();
+      .order("desc");
 
-    let filtered = allNotifications.filter((n) => {
+    for await (const n of query) {
       // Filter out expired
-      if (n.expiresAt && n.expiresAt < now) return false;
+      if (n.expiresAt && n.expiresAt < now) continue;
 
       // Filter by broadcast OR targetUserIds
       const isTargeted = n.isBroadcast || n.targetUserIds?.includes(user._id);
-      if (!isTargeted) return false;
+      if (!isTargeted) continue;
 
       // Filter out if dismissed by user
-      if (n.dismissedBy.includes(user._id)) return false;
+      if (n.dismissedBy.includes(user._id)) continue;
 
       // Filter unread only if requested
-      if (args.unreadOnly && n.readBy.includes(user._id)) return false;
+      if (args.unreadOnly && n.readBy.includes(user._id)) continue;
 
-      return true;
-    });
+      results.push({
+        ...n,
+        isRead: n.readBy.includes(user._id),
+      });
 
-    if (args.limit) {
-      filtered = filtered.slice(0, args.limit);
+      // Exit early once the requested limit is satisfied
+      if (args.limit && results.length >= args.limit) {
+        break;
+      }
     }
 
-    return filtered.map((n) => ({
-      ...n,
-      isRead: n.readBy.includes(user._id),
-    }));
+    return results;
   },
 });
 
