@@ -27,6 +27,7 @@ async function checkAdmin(ctx: QueryCtx | MutationCtx) {
  */
 
 // 1. List user's notifications
+// Optimized with async iteration for early-exit and lower memory usage
 export const list = query({
   args: {
     limit: v.optional(v.number()),
@@ -36,41 +37,44 @@ export const list = query({
     const user = await getCurrentUser(ctx);
     if (!user) return [];
 
-    const now = Date.now();
+    // Explicitly return empty if limit is 0 or less
+    if (args.limit !== undefined && args.limit <= 0) return [];
 
-    // Fetch all notifications and filter in memory for efficiency/simplicity
-    // In a larger app, we might want more complex indexing
-    const allNotifications = await ctx.db
+    const now = Date.now();
+    const results = [];
+
+    // Use async iteration to support early-exit via limit,
+    // avoiding full table scans and reducing memory pressure.
+    const query = ctx.db
       .query("notifications")
       .withIndex("by_createdAt")
-      .order("desc")
-      .collect();
+      .order("desc");
 
-    let filtered = allNotifications.filter((n) => {
+    for await (const n of query) {
       // Filter out expired
-      if (n.expiresAt && n.expiresAt < now) return false;
+      if (n.expiresAt && n.expiresAt < now) continue;
 
       // Filter by broadcast OR targetUserIds
       const isTargeted = n.isBroadcast || n.targetUserIds?.includes(user._id);
-      if (!isTargeted) return false;
+      if (!isTargeted) continue;
 
       // Filter out if dismissed by user
-      if (n.dismissedBy.includes(user._id)) return false;
+      if (n.dismissedBy.includes(user._id)) continue;
 
       // Filter unread only if requested
-      if (args.unreadOnly && n.readBy.includes(user._id)) return false;
+      if (args.unreadOnly && n.readBy.includes(user._id)) continue;
 
-      return true;
-    });
+      results.push({
+        ...n,
+        isRead: n.readBy.includes(user._id),
+      });
 
-    if (args.limit) {
-      filtered = filtered.slice(0, args.limit);
+      if (args.limit && results.length >= args.limit) {
+        break;
+      }
     }
 
-    return filtered.map((n) => ({
-      ...n,
-      isRead: n.readBy.includes(user._id),
-    }));
+    return results;
   },
 });
 

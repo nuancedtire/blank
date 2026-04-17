@@ -9,3 +9,7 @@
 ## 2026-04-07 - [Optimizing Admin List Payloads]
 **Learning:** Admin dashboards and management lists often fetch entire documents including heavy Markdown content, leading to large payload sizes.
 **Action:** Use "Summary" queries that exclude heavy fields like 'content' for list views, and implement a fetch-on-demand pattern for detail views or edit forms. Use database-level sorting via indexes instead of in-memory .sort().
+
+## 2025-05-16 - [Early-exit with Async Iteration]
+**Learning:** When database-level filtering (e.g., using `.withIndex().eq()`) is not possible for all criteria, using async iteration (`for await`) instead of `.collect().filter()` allows for early-exit when a `limit` is reached. This prevents scanning the entire table once enough results are found.
+**Action:** Favor async iteration with manual `break` for filtered list queries that support a `limit`.
