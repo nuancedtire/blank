@@ -66,3 +66,65 @@ describe("notifications.listAll logic", () => {
     expect(ctx.db.get).toHaveBeenCalledTimes(1);
   });
 });
+
+// Mocking the async iteration logic for the list query
+async function listLogic(ctx: any, args: { limit?: number; unreadOnly?: boolean }, user: any) {
+  const now = Date.now();
+  const results = [];
+  const limit = args.limit ?? Infinity;
+
+  if (limit <= 0) return [];
+
+  const notificationsQuery = ctx.db.query("notifications");
+
+  for await (const n of notificationsQuery) {
+    if (n.expiresAt && n.expiresAt < now) continue;
+    const isTargeted = n.isBroadcast || n.targetUserIds?.includes(user._id);
+    if (!isTargeted) continue;
+    if (n.dismissedBy.includes(user._id)) continue;
+    if (args.unreadOnly && n.readBy.includes(user._id)) continue;
+
+    results.push({
+      ...n,
+      isRead: n.readBy.includes(user._id),
+    });
+
+    if (results.length >= limit) break;
+  }
+
+  return results;
+}
+
+describe("notifications.list async iteration", () => {
+  it("early exits when the limit is reached", async () => {
+    const mockUser = { _id: "u1" };
+    const mockNotifications = [
+      { _id: "n1", isBroadcast: true, readBy: [], dismissedBy: [] },
+      { _id: "n2", isBroadcast: true, readBy: [], dismissedBy: [] },
+      { _id: "n3", isBroadcast: true, readBy: [], dismissedBy: [] },
+    ];
+
+    let yieldCount = 0;
+    const queryStub = {
+      async *[Symbol.asyncIterator]() {
+        for (const n of mockNotifications) {
+          yieldCount++;
+          yield n;
+        }
+      },
+    };
+
+    const ctx = {
+      db: {
+        query: vi.fn().mockReturnValue(queryStub),
+      },
+    };
+
+    const result = await listLogic(ctx, { limit: 1 }, mockUser);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]._id).toBe("n1");
+    // Should stop after the first item satisfies the limit
+    expect(yieldCount).toBe(1);
+  });
+});

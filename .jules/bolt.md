@@ -9,3 +9,7 @@
 ## 2026-04-07 - [Optimizing Admin List Payloads]
 **Learning:** Admin dashboards and management lists often fetch entire documents including heavy Markdown content, leading to large payload sizes.
 **Action:** Use "Summary" queries that exclude heavy fields like 'content' for list views, and implement a fetch-on-demand pattern for detail views or edit forms. Use database-level sorting via indexes instead of in-memory .sort().
+
+## 2026-04-17 - [Early Exit Nuance in Async Iteration]
+**Learning:** In Convex, when using 'for await' with a limit, placing the 'break' check at the start of the loop can cause the iterator to pre-fetch one more item than necessary. Moving the check to immediately after the result is pushed ensures the database scan stops exactly when the limit is met.
+**Action:** Always place 'if (results.length >= limit) break;' at the end of the loop body to ensure precise early exit.
