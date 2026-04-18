@@ -382,9 +382,9 @@ function LandingPage() {
               </h2>
             </div>
             <p className="max-w-md text-sm text-muted-foreground md:text-right">
-              Start with natural language, run retrieval across trusted
-              sources, then optionally continue with the AI agent for deeper
-              search support.
+              Start with natural language, run retrieval across trusted sources,
+              then optionally continue with the AI agent for deeper search
+              support.
             </p>
           </div>
 
@@ -437,10 +437,6 @@ function LandingPage() {
               <h2 className="text-2xl sm:text-3xl font-bold text-primary-foreground mb-4">
                 Ready to Streamline Your Clinical Workflow?
               </h2>
-              <p className="text-primary-foreground/80 mb-8 max-w-xl mx-auto">
-                Join thousands of healthcare professionals accessing guidelines
-                faster.
-              </p>
               <div className="flex justify-center">
                 <Button size="lg" asChild className={primaryCtaClass}>
                   <Link to="/login">Get Started Now</Link>
