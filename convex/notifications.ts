@@ -37,40 +37,41 @@ export const list = query({
     if (!user) return [];
 
     const now = Date.now();
+    const results = [];
+    const limit = args.limit ?? Infinity;
 
-    // Fetch all notifications and filter in memory for efficiency/simplicity
-    // In a larger app, we might want more complex indexing
-    const allNotifications = await ctx.db
+    if (limit <= 0) return [];
+
+    // Use async iteration to avoid full table scans and memory pressure.
+    // This allows early exit once the requested limit is satisfied.
+    const notificationsQuery = ctx.db
       .query("notifications")
       .withIndex("by_createdAt")
-      .order("desc")
-      .collect();
+      .order("desc");
 
-    let filtered = allNotifications.filter((n) => {
+    for await (const n of notificationsQuery) {
       // Filter out expired
-      if (n.expiresAt && n.expiresAt < now) return false;
+      if (n.expiresAt && n.expiresAt < now) continue;
 
       // Filter by broadcast OR targetUserIds
       const isTargeted = n.isBroadcast || n.targetUserIds?.includes(user._id);
-      if (!isTargeted) return false;
+      if (!isTargeted) continue;
 
       // Filter out if dismissed by user
-      if (n.dismissedBy.includes(user._id)) return false;
+      if (n.dismissedBy.includes(user._id)) continue;
 
       // Filter unread only if requested
-      if (args.unreadOnly && n.readBy.includes(user._id)) return false;
+      if (args.unreadOnly && n.readBy.includes(user._id)) continue;
 
-      return true;
-    });
+      results.push({
+        ...n,
+        isRead: n.readBy.includes(user._id),
+      });
 
-    if (args.limit) {
-      filtered = filtered.slice(0, args.limit);
+      if (results.length >= limit) break;
     }
 
-    return filtered.map((n) => ({
-      ...n,
-      isRead: n.readBy.includes(user._id),
-    }));
+    return results;
   },
 });
 
@@ -82,15 +83,22 @@ export const getUnreadCount = query({
     if (!user) return 0;
 
     const now = Date.now();
-    const allNotifications = await ctx.db.query("notifications").collect();
+    let count = 0;
 
-    return allNotifications.filter((n) => {
-      if (n.expiresAt && n.expiresAt < now) return false;
+    // Use async iteration to count without loading all documents into memory
+    const notificationsQuery = ctx.db.query("notifications");
+
+    for await (const n of notificationsQuery) {
+      if (n.expiresAt && n.expiresAt < now) continue;
       const isTargeted = n.isBroadcast || n.targetUserIds?.includes(user._id);
-      if (!isTargeted) return false;
-      if (n.dismissedBy.includes(user._id)) return false;
-      return !n.readBy.includes(user._id);
-    }).length;
+      if (!isTargeted) continue;
+      if (n.dismissedBy.includes(user._id)) continue;
+      if (!n.readBy.includes(user._id)) {
+        count++;
+      }
+    }
+
+    return count;
   },
 });
 
@@ -120,9 +128,11 @@ export const markAllAsRead = mutation({
     if (!user) throw new Error("Not authenticated");
 
     const now = Date.now();
-    const notifications = await ctx.db.query("notifications").collect();
 
-    for (const n of notifications) {
+    // Use async iteration to process notifications one by one without loading all into memory
+    const notificationsQuery = ctx.db.query("notifications");
+
+    for await (const n of notificationsQuery) {
       const isTargeted = n.isBroadcast || n.targetUserIds?.includes(user._id);
       const isExpired = n.expiresAt && n.expiresAt < now;
       const isRead = n.readBy.includes(user._id);
