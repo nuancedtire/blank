@@ -5,6 +5,19 @@ import { query, mutation, internalQuery } from "./_generated/server";
 export const getSlugByTitle = query({
   args: { title: v.string() },
   handler: async (ctx, { title }) => {
+    // ⚡ Fast path: Exact match using the new by_status_title index.
+    // This handles most cases with O(log N) complexity instead of O(N).
+    const exactMatch = await ctx.db
+      .query("guidelines")
+      .withIndex("by_status_title", (q) =>
+        q.eq("status", "published").eq("title", title)
+      )
+      .unique();
+
+    if (exactMatch) return exactMatch.slug;
+
+    // Fallback path: Case-insensitive/trimmed scan.
+    // Retained for compatibility with AI-generated titles that might have formatting issues.
     const guidelines = await ctx.db
       .query("guidelines")
       .withIndex("by_status", (q) => q.eq("status", "published"))

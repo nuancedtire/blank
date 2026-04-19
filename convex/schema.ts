@@ -69,6 +69,7 @@ export default defineSchema({
     .index("by_slug", ["slug"])
     .index("by_category", ["category"])
     .index("by_status", ["status"])
+    .index("by_status_title", ["status", "title"])
     .index("by_category_status", ["category", "status"])
     .index("by_status_lastUpdated", ["status", "lastUpdated"])
     .index("by_lastUpdated", ["lastUpdated"])
