@@ -38,7 +38,7 @@ function BrowsePage() {
           >
             <CardInteractive className="flex-row items-center gap-3 sm:gap-4 p-3 sm:p-4">
               <div className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/10 to-accent/10 text-2xl sm:text-3xl transition-transform group-hover:scale-110">
-                {meta?.icon ?? "📄"}
+                {meta?.icon ? <meta.icon className="h-6 w-6 text-primary" /> : "📄"}
               </div>
               <div className="flex-1 min-w-0">
                 <h2 className="font-bold text-sm sm:text-base">{cat.name}</h2>

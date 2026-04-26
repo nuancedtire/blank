@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
+import { useConvexAuth } from "convex/react";
 import { api } from "convex/_generated/api";
 import { useEffect, useRef } from "react";
 import { AppShell } from "@/components/layout/app-shell";
@@ -16,14 +17,19 @@ export const Route = createFileRoute("/_authed")({
 });
 
 function AuthedLayout() {
+  const { isAuthenticated, isLoading } = useConvexAuth();
   const ensureProfile = useConvexMutation(api.users.ensureProfile);
-  const { data: me } = useQuery(convexQuery(api.users.me, {}));
+  const { data: me } = useQuery({
+    ...convexQuery(api.users.me, {}),
+    enabled: isAuthenticated,
+  });
   const profileMutation = useMutation({
     mutationFn: () => ensureProfile({}),
   });
   const calledRef = useRef(false);
 
   useEffect(() => {
+    if (isLoading || !isAuthenticated) return;
     const profileMissing =
       me !== undefined && (me === null || me?._id === null);
     if (!calledRef.current || profileMissing) {
@@ -32,7 +38,7 @@ function AuthedLayout() {
         profileMutation.mutate();
       }
     }
-  }, [me?._id, profileMutation.isPending]);
+  }, [isAuthenticated, isLoading, me?._id, profileMutation.isPending]);
 
   useEffect(() => {
     if (me?.isBanned) {

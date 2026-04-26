@@ -1,21 +1,21 @@
 {
-    "$schema": "node_modules/wrangler/config-schema.json",
-    "name": "aide",
-    "compatibility_date": "2025-09-02",
-    "compatibility_flags": ["nodejs_compat"],
-    "main": "./src/server.ts",
-    "observability": {
-        "enabled": true,
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "aide",
+  "compatibility_date": "2025-09-02",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "./src/server.ts",
+  "observability": {
+    "enabled": true,
+  },
+  "routes": [
+    {
+      "pattern": "aide.fazeen.dev",
+      "custom_domain": true,
     },
-    "routes": [
-        {
-            "pattern": "aide.fazeen.dev",
-            "custom_domain": true,
-        },
-    ],
-    "vars": {
-        "VITE_CONVEX_URL": "https://opulent-duck-589.eu-west-1.convex.cloud",
-        "VITE_CONVEX_SITE_URL": "https://opulent-duck-589.eu-west-1.convex.site",
-        "VITE_SITE_URL": "https://aide.fazeen.dev",
-    },
+  ],
+  "vars": {
+    "VITE_CONVEX_URL": "https://kindred-quail-470.convex.cloud",
+    "VITE_CONVEX_SITE_URL": "https://kindred-quail-470.convex.site",
+    "VITE_SITE_URL": "https://aide.fazeen.dev",
+  },
 }

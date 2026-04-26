@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
+import { useConvexAuth } from "convex/react";
 import { api } from "convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -113,9 +114,11 @@ function aiBadgeClasses(state?: string) {
 }
 
 function NotificationList({ onClose }: { onClose?: () => void }) {
-  const { data: notifications } = useQuery(
-    convexQuery(api.notifications.list, { limit: 20 }),
-  );
+  const { isAuthenticated } = useConvexAuth();
+  const { data: notifications } = useQuery({
+    ...convexQuery(api.notifications.list, { limit: 20 }),
+    enabled: isAuthenticated,
+  });
   const markAsRead = useConvexMutation(api.notifications.markAsRead);
   const markAllAsRead = useConvexMutation(api.notifications.markAllAsRead);
   const dismiss = useConvexMutation(api.notifications.dismiss);
@@ -222,9 +225,11 @@ function NotificationList({ onClose }: { onClose?: () => void }) {
 }
 
 function NotificationCenter() {
-  const { data: unreadCount } = useQuery(
-    convexQuery(api.notifications.getUnreadCount, {}),
-  );
+  const { isAuthenticated } = useConvexAuth();
+  const { data: unreadCount } = useQuery({
+    ...convexQuery(api.notifications.getUnreadCount, {}),
+    enabled: isAuthenticated,
+  });
   const count = unreadCount ?? 0;
   const badgeText = count > 99 ? "99+" : String(count);
 
@@ -283,13 +288,19 @@ function NotificationCenter() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
-  const { data: user } = useQuery(convexQuery(api.users.me, {}));
-  const { data: aiStatus } = useQuery(
-    convexQuery((api as any).agentActions.getAiRuntimeStatus, {}),
-  );
-  const { data: mhAlerts = [] } = useQuery(
-    convexQuery(api.mentalHealth.alerts.listActiveAlerts, {}),
-  );
+  const { isAuthenticated } = useConvexAuth();
+  const { data: user } = useQuery({
+    ...convexQuery(api.users.me, {}),
+    enabled: isAuthenticated,
+  });
+  const { data: aiStatus } = useQuery({
+    ...convexQuery((api as any).agentActions.getAiRuntimeStatus, {}),
+    enabled: isAuthenticated,
+  });
+  const { data: mhAlerts = [] } = useQuery({
+    ...convexQuery(api.mentalHealth.alerts.listActiveAlerts, {}),
+    enabled: isAuthenticated,
+  });
   const { data: featureFlags } = useQuery(
     convexQuery(api.siteSettings.getFeatureFlags, {}),
   );

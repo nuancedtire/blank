@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { convexQuery } from "@convex-dev/react-query";
+import { useConvexAuth } from "convex/react";
 import { api } from "convex/_generated/api";
 import { ShieldAlert } from "lucide-react";
 
@@ -9,9 +10,13 @@ export const Route = createFileRoute("/_authed/admin")({
 });
 
 function AdminLayout() {
-  const { data: me, isLoading } = useQuery(convexQuery(api.users.me, {}));
+  const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
+  const { data: me, isLoading } = useQuery({
+    ...convexQuery(api.users.me, {}),
+    enabled: isAuthenticated,
+  });
 
-  if (isLoading) {
+  if (isAuthLoading || isLoading) {
     return <div className="py-10 text-sm text-muted-foreground">Checking admin access...</div>;
   }
 

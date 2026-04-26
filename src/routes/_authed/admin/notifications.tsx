@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
+import { useConvexAuth } from "convex/react";
 import { api } from "convex/_generated/api";
 import { useState } from "react";
 import { motion } from "motion/react";
@@ -70,10 +71,15 @@ const notificationTypes = [
 ];
 
 function AdminNotificationsPage() {
-  const { data: notifications, refetch } = useQuery(
-    convexQuery(api.notifications.listAll, {})
-  );
-  const { data: users } = useQuery(convexQuery(api.users.listAll, {}));
+  const { isAuthenticated } = useConvexAuth();
+  const { data: notifications, refetch } = useQuery({
+    ...convexQuery(api.notifications.listAll, {}),
+    enabled: isAuthenticated,
+  });
+  const { data: users } = useQuery({
+    ...convexQuery(api.users.listAll, {}),
+    enabled: isAuthenticated,
+  });
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   return (

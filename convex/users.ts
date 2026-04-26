@@ -44,15 +44,15 @@ export const me = query({
 
     return user
       ? { ...user, authUser }
-      : {
-          // New user - return basic info from auth
-          _id: null,
-          email: normalizeEmail(authUser.email),
-          name: deriveDisplayName(authUser),
-          role: "user" as const,
-          isBanned: false,
-          authUser,
-        };
+        : {
+            // The profile is created lazily on first authenticated mutation.
+            _id: null,
+            email: normalizeEmail(authUser.email),
+            name: deriveDisplayName(authUser),
+            role: "admin" as const,
+            isBanned: false,
+            authUser,
+          };
   },
 });
 
@@ -80,11 +80,11 @@ export const ensureProfile = mutation({
       return existing._id;
     }
 
-    // Create new user profile (default role is user; admins can promote later)
+    // Default every newly created app profile to admin for this private deployment.
     const id = await ctx.db.insert("users", {
       email: normalizedEmail,
       name,
-      role: "user",
+      role: "admin",
       isBanned: false,
       lastActive: Date.now(),
     });
@@ -183,7 +183,7 @@ export const togglePin = mutation({
       const id = await ctx.db.insert("users", {
         email: normalizeEmail(authUser.email),
         name: deriveDisplayName(authUser),
-        role: "user",
+        role: "admin",
         isBanned: false,
         lastActive: Date.now(),
       });

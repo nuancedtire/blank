@@ -12,12 +12,33 @@ import type { DataModel } from "./_generated/dataModel";
 export const authComponent = createClient<DataModel>(components.betterAuth);
 
 export const createAuth = (ctx: GenericCtx<DataModel>) => {
-  const siteUrl = process.env.SITE_URL ?? process.env.VITE_SITE_URL!;
+  const siteUrl = (
+    process.env.BETTER_AUTH_URL ??
+    process.env.SITE_URL ??
+    process.env.VITE_SITE_URL ??
+    ""
+  )
+    .trim()
+    .replace(/\/$/, "");
+  const trustedOrigins = Array.from(
+    new Set(
+      [
+        siteUrl,
+        process.env.SITE_URL,
+        process.env.VITE_SITE_URL,
+        "http://localhost:3000",
+        "http://localhost:8000",
+      ]
+        .map((origin) => origin?.trim().replace(/\/$/, ""))
+        .filter((origin): origin is string => Boolean(origin)),
+    ),
+  );
 
   return betterAuth({
     appName: "Aide",
     baseURL: siteUrl,
     secret: process.env.BETTER_AUTH_SECRET,
+    trustedOrigins,
     database: authComponent.adapter(ctx),
     socialProviders: {
       microsoft: {

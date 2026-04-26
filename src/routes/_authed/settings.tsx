@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
+import { useConvexAuth } from "convex/react";
 import { api } from "convex/_generated/api";
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
@@ -162,9 +163,11 @@ function Section({
 
 /* ─── Main page ─── */
 function SettingsPage() {
-  const { data: accountInfo, refetch } = useQuery(
-    convexQuery(api.settings.getAccountInfo, {}),
-  );
+  const { isAuthenticated } = useConvexAuth();
+  const { data: accountInfo, refetch } = useQuery({
+    ...convexQuery(api.settings.getAccountInfo, {}),
+    enabled: isAuthenticated,
+  });
 
   const [sessions, setSessions] = useState<Session[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);

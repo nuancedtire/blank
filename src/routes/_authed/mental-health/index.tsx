@@ -2,6 +2,7 @@ import * as React from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
+import { useConvexAuth } from "convex/react";
 import { api } from "convex/_generated/api";
 import type { Id } from "convex/_generated/dataModel";
 import { QRCodeSVG } from "qrcode.react";
@@ -128,18 +129,21 @@ function MentalHealthDashboard() {
   const navigate = useNavigate();
   const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
   const [qrDialogOpen, setQrDialogOpen] = React.useState(false);
+  const { isAuthenticated } = useConvexAuth();
   const [qrSession, setQrSession] = React.useState<{
     sessionId: string;
     sessionToken: string;
   } | null>(null);
 
-  const { data: sessions = [] } = useQuery(
-    convexQuery(api.mentalHealth.sessions.listActiveSessions, {}),
-  );
+  const { data: sessions = [] } = useQuery({
+    ...convexQuery(api.mentalHealth.sessions.listActiveSessions, {}),
+    enabled: isAuthenticated,
+  });
 
-  const { data: alerts = [] } = useQuery(
-    convexQuery(api.mentalHealth.alerts.listActiveAlerts, {}),
-  );
+  const { data: alerts = [] } = useQuery({
+    ...convexQuery(api.mentalHealth.alerts.listActiveAlerts, {}),
+    enabled: isAuthenticated,
+  });
 
   const acknowledgeAlertFn = useConvexMutation(
     api.mentalHealth.alerts.acknowledgeAlert,

@@ -1,6 +1,7 @@
 import * as React from "react";
 import { motion, AnimatePresence, MotionConfig } from "motion/react";
 import {
+  useConvexAuth,
   useMutation as useConvexRawMutation,
   useQuery as useConvexRawQuery,
 } from "convex/react";
@@ -91,6 +92,7 @@ export function AgentChat({
   className,
   onClose,
 }: AgentChatProps) {
+  const { isAuthenticated } = useConvexAuth();
   const [threadId, setThreadId] = React.useState<string | null>(initialThreadId);
   const [historyCollapsed, setHistoryCollapsed] = React.useState(false);
   const [mobileHistoryOpen, setMobileHistoryOpen] = React.useState(false);
@@ -119,10 +121,15 @@ export function AgentChat({
     api.assistantFeedback.listMineForThread,
     threadId ? { threadId } : "skip",
   ) as AssistantFeedbackRecord[] | undefined;
-  const recentThreads = useConvexRawQuery(api.agentActions.listMyThreads, {
-    limit: 20,
-    includeArchived: false,
-  });
+  const recentThreads = useConvexRawQuery(
+    api.agentActions.listMyThreads,
+    isAuthenticated
+      ? {
+          limit: 20,
+          includeArchived: false,
+        }
+      : "skip",
+  );
 
   const messages = useUIMessages(
     api.agentActions.listThreadMessages,
@@ -764,10 +771,44 @@ function getTransparencyTone(level: ResponseTransparency["level"]) {
   }
 }
 
+type NormalizedToolPart = {
+  toolName: string;
+  state: string;
+  input?: Record<string, unknown>;
+  output?: Record<string, unknown>;
+  errorText?: string;
+};
+
+function isToolPartType(type: string): boolean {
+  return type.startsWith("tool-") || type === "dynamic-tool";
+}
+
+function normalizeToolPart(part: {
+  type: string;
+  state?: string;
+  input?: unknown;
+  output?: unknown;
+  errorText?: string;
+  toolName?: string;
+}): NormalizedToolPart | null {
+  if (!isToolPartType(part.type)) return null;
+  const toolName =
+    part.type === "dynamic-tool"
+      ? (part.toolName ?? "tool")
+      : part.type.slice("tool-".length);
+  return {
+    toolName,
+    state: part.state ?? "input-available",
+    input: (part.input as Record<string, unknown>) ?? undefined,
+    output: (part.output as Record<string, unknown>) ?? undefined,
+    errorText: part.errorText,
+  };
+}
+
 function readConfidence(
-  result?: Record<string, unknown>,
+  output?: Record<string, unknown>,
 ): ResponseTransparency | null {
-  const confidence = result?.confidence;
+  const confidence = output?.confidence;
   if (!confidence || typeof confidence !== "object") return null;
 
   const candidate = confidence as {
@@ -791,26 +832,19 @@ function readConfidence(
 }
 
 function getResponseTransparency(
-  invocations: Array<{
-    toolName: string;
-    result?: Record<string, unknown>;
-  }>,
+  toolParts: NormalizedToolPart[],
 ): ResponseTransparency {
-  const rag = invocations.find(
-    (invocation) => invocation.toolName === "ragSearch" && invocation.result?.found,
-  );
-  const keyword = invocations.find(
-    (invocation) =>
-      invocation.toolName === "searchGuidelines" && invocation.result?.found,
-  );
-  const external = invocations.find(
-    (invocation) =>
-      invocation.toolName === "searchExternalWeb" && invocation.result?.found,
+  const completed = toolParts.filter(
+    (part) => part.state === "output-available" && part.output?.found,
   );
 
-  const ragConfidence = readConfidence(rag?.result);
-  const keywordConfidence = readConfidence(keyword?.result);
-  const externalConfidence = readConfidence(external?.result);
+  const rag = completed.find((part) => part.toolName === "ragSearch");
+  const keyword = completed.find((part) => part.toolName === "searchGuidelines");
+  const external = completed.find((part) => part.toolName === "searchExternalWeb");
+
+  const ragConfidence = readConfidence(rag?.output);
+  const keywordConfidence = readConfidence(keyword?.output);
+  const externalConfidence = readConfidence(external?.output);
 
   if (ragConfidence) {
     return {
@@ -867,20 +901,29 @@ const MessageBubble = React.memo(function MessageBubble({
   const textParts = message.parts?.filter(
     (p): p is { type: "text"; text: string } => p.type === "text",
   );
-  const toolParts = message.parts?.filter(
-    (p): p is Extract<
-      (typeof message.parts)[number],
-      { type: "tool-invocation" }
-    > => p.type === "tool-invocation",
-  );
+  const toolParts = React.useMemo(() => {
+    if (!message.parts) return [] as NormalizedToolPart[];
+    const result: NormalizedToolPart[] = [];
+    for (const part of message.parts as Array<{
+      type: string;
+      state?: string;
+      input?: unknown;
+      output?: unknown;
+      errorText?: string;
+      toolName?: string;
+    }>) {
+      const normalized = normalizeToolPart(part);
+      if (normalized) result.push(normalized);
+    }
+    return result;
+  }, [message.parts]);
 
   const fullText = textParts?.map((t) => t.text).join("") ?? "";
   const displayText = isUser ? sanitizeUserPrompt(fullText) : fullText;
   const isStreaming = message.status === "streaming";
-  const toolInvocations =
-    toolParts?.map((part) => (part as any).toolInvocation).filter(Boolean) ?? [];
-  const transparency = !isUser && !isStreaming
-    ? getResponseTransparency(toolInvocations)
+  const isComplete = message.status === "success" || message.status === "failed";
+  const transparency = !isUser && isComplete
+    ? getResponseTransparency(toolParts)
     : null;
 
   React.useEffect(() => {
@@ -928,11 +971,15 @@ const MessageBubble = React.memo(function MessageBubble({
             : "w-full max-w-full sm:max-w-[92%] md:max-w-[85%]",
         )}
       >
-        <AnimatePresence initial={false}>
-          {toolParts?.map((tp, i) => (
-            <ToolCallChip key={i} invocation={(tp as any).toolInvocation} index={i} />
-          ))}
-        </AnimatePresence>
+        {!isUser && toolParts.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            <AnimatePresence initial={false}>
+              {toolParts.map((tp, i) => (
+                <ToolCallChip key={`${tp.toolName}-${i}`} invocation={tp} index={i} />
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
 
         {displayText ? (
           <StreamingText
@@ -941,32 +988,35 @@ const MessageBubble = React.memo(function MessageBubble({
             isUser={isUser}
           />
         ) : (
-          isStreaming && !toolParts?.length && <PulsingDots />
+          !isComplete && toolParts.length === 0 && <PulsingDots />
         )}
 
-        {!isUser && !isStreaming && transparency && (
-          <ResponseMeta transparency={transparency} />
-        )}
-
-        {!isUser && !isStreaming && (
-          <ClinicalSafetyDisclaimer />
-        )}
-
-        {!isUser && !isStreaming && threadId && (
-          <AssistantFeedbackPanel
-            feedback={feedback}
-            draftRating={draftRating}
-            draftComment={draftComment}
-            isSubmitting={isSubmittingFeedback}
-            onSelectRating={(value) => setDraftRating(value)}
-            onCommentChange={setDraftComment}
-            onCancel={() => {
-              setDraftRating(null);
-              setDraftComment(feedback?.comment ?? "");
-            }}
-            onSubmit={() => void handleSubmitFeedback(draftComment.trim() || undefined)}
-            onSkipComment={() => void handleSubmitFeedback(undefined)}
-          />
+        {!isUser && isComplete && (
+          <motion.div
+            className="space-y-2"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+          >
+            {transparency && <ResponseMeta transparency={transparency} />}
+            <ClinicalSafetyDisclaimer />
+            {threadId && (
+              <AssistantFeedbackPanel
+                feedback={feedback}
+                draftRating={draftRating}
+                draftComment={draftComment}
+                isSubmitting={isSubmittingFeedback}
+                onSelectRating={(value) => setDraftRating(value)}
+                onCommentChange={setDraftComment}
+                onCancel={() => {
+                  setDraftRating(null);
+                  setDraftComment(feedback?.comment ?? "");
+                }}
+                onSubmit={() => void handleSubmitFeedback(draftComment.trim() || undefined)}
+                onSkipComment={() => void handleSubmitFeedback(undefined)}
+              />
+            )}
+          </motion.div>
         )}
       </div>
 
@@ -1233,66 +1283,60 @@ function ToolCallChip({
   invocation,
   index = 0,
 }: {
-  invocation: {
-    toolName: string;
-    state: string;
-    args?: Record<string, unknown>;
-    result?: Record<string, unknown>;
-  };
+  invocation: NormalizedToolPart;
   index?: number;
 }) {
-  const isRunning = invocation.state === "call" || invocation.state === "partial-call";
-  const query = (invocation.args as Record<string, string>)?.query ?? "guidelines";
+  const isRunning =
+    invocation.state === "input-streaming" ||
+    invocation.state === "input-available";
+  const isError = invocation.state === "output-error";
+  const query =
+    (invocation.input as Record<string, string> | undefined)?.query ?? "guidelines";
 
-  let icon = <Sparkles className="h-3 w-3" />;
+  const spinner = (
+    <motion.span
+      animate={{ rotate: 360 }}
+      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+      className="inline-flex"
+    >
+      <Loader2 className="h-3 w-3" />
+    </motion.span>
+  );
+
+  let icon: React.ReactNode = <Sparkles className="h-3 w-3" />;
   let label = invocation.toolName;
 
   if (invocation.toolName === "ragSearch") {
-    icon = isRunning ? (
-      <motion.span animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} className="inline-flex">
-        <Loader2 className="h-3 w-3" />
-      </motion.span>
-    ) : (
-      <BookOpen className="h-3 w-3" />
-    );
-    const sourceFiles = Array.isArray((invocation.result as any)?.sources)
-      ? ((invocation.result as any).sources as Array<{ fileName?: string }>)
+    icon = isRunning ? spinner : <BookOpen className="h-3 w-3" />;
+    const sourceFiles = Array.isArray((invocation.output as any)?.sources)
+      ? ((invocation.output as any).sources as Array<{ fileName?: string }>)
           .map((s) => s.fileName)
           .filter(Boolean)
           .slice(0, 2)
       : [];
     label = sourceFiles.length > 0 ? `RAG: ${sourceFiles.join(", ")}` : `RAG: "${query}"`;
   } else if (invocation.toolName === "searchGuidelines") {
-    icon = isRunning ? (
-      <motion.span animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} className="inline-flex">
-        <Loader2 className="h-3 w-3" />
-      </motion.span>
-    ) : (
-      <Search className="h-3 w-3" />
-    );
+    icon = isRunning ? spinner : <Search className="h-3 w-3" />;
     label = `Local search: "${query}"`;
   } else if (invocation.toolName === "searchExternalWeb") {
-    icon = isRunning ? (
-      <motion.span animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} className="inline-flex">
-        <Loader2 className="h-3 w-3" />
-      </motion.span>
-    ) : (
-      <Search className="h-3 w-3" />
-    );
+    icon = isRunning ? spinner : <Search className="h-3 w-3" />;
     label = `Web (Exa): "${query}"`;
   }
 
   return (
     <motion.div
+      layout
       initial={{ opacity: 0, scale: 0.88, x: -8 }}
       animate={{ opacity: 1, scale: 1, x: 0 }}
       exit={{ opacity: 0, scale: 0.88, transition: { duration: 0.1 } }}
-      transition={{ type: "spring", stiffness: 440, damping: 32, delay: index * 0.06 }}
+      transition={{ type: "spring", stiffness: 440, damping: 32, delay: index * 0.04 }}
       className={cn(
         "inline-flex items-center gap-2 text-xs rounded-lg px-2.5 md:px-3 py-1.5",
-        isRunning
-          ? "bg-primary/10 text-primary border border-primary/20"
-          : "bg-muted/50 text-muted-foreground",
+        isError
+          ? "bg-destructive/10 text-destructive border border-destructive/20"
+          : isRunning
+            ? "bg-primary/10 text-primary border border-primary/20"
+            : "bg-muted/60 text-muted-foreground border border-transparent",
       )}
     >
       {icon}
